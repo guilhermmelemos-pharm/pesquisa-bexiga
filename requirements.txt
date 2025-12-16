@@ -2,4 +2,4 @@ streamlit
 pandas
 biopython
 plotly
-matplotlib
+deep-translator
