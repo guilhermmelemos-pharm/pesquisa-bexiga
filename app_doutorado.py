@@ -9,7 +9,7 @@ from deep_translator import GoogleTranslator
 # ==========================================
 # 1. CONFIGURAÇÃO GLOBAL
 # ==========================================
-st.set_page_config(page_title="Lemos Buscador Private", page_icon="🔬", layout="wide")
+st.set_page_config(page_title="Lemos Buscador Final", page_icon="🔬", layout="wide")
 
 # Inicialização do Session State
 if 'alvos_val' not in st.session_state: st.session_state.alvos_val = ""
@@ -17,10 +17,8 @@ if 'fonte_val' not in st.session_state: st.session_state.fonte_val = ""
 if 'alvo_val' not in st.session_state: st.session_state.alvo_val = ""
 
 # ==========================================
-# 2. BANCO DE DADOS (EXPANDIDO PARA DOUTORADO)
+# 2. BANCO DE DADOS (LISTA LEMOS)
 # ==========================================
-
-# SUA LISTA EXCLUSIVA (Personalizada e Expandida)
 SUGESTOES_ALVOS = """
 -- ALVOS MAIS PROMISSORES (PRIORIDADE) --
 Autophagy, LC3B, Beclin-1, p62, mTOR, AMPK, VEGF, VEGFR2, TGF-beta1, CTGF, Galectin-3, P2X3, P2X7, TRPV1, TRPV4, TRPM8, Beta-3 Adrenergic, Muscarinic M3, Cannabinoid CB2
@@ -31,7 +29,7 @@ Mirabegron, Solifenacin, Oxybutynin, Botulinum toxin A (BoNT/A), Resiniferatoxin
 -- CANAIS IÔNICOS (MUSCULO LISO & NERVO) --
 BK channel (KCa1.1), SK3 channel, Kv7.4 (KCNQ4), Kv7.5, KATP channel (Kir6.2), L-type Calcium Channel (Cav1.2), T-type Calcium Channel, Piezo1, Piezo2, ASIC1, ASIC3, TRPA1, TRPC6
 
--- RECEPTORES ACOPLADOS A G (GPCRS) --
+-- RECEPTORES GPCRS --
 Alpha-1A Adrenergic, Alpha-1D Adrenergic, Beta-2 Adrenergic, Muscarinic M2, Dopamine D2, Serotonin 5-HT, Adenosine A1, Adenosine A2A, P2Y receptors, Angiotensin II receptor (AT1R), Mas receptor
 
 -- INFLAMAÇÃO, DOR & NEUROPEPTÍDEOS --
@@ -42,10 +40,8 @@ Estrogen Receptor Alpha (ESR1), Estrogen Receptor Beta (ESR2), Androgen Receptor
 """
 LISTA_ALVOS_LIMPA = " ".join(SUGESTOES_ALVOS.replace("\n", " ").split())
 
-# PRESETS DE ÓRGÃOS
 PRESETS_ORGAOS = {
     "(Sugestão Lemos)": {
-        # O Padrão Ouro: Compara Bexiga com TUDO que é parecido (Rim, Intestino, Vaso, Útero, Pulmão)
         "fonte": "Kidney OR Renal OR Blood Vessels OR Vascular OR Intestine OR Gut OR Colon OR Lung OR Airway OR Uterus OR Myometrium OR Smooth Muscle",
         "alvo": "Bladder OR Vesical OR Urothelium OR Detrusor OR Cystitis OR Overactive Bladder OR Painful Bladder"
     },
@@ -53,16 +49,13 @@ PRESETS_ORGAOS = {
         "fonte": "Kidney OR Renal OR Blood Vessels OR Vascular OR Hypertension",
         "alvo": "Bladder OR Vesical OR Urothelium OR Detrusor OR Cystitis"
     },
-    "Cérebro -> Intestino (Gut-Brain)": {
+    "Cérebro -> Intestino": {
         "fonte": "Brain OR CNS OR Central Nervous System OR Neuronal",
         "alvo": "Gut OR Intestine OR Colon OR Enteric Nervous System"
     }
 }
 
-# Funções de Callback
-def carregar_alvos():
-    st.session_state.alvos_val = LISTA_ALVOS_LIMPA
-
+def carregar_alvos(): st.session_state.alvos_val = LISTA_ALVOS_LIMPA
 def carregar_orgaos(preset_name):
     dados = PRESETS_ORGAOS[preset_name]
     st.session_state.fonte_val = dados["fonte"]
@@ -80,14 +73,11 @@ def consultar_pubmed_count(termo_farmaco, termo_orgao, email, y_start, y_end):
         handle = Entrez.esearch(db="pubmed", term=query, retmax=0)
         record = Entrez.read(handle)
         return int(record["Count"])
-    except:
-        return -1
+    except: return -1
 
 def traduzir_para_pt(texto):
-    try:
-        return GoogleTranslator(source='auto', target='pt').translate(texto)
-    except:
-        return texto
+    try: return GoogleTranslator(source='auto', target='pt').translate(texto)
+    except: return texto
 
 def extrair_conclusao(abstract_text):
     if not abstract_text: return "Resumo não disponível."
@@ -138,6 +128,7 @@ if modo == "Desktop (Completo)":
     st.title("🔬 Lemos Private Edition")
     st.markdown("**Ferramenta Bibliométrica Personalizada para Doutorado**")
 
+    # Sidebar
     st.sidebar.header("1. Identificação")
     email_user = st.sidebar.text_input("Seu E-mail:", placeholder="pesquisador@unifesp.br", key="email_desk")
     anos = st.sidebar.slider("📅 Período:", 1990, 2025, (2010, 2025), key="anos_desk")
@@ -145,14 +136,10 @@ if modo == "Desktop (Completo)":
     
     st.sidebar.markdown("---")
     st.sidebar.header("2. Seus Órgãos")
-    
-    # SEU BOTÃO PERSONALIZADO
-    if st.sidebar.button("🧪 (Sugestão Lemos) - Comparar Tudo"): 
-        carregar_orgaos("(Sugestão Lemos)")
-    
+    if st.sidebar.button("🧪 (Sugestão Lemos) - Comparar Tudo"): carregar_orgaos("(Sugestão Lemos)")
     col_p1, col_p2 = st.sidebar.columns(2)
     if col_p1.button("Rim ➡️ Bexiga"): carregar_orgaos("Rim/Vaso -> Bexiga")
-    if col_p2.button("Cérebro ➡️ Intestino"): carregar_orgaos("Cérebro -> Intestino (Gut-Brain)")
+    if col_p2.button("Cérebro ➡️ Intestino"): carregar_orgaos("Cérebro -> Intestino")
     
     st.sidebar.caption("Configuração Atual:")
     termo_fonte = st.sidebar.text_input("Fonte:", key="fonte_val", placeholder="Carregue um botão acima...")
@@ -160,10 +147,10 @@ if modo == "Desktop (Completo)":
     
     st.sidebar.markdown("---")
     st.sidebar.header("3. Sua Lista de Alvos")
-    st.sidebar.caption("Inclui: Autofagia, Canais, Receptores, Hormônios e Fármacos.")
     if st.sidebar.button("📥 Carregar Minha Lista Completa"): carregar_alvos()
     alvos_input = st.sidebar.text_area("Alvos:", key="alvos_val", height=200)
 
+    # Processamento Desktop
     if st.sidebar.button("🚀 Iniciar Minha Análise", type="primary"):
         if not email_user or "@" not in email_user: st.error("E-mail obrigatório!")
         elif not termo_fonte or not termo_alvo: st.warning("Escolha os órgãos!")
@@ -171,27 +158,48 @@ if modo == "Desktop (Completo)":
         else:
             alvos_lista = [x.strip() for x in alvos_input.split(",") if x.strip()]
             resultados = []
+            
+            # Barra de progresso com texto explicativo
+            progresso_texto = st.empty()
             bar = st.progress(0)
+            
             for i, alvo in enumerate(alvos_lista):
+                progresso_texto.text(f"⏳ Processando {i+1} de {len(alvos_lista)}: {alvo}")
                 n_fonte = consultar_pubmed_count(alvo, termo_fonte, email_user, min_year, max_year)
                 n_bexiga = consultar_pubmed_count(alvo, termo_alvo, email_user, min_year, max_year)
                 if n_fonte != -1:
                     ratio = n_fonte / n_bexiga if n_bexiga > 0 else n_fonte
                     resultados.append({"Alvo": alvo, "Fonte Total": n_fonte, "Alvo Total": n_bexiga, "Potencial": round(ratio, 1)})
                 bar.progress((i+1)/len(alvos_lista))
+            
+            progresso_texto.empty()
             st.session_state['dados_desk'] = pd.DataFrame(resultados).sort_values(by="Potencial", ascending=False)
 
+    # Resultados Desktop
     if 'dados_desk' in st.session_state:
         df = st.session_state['dados_desk']
         top = df.iloc[0]
-        st.success(f"💎 **Maior Oportunidade:** {top['Alvo']} ({top['Potencial']}x).")
+        
+        st.success(f"✅ Análise completa de **{len(df)} alvos**. O maior destaque é **{top['Alvo']}**.")
         
         col1, col2 = st.columns([2, 1])
         with col1:
-            fig = px.bar(df.head(20), x="Alvo", y="Potencial", color="Potencial", title="Top 20 Alvos Promissores", color_continuous_scale="Bluered")
+            # Gráfico limitado aos Top 20 para visualização
+            fig = px.bar(df.head(20), x="Alvo", y="Potencial", color="Potencial", title="Top 20 Alvos (Visualização)", color_continuous_scale="Bluered")
             st.plotly_chart(fig, use_container_width=True)
+            st.caption("*O gráfico mostra apenas os 20 primeiros. A tabela ao lado e o download contêm TODOS.*")
         with col2:
             st.dataframe(df[["Alvo", "Fonte Total", "Alvo Total", "Potencial"]].style.background_gradient(subset=['Potencial'], cmap="Greens").hide(axis="index"), use_container_width=True, height=500)
+            
+            # BOTÃO DE DOWNLOAD (NOVIDADE)
+            csv = df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📥 Baixar Tabela Completa (Excel/CSV)",
+                data=csv,
+                file_name=f'analise_lemos_{len(df)}_alvos.csv',
+                mime='text/csv',
+                use_container_width=True
+            )
             
         st.divider()
         st.header("🔎 Raio-X Traduzido")
@@ -213,13 +221,9 @@ elif modo == "Mobile (Pocket)":
     
     with st.expander("⚙️ Configurar Busca"):
         anos_mob = st.slider("📅 Anos:", 1990, 2025, (2010, 2025))
-        
-        # BOTÃO MOBILE
         if st.button("🧪 (Sugestão Lemos)", key="mob_lemos"): carregar_orgaos("(Sugestão Lemos)")
-        
         t_fonte_mob = st.text_input("Fonte:", key="fonte_val", placeholder="Fonte...")
         t_alvo_mob = st.text_input("Alvo:", key="alvo_val", placeholder="Alvo...")
-        
         if st.button("📥 Minha Lista", key="mob_alvos"): carregar_alvos()
         alvos_mob = st.text_area("Alvos:", key="alvos_val", height=150)
         
@@ -243,6 +247,11 @@ elif modo == "Mobile (Pocket)":
         t = d.iloc[0]
         st.divider()
         st.metric("🏆 Vencedor", t['Alvo'], f"{t['Potencial']}x")
+        
+        # Botão Download Mobile também
+        csv_mob = d.to_csv(index=False).encode('utf-8')
+        st.download_button("📥 Baixar CSV", csv_mob, "resultados_mobile.csv", "text/csv", use_container_width=True)
+        
         with st.expander("Ver Lista"): st.dataframe(d, use_container_width=True, hide_index=True)
         st.divider()
         sl = st.selectbox("Ler sobre:", d['Alvo'].tolist())
