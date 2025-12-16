@@ -4,18 +4,19 @@ from Bio import Entrez
 import time
 import plotly.express as px
 import re
+from deep_translator import GoogleTranslator
 
 # ==========================================
 # 1. CONFIGURAÇÃO GLOBAL
 # ==========================================
 st.set_page_config(
     page_title="Lemos Buscador", 
-    page_icon="🧬", 
-    layout="wide" # Layout wide funciona bem para ambos (no mobile ele empilha)
+    page_icon="🇧🇷", 
+    layout="wide" 
 )
 
 # ==========================================
-# 2. FUNÇÕES COMUNS (O CÉREBRO DO APP)
+# 2. FUNÇÕES DO SISTEMA
 # ==========================================
 def consultar_pubmed_count(termo_farmaco, termo_orgao, email, y_start, y_end):
     if not email: return -1
@@ -29,11 +30,33 @@ def consultar_pubmed_count(termo_farmaco, termo_orgao, email, y_start, y_end):
     except:
         return -1
 
+def traduzir_para_pt(texto):
+    """ Traduz do Inglês para Português usando Deep Translator """
+    try:
+        tradutor = GoogleTranslator(source='auto', target='pt')
+        return tradutor.translate(texto)
+    except:
+        return texto # Se der erro, devolve em inglês mesmo
+
 def extrair_conclusao(abstract_text):
     if not abstract_text: return "Resumo não disponível."
+    
+    # Tenta achar a conclusão em inglês
     match = re.search(r'(Conclusion|Conclusions|In conclusion|Summary|Results suggest that)(.*)', abstract_text, re.IGNORECASE | re.DOTALL)
-    if match: return "➡️ " + match.group(2).strip()[:300] + "..." 
-    return "➡️ " + abstract_text[:200] + "..."
+    
+    texto_final = ""
+    if match: 
+        texto_final = match.group(2).strip()[:400] # Pega até 400 caracteres
+    else:
+        # Se não achar a palavra mágica, pega as últimas 3 frases
+        frases = abstract_text.split(". ")
+        if len(frases) > 3:
+            texto_final = ". ".join(frases[-3:])
+        else:
+            texto_final = abstract_text[:300]
+            
+    # TRADUZ A CONCLUSÃO ENCONTRADA
+    return "🇧🇷 " + traduzir_para_pt(texto_final) + "..."
 
 def buscar_resumos_detalhados(termo_farmaco, termo_orgao, email, y_start, y_end, limit=5):
     if not email: return []
@@ -63,49 +86,66 @@ def buscar_resumos_detalhados(termo_farmaco, termo_orgao, email, y_start, y_end,
                 elif tag=="" and current_tag=="AB": art_data["Abstract"]+=" "+line.strip()
                 elif tag=="" and current_tag=="TI": art_data["Title"]+=" "+line.strip()
             if art_data["PMID"]!="N/A":
+                # Aqui chamamos a tradução
                 art_data["Resumo_IA"] = extrair_conclusao(art_data["Abstract"])
                 artigos.append(art_data)
         return artigos
     except Exception as e: return []
 
 # ==========================================
-# 3. SELETOR DE MODO (A MÁGICA)
+# 3. INTERFACE E MODOS
 # ==========================================
-# Menu lateral fixo para troca de versão
-modo = st.sidebar.radio("📱 Escolha a Versão:", ["Desktop (Completo)", "Mobile (Pocket)"], index=0)
+modo = st.sidebar.radio("📱 Modo de Visualização:", ["Desktop (Completo)", "Mobile (Pocket)"], index=0)
 st.sidebar.markdown("---")
 
-# Listas Padrão
-lista_padrao = """Autophagy, LC3B (MAP1LC3B), Beclin-1 (BECN1), p62 (SQSTM1), ATG5, mTOR, VEGF, VEGFR1, VEGFR2, TGF-beta1, CTGF, Galectin-3, P2X3, TRPV1, TRPV4, Beta-3 Adrenergic, SGLT2, ROCK (Rho-kinase), NLRP3, IL-17"""
-lista_limpa = " ".join(lista_padrao.replace("\n", " ").split())
+# LISTA COMPLETA (SUGESTÃO)
+lista_sugestao_completa = """
+Autophagy, LC3B (MAP1LC3B), Beclin-1 (BECN1), p62 (SQSTM1), ATG5, mTOR, 
+VEGF, VEGFR1, VEGFR2, NRP1 (Neuropilin), VEGF-B, 
+TGF-beta1, CTGF, Galectin-3, MMP-9, 
+P2X3, TRPV1, TRPV4, Beta-3 Adrenergic, Muscarinic M3, 
+SGLT2, ROCK (Rho-kinase), NLRP3, IL-17, Nrf2
+"""
+lista_limpa = " ".join(lista_sugestao_completa.replace("\n", " ").split())
 
 # ==========================================
-# 4. VERSÃO DESKTOP PRO (Lógica V6.0)
+# 4. VERSÃO DESKTOP
 # ==========================================
 if modo == "Desktop (Completo)":
-    st.title("🧬 Lemos Buscador: Desktop Pro")
-    st.markdown("**Ferramenta de Inteligência Bibliométrica Avançada**")
+    st.title("🧬 Lemos Buscador: Versão Tradutor")
+    st.markdown("**Ferramenta de Inteligência Bibliométrica com IA de Tradução**")
 
-    # --- Sidebar Desktop ---
+    # Sidebar
     st.sidebar.header("⚙️ Parâmetros")
     email_user = st.sidebar.text_input("Seu E-mail:", placeholder="pesquisador@unifesp.br", key="email_desk")
     anos = st.sidebar.slider("📅 Período:", 1990, 2025, (2010, 2025), key="anos_desk")
     min_year, max_year = anos
     
-    alvos_input = st.sidebar.text_area("Lista de Alvos:", value=lista_limpa, height=250, key="alvos_desk")
-    st.sidebar.info("Use vírgulas para separar os alvos.")
+    # LÓGICA DO BOTÃO DE SUGESTÃO (DESKTOP)
+    if "alvos_desk_val" not in st.session_state: st.session_state.alvos_desk_val = ""
+    
+    def carregar_sugestao_desk():
+        st.session_state.alvos_desk_val = lista_limpa
+
+    st.sidebar.markdown("### 🎯 Alvos Moleculares")
+    # Botão que carrega a lista
+    st.sidebar.button("📥 Carregar Sugestões do Doutorado", on_click=carregar_sugestao_desk)
+    
+    # Caixa de texto vinculada ao Session State (começa vazia, enche se clicar no botão)
+    alvos_input = st.sidebar.text_area("Lista para Pesquisa:", key="alvos_desk_val", height=250)
     
     termo_fonte = st.sidebar.text_input("Fonte (Comparação):", value="Kidney OR Renal OR Blood Vessels OR Vascular OR Lung OR Gut", key="fonte_desk")
     termo_alvo = st.sidebar.text_input("Alvo (Seu Foco):", value="Bladder OR Vesical OR Urothelium OR Detrusor OR Cystitis", key="alvo_desk")
     
-    if st.sidebar.button("🚀 Iniciar Análise Completa", type="primary"):
+    if st.sidebar.button("🚀 Iniciar Análise", type="primary"):
         if not email_user or "@" not in email_user:
             st.error("E-mail obrigatório!")
+        elif not alvos_input:
+            st.warning("A lista de alvos está vazia! Digite algo ou clique em 'Carregar Sugestões'.")
         else:
             alvos_lista = [x.strip() for x in alvos_input.split(",") if x.strip()]
             resultados = []
             bar = st.progress(0)
-            
             for i, alvo in enumerate(alvos_lista):
                 n_fonte = consultar_pubmed_count(alvo, termo_fonte, email_user, min_year, max_year)
                 n_bexiga = consultar_pubmed_count(alvo, termo_alvo, email_user, min_year, max_year)
@@ -113,62 +153,62 @@ if modo == "Desktop (Completo)":
                     ratio = n_fonte / n_bexiga if n_bexiga > 0 else n_fonte
                     resultados.append({"Alvo": alvo, "Fonte Total": n_fonte, "Bexiga Total": n_bexiga, "Potencial": round(ratio, 1)})
                 bar.progress((i+1)/len(alvos_lista))
-            
             st.session_state['dados_desk'] = pd.DataFrame(resultados).sort_values(by="Potencial", ascending=False)
-            st.success("Análise finalizada!")
 
-    # --- Resultados Desktop ---
+    # Resultados Desktop
     if 'dados_desk' in st.session_state:
         df = st.session_state['dados_desk']
-        
-        # Resumo Inteligente
         top = df.iloc[0]
-        st.info(f"💡 **Insight Rápido:** A maior oportunidade encontrada foi **{top['Alvo']}**, que é **{top['Potencial']}x** mais estudado fora da bexiga. Existem {len(df[df['Potencial']>10])} alvos com alto potencial de ineditismo.")
+        st.info(f"💡 **Insight:** O maior nicho é **{top['Alvo']}** ({top['Potencial']}x).")
         
         col1, col2 = st.columns(2)
         with col1:
-            st.subheader("📊 Gráfico de Nichos")
             fig = px.bar(df.head(15), x="Alvo", y="Potencial", color="Potencial", color_continuous_scale="Bluered")
             st.plotly_chart(fig, use_container_width=True)
         with col2:
-            st.subheader("📋 Tabela de Dados")
             st.dataframe(df.style.background_gradient(subset=['Potencial'], cmap="Greens").hide(axis="index"), use_container_width=True, height=400)
             
         st.divider()
-        st.header("🔎 Raio-X Detalhado")
-        sel_alvo = st.selectbox("Selecione para ver os artigos:", df['Alvo'].tolist())
+        st.header("🔎 Raio-X (Com Tradução PT-BR)")
+        st.caption("O sistema vai ler o abstract em inglês e traduzir a conclusão para você.")
         
-        if st.button("Buscar Artigos (Desktop)"):
-            with st.spinner("Lendo conclusões..."):
+        sel_alvo = st.selectbox("Selecione o alvo:", df['Alvo'].tolist())
+        
+        if st.button("Buscar e Traduzir Artigos"):
+            with st.spinner(f"Lendo e traduzindo artigos sobre {sel_alvo}... (Isso pode levar alguns segundos)"):
                 artigos = buscar_resumos_detalhados(sel_alvo, termo_alvo, email_user, min_year, max_year)
                 if not artigos: st.balloons(); st.success("Nicho Confirmado! Zero artigos encontrados.")
                 else:
                     for art in artigos:
                         with st.expander(f"📄 {art['Title']}"):
                             st.write(f"**Fonte:** {art['Source']}")
-                            st.info(art['Resumo_IA'])
-                            st.caption(art['Abstract'][:300] + "...")
+                            # Exibe a tradução em destaque
+                            st.success(art['Resumo_IA'])
+                            st.caption(f"Original (En): {art['Abstract'][:200]}...")
                             st.markdown(f"[Link PubMed](https://pubmed.ncbi.nlm.nih.gov/{art['PMID']})")
 
 # ==========================================
-# 5. VERSÃO MOBILE POCKET (Lógica V7.0)
+# 5. VERSÃO MOBILE
 # ==========================================
 elif modo == "Mobile (Pocket)":
-    st.title("📱 Lemos Pocket")
-    st.caption("Interface simplificada para uso em celular.")
-
-    # --- Inputs Mobile (No centro, escondidos em Expander) ---
-    email_mobile = st.text_input("📧 E-mail (Obrigatório):", placeholder="pesquisador@unifesp.br", key="email_mob")
+    st.title("📱 Lemos Pocket Tradutor")
     
-    with st.expander("⚙️ Configurar Busca (Toque para abrir)"):
+    email_mobile = st.text_input("📧 E-mail:", placeholder="pesquisador@unifesp.br", key="email_mob")
+    
+    # LÓGICA DO BOTÃO DE SUGESTÃO (MOBILE)
+    if "alvos_mob_val" not in st.session_state: st.session_state.alvos_mob_val = ""
+    def carregar_sugestao_mob(): st.session_state.alvos_mob_val = lista_limpa
+
+    with st.expander("⚙️ Configurar Busca"):
         anos_mob = st.slider("📅 Anos:", 1990, 2025, (2010, 2025), key="anos_mob")
-        alvos_mob = st.text_area("Alvos:", value=lista_limpa, height=150, key="alvos_mob")
+        st.button("📥 Usar Sugestões Padrão", on_click=carregar_sugestao_mob, key="btn_mob_sug")
+        alvos_mob = st.text_area("Alvos:", key="alvos_mob_val", height=150)
         t_fonte_mob = st.text_input("Fonte:", value="Kidney OR Vascular OR Lung", key="f_mob")
         t_alvo_mob = st.text_input("Alvo:", value="Bladder OR Cystitis", key="a_mob")
     
-    if st.button("🚀 INICIAR (Modo Rápido)", type="primary", use_container_width=True):
-        if not email_mobile or "@" not in email_mobile:
-            st.error("Preencha o e-mail!")
+    if st.button("🚀 INICIAR", type="primary", use_container_width=True):
+        if not email_mobile or "@" not in email_mobile: st.error("Preencha o e-mail!")
+        elif not alvos_mob: st.warning("Lista vazia!")
         else:
             alvos_lista = [x.strip() for x in alvos_mob.split(",") if x.strip()]
             resultados = []
@@ -180,33 +220,30 @@ elif modo == "Mobile (Pocket)":
                     ratio = n_fonte / n_bexiga if n_bexiga > 0 else n_fonte
                     resultados.append({"Alvo": alvo, "Potencial": round(ratio, 1)})
                 progresso.progress((i+1)/len(alvos_lista))
-            
             st.session_state['dados_mob'] = pd.DataFrame(resultados).sort_values(by="Potencial", ascending=False)
-            st.toast("Busca Concluída!", icon="✅")
 
-    # --- Resultados Mobile ---
     if 'dados_mob' in st.session_state:
         df_mob = st.session_state['dados_mob']
         top_mob = df_mob.iloc[0]
         
         st.divider()
         col_a, col_b = st.columns(2)
-        col_a.metric("🏆 Top Alvo", top_mob['Alvo'])
+        col_a.metric("🏆 Top 1", top_mob['Alvo'])
         col_b.metric("Potencial", f"{top_mob['Potencial']}x")
         
         with st.expander("📋 Ver Lista Completa"):
             st.dataframe(df_mob, use_container_width=True, hide_index=True)
             
         st.divider()
-        st.subheader("🔎 Raio-X Rápido")
-        sel_mob = st.selectbox("Escolha o alvo:", df_mob['Alvo'].tolist(), key="sel_mob")
+        st.subheader("🔎 Raio-X Traduzido")
+        sel_mob = st.selectbox("Escolha:", df_mob['Alvo'].tolist(), key="sel_mob")
         
         if st.button(f"Ler sobre {sel_mob}", use_container_width=True):
-            with st.spinner("Lendo..."):
+            with st.spinner("Traduzindo..."):
                 arts_mob = buscar_resumos_detalhados(sel_mob, t_alvo_mob, email_mobile, anos_mob[0], anos_mob[1], limit=3)
-                if not arts_mob: st.info("Nenhum artigo encontrado!")
+                if not arts_mob: st.info("Nenhum artigo!")
                 else:
                     for art in arts_mob:
                         st.success(f"**{art['Title']}**\n\n{art['Resumo_IA']}")
-                        st.link_button("Abrir PubMed", f"https://pubmed.ncbi.nlm.nih.gov/{art['PMID']}", use_container_width=True)
+                        st.link_button("Ver Original", f"https://pubmed.ncbi.nlm.nih.gov/{art['PMID']}", use_container_width=True)
                         st.write("---")
