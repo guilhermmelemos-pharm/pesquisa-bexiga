@@ -8,16 +8,16 @@ import plotly.express as px
 # 1. CONFIGURAÇÃO INICIAL DA PÁGINA
 # ==========================================
 st.set_page_config(
-    page_title="Lemos Buscador 1.0", 
+    page_title="Lemos Buscador", 
     page_icon="🧬", 
     layout="wide"
 )
 
 st.title("🧬 Lemos Buscador")
 st.markdown("""
-**Ferramenta de Inteligência Bibliométrica**
-Análise unificada de oportunidades farmacológicas, cruzando dados de 
-**Rins, Vasos, Pulmão e Intestino** contra o **Baixo Trato Urinário**.
+**Ferramenta de Inteligência Bibliométrica Personalizada**
+1. Identifique o nicho numérico na tabela.
+2. **Selecione o alvo no final da página** para ler os resumos do que já foi publicado na Bexiga.
 """)
 
 # ==========================================
@@ -25,12 +25,10 @@ Análise unificada de oportunidades farmacológicas, cruzando dados de
 # ==========================================
 st.sidebar.header("⚙️ Parâmetros de Pesquisa")
 
-# E-mail é obrigatório para a API do NCBI
-email_user = st.sidebar.text_input("Seu E-mail (Obrigatório pelo PubMed):", 
-                                  value="pesquisador@unifesp.br",
-                                  help="O NCBI exige um e-mail para monitorar o uso da API.")
+email_user = st.sidebar.text_input("Seu E-mail (Obrigatório):", 
+                                  value="pesquisador@unifesp.br")
 
-# --- LISTA MESTRA (TUDO INCLUÍDO) ---
+# LISTA MESTRA
 lista_sugestao = """
 -- AUTOFAGIA --
 Autophagy, LC3B (MAP1LC3B), Beclin-1 (BECN1), p62 (SQSTM1), 
@@ -50,150 +48,148 @@ SGLT2, PDE5, ROCK (Rho-kinase), ACE2, Angiotensin II,
 COX-2, NLRP3, IL-17, TLR4, Nrf2, PPAR-gamma
 """
 
-# Limpeza da string para o formato de busca
 lista_limpa = lista_sugestao.replace("\n", " ").replace("-- AUTOFAGIA --", "").replace("-- FATORES DE CRESCIMENTO & FIBROSE --", "").replace("-- CANAIS IÔNICOS & RECEPTORES --", "").replace("-- ENZIMAS, INFLAMAÇÃO & OUTROS --", "")
-lista_limpa = " ".join(lista_limpa.split()) # Remove espaços duplos
+lista_limpa = " ".join(lista_limpa.split())
 
-alvos_input = st.sidebar.text_area("Lista de Alvos (Editável):", 
-                                   value=lista_limpa, height=300)
+alvos_input = st.sidebar.text_area("Lista de Alvos:", value=lista_limpa, height=300)
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("🔠 Termos de Busca (Query)")
 st.sidebar.info("Buscas em INGLÊS com operadores booleanos.")
 
-# --- TERMOS FONTE (INCLUI RIM, VASO, PULMÃO, INTESTINO) ---
-termo_fonte = st.sidebar.text_input("Termos Fonte (Modelos Comparativos):", 
-                                    value="Kidney OR Renal OR Blood Vessels OR Vascular OR Lung OR Airway OR Intestine OR Gut OR Diabetic Nephropathy OR Hypertension")
+termo_fonte = st.sidebar.text_input("Termos Fonte (Modelos):", 
+                                    value="Kidney OR Renal OR Blood Vessels OR Vascular OR Lung OR Airway OR Intestine OR Gut OR Diabetic Nephropathy")
 
-# --- TERMOS ALVO (BEXIGA E DOENÇAS) ---
-termo_alvo = st.sidebar.text_input("Termos Alvo (Seu Foco):", 
-                                   value="Bladder OR Vesical OR Urothelium OR Detrusor OR Cystitis OR Painful Bladder OR Overactive Bladder OR Lower Urinary Tract")
+termo_alvo = st.sidebar.text_input("Termos Alvo (Bexiga):", 
+                                   value="Bladder OR Vesical OR Urothelium OR Detrusor OR Cystitis OR Painful Bladder OR Overactive Bladder")
 
-botao_buscar = st.sidebar.button("🚀 Iniciar Varredura Completa", type="primary")
+botao_buscar = st.sidebar.button("🚀 Iniciar Lemos Buscador", type="primary")
 
 # ==========================================
-# 3. FUNÇÃO DE CONEXÃO COM PUBMED
+# 3. FUNÇÕES PUBMED (CONTAGEM E DETALHES)
 # ==========================================
-def consultar_pubmed(termo_farmaco, termo_orgao, email):
+def consultar_pubmed_count(termo_farmaco, termo_orgao, email):
     Entrez.email = email
-    # Remove caracteres especiais que podem quebrar a busca
-    termo_farmaco_limpo = termo_farmaco.replace(",", "").strip()
-    
-    # Monta a query
-    query_final = f"({termo_farmaco_limpo}) AND ({termo_orgao})"
+    termo_farmaco = termo_farmaco.replace(",", "").strip()
+    query = f"({termo_farmaco}) AND ({termo_orgao})"
+    try:
+        handle = Entrez.esearch(db="pubmed", term=query, retmax=0)
+        record = Entrez.read(handle)
+        return int(record["Count"])
+    except:
+        return -1
+
+def buscar_resumos_bexiga(termo_farmaco, termo_orgao, email, max_results=5):
+    """ Busca os detalhes (Título/Abstract) dos artigos encontrados na Bexiga """
+    Entrez.email = email
+    termo_farmaco = termo_farmaco.replace(",", "").strip()
+    query = f"({termo_farmaco}) AND ({termo_orgao})"
     
     try:
-        handle = Entrez.esearch(db="pubmed", term=query_final, retmax=0)
+        # 1. Pega os IDs dos artigos
+        handle = Entrez.esearch(db="pubmed", term=query, retmax=max_results, sort="relevance")
         record = Entrez.read(handle)
-        handle.close()
-        return int(record["Count"])
+        id_list = record["IdList"]
+        
+        if not id_list:
+            return []
+            
+        # 2. Baixa os detalhes desses IDs
+        handle = Entrez.efetch(db="pubmed", id=id_list, rettype="medline", retmode="text")
+        records = handle.read()
+        
+        # Processamento simples do texto retornado
+        artigos = []
+        raw_articles = records.split("\n\n")
+        
+        for art in raw_articles:
+            lines = art.split("\n")
+            title = "Sem Título"
+            source = "Fonte desconhecida"
+            pmid = "N/A"
+            
+            for line in lines:
+                if line.startswith("TI  - "): title = line[6:]
+                if line.startswith("TA  - "): source = line[6:]
+                if line.startswith("PMID- "): pmid = line[6:]
+            
+            if pmid != "N/A":
+                artigos.append({"PMID": pmid, "Título": title, "Revista": source})
+                
+        return artigos
     except Exception as e:
-        return -1 
+        return [{"Erro": str(e)}]
 
 # ==========================================
-# 4. LÓGICA DE PROCESSAMENTO
+# 4. LÓGICA PRINCIPAL
 # ==========================================
 if botao_buscar:
     if not email_user or "@" not in email_user:
-        st.error("⚠️ Por favor, insira um e-mail válido.")
+        st.error("⚠️ Insira um e-mail válido.")
     else:
-        # Separa a lista por vírgulas e remove vazios
+        # --- PARTE 1: A VARREDURA NUMÉRICA ---
         alvos_lista = [x.strip() for x in alvos_input.split(",") if x.strip()]
-        
         resultados = []
         progresso = st.progress(0)
-        status = st.empty()
         total = len(alvos_lista)
         
         for i, alvo in enumerate(alvos_lista):
-            status.markdown(f"🔍 Analisando: **{alvo}**...")
+            n_fonte = consultar_pubmed_count(alvo, termo_fonte, email_user)
+            n_bexiga = consultar_pubmed_count(alvo, termo_alvo, email_user)
             
-            # Buscas
-            n_fonte = consultar_pubmed(alvo, termo_fonte, email_user)
-            n_bexiga = consultar_pubmed(alvo, termo_alvo, email_user)
-            
-            if n_fonte != -1 and n_bexiga != -1:
-                gap = n_fonte - n_bexiga
-                # Ratio: Quantas vezes é mais estudado nos outros órgãos?
+            if n_fonte != -1:
                 ratio = n_fonte / n_bexiga if n_bexiga > 0 else n_fonte
-                
-                # Classificação de Nicho
-                classificacao = "Neutro"
-                if ratio > 15 and n_fonte > 300: classificacao = "💎 NICHO DE OURO"
-                elif ratio > 5 and n_fonte > 100: classificacao = "🥇 Oportunidade Alta"
-                elif ratio > 2 and n_fonte > 50: classificacao = "🥈 Oportunidade Média"
-                elif n_bexiga >= n_fonte and n_bexiga > 50: classificacao = "🔴 Saturado na Bexiga"
-
                 resultados.append({
-                    "Alvo Molecular": alvo,
-                    "Hits (Fonte Total)": n_fonte,
-                    "Hits (Bexiga)": n_bexiga,
-                    "Gap Absoluto": gap,
-                    "Potencial (Ratio)": round(ratio, 1),
-                    "Status": classificacao
+                    "Alvo": alvo,
+                    "Fonte Total": n_fonte,
+                    "Bexiga Total": n_bexiga,
+                    "Potencial": round(ratio, 1)
                 })
-            
             progresso.progress((i + 1) / total)
-            time.sleep(0.35) # Delay importante para lista grande
+            time.sleep(0.1) 
 
-        status.success("✅ Varredura Completa Finalizada!")
+        # Salva no Session State
+        st.session_state['dados'] = pd.DataFrame(resultados).sort_values(by="Potencial", ascending=False)
+        st.success("Varredura concluída!")
+
+# --- PARTE 2: EXIBIÇÃO E RAIO-X ---
+if 'dados' in st.session_state:
+    df = st.session_state['dados']
+    
+    # 1. Gráfico e Tabela
+    col_chart, col_table = st.columns([1, 1])
+    
+    with col_chart:
+        st.subheader("📊 Ranking de Oportunidade")
+        fig = px.bar(df.head(15), x="Alvo", y="Potencial", color="Potencial", 
+                     title="Top 15 Nichos (Ratio Fonte/Bexiga)", color_continuous_scale="Bluered")
+        st.plotly_chart(fig, use_container_width=True)
         
-        df = pd.DataFrame(resultados)
-        
-        if not df.empty:
-            df = df.sort_values(by="Potencial (Ratio)", ascending=False)
+    with col_table:
+        st.subheader("📋 Dados Brutos")
+        st.dataframe(df.style.background_gradient(subset=['Potencial'], cmap="Greens").hide(axis="index"), 
+                     use_container_width=True, height=400)
 
-            st.divider()
-            
-            # KPIs
-            top_nicho = df.iloc[0]
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Maior Nicho Encontrado", top_nicho['Alvo Molecular'])
-            col2.metric("Potencial (x vezes)", f"{top_nicho['Potencial (Ratio)']}x")
-            col3.metric("Total Artigos (Fonte)", top_nicho['Hits (Fonte Total)'])
-            
-            # Gráfico
-            st.subheader("📊 Comparativo de Oportunidades")
-            
-            df_long = pd.melt(
-                df, 
-                id_vars=['Alvo Molecular'], 
-                value_vars=['Hits (Fonte Total)', 'Hits (Bexiga)'],
-                var_name='Origem', 
-                value_name='Artigos'
-            )
-            
-            fig = px.bar(
-                df_long, 
-                x="Alvo Molecular", 
-                y="Artigos", 
-                color="Origem", 
-                barmode='group',
-                color_discrete_map={
-                    "Hits (Fonte Total)": "#FF4B4B", 
-                    "Hits (Bexiga)": "#1E90FF"
-                },
-                height=600
-            )
-            
-            st.plotly_chart(fig, use_container_width=True)
+    st.divider()
 
-            # Tabela Limpa (Sem índice numérico)
-            st.subheader("📋 Dados Detalhados")
-            st.dataframe(
-                df.style.background_gradient(subset=['Potencial (Ratio)'], cmap="Greens")
-                        .format({"Potencial (Ratio)": "{:.1f}", "Hits (Fonte Total)": "{:,.0f}"})
-                        .hide(axis="index"),
-                use_container_width=True
-            )
+    # --- RAIO-X DE ARTIGOS ---
+    st.header("🔎 Raio-X do Nicho: O que já existe?")
+    st.markdown("Selecione um alvo abaixo para ver os **5 artigos mais relevantes** publicados sobre ele na Bexiga.")
+    
+    lista_alvos = df['Alvo'].tolist()
+    alvo_selecionado = st.selectbox("Selecione o Alvo para investigar:", lista_alvos)
+    
+    if st.button(f"Buscar Artigos sobre {alvo_selecionado} na Bexiga"):
+        with st.spinner(f"O Lemos Buscador está lendo o PubMed sobre {alvo_selecionado}..."):
+            # Busca os detalhes
+            artigos = buscar_resumos_bexiga(alvo_selecionado, termo_alvo, email_user)
             
-            # Download
-            csv = df.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="📥 Baixar Tabela Completa (CSV)", 
-                data=csv, 
-                file_name='analise_completa_bexiga.csv', 
-                mime='text/csv'
-            )
-        else:
-            st.warning("Sem dados retornados. Verifique a conexão.")
+            if not artigos:
+                st.balloons()
+                st.success(f"💎 NICHO CONFIRMADO! Nenhum artigo encontrado sobre '{alvo_selecionado}' com os termos atuais.")
+            else:
+                st.write(f"Foram encontrados {len(artigos)} artigos principais. Confira se o tema já está saturado:")
+                for art in artigos:
+                    with st.expander(f"📄 {art.get('Título', 'Sem Título')}"):
+                        st.write(f"**Revista:** {art.get('Revista', 'N/A')}")
+                        st.write(f"**PMID:** {art.get('PMID', 'N/A')}")
+                        st.markdown(f"[Ler no PubMed](https://pubmed.ncbi.nlm.nih.gov/{art.get('PMID', '')})")
