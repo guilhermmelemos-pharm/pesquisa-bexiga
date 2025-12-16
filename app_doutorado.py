@@ -17,7 +17,7 @@ if 'fonte_val' not in st.session_state: st.session_state.fonte_val = ""
 if 'alvo_val' not in st.session_state: st.session_state.alvo_val = ""
 
 # ==========================================
-# 2. BANCO DE DADOS (LISTA LEMOS)
+# 2. BANCO DE DADOS
 # ==========================================
 SUGESTOES_ALVOS = """
 -- ALVOS MAIS PROMISSORES (PRIORIDADE) --
@@ -128,27 +128,38 @@ if modo == "Desktop (Completo)":
     st.title("🔬 Lemos Private Edition")
     st.markdown("**Ferramenta Bibliométrica Personalizada para Doutorado**")
 
-    # Sidebar
+    # Sidebar - Inputs
     st.sidebar.header("1. Identificação")
     email_user = st.sidebar.text_input("Seu E-mail:", placeholder="pesquisador@unifesp.br", key="email_desk")
     anos = st.sidebar.slider("📅 Período:", 1990, 2025, (2010, 2025), key="anos_desk")
     min_year, max_year = anos
     
     st.sidebar.markdown("---")
-    st.sidebar.header("2. Seus Órgãos")
-    if st.sidebar.button("🧪 (Sugestão Lemos) - Comparar Tudo"): carregar_orgaos("(Sugestão Lemos)")
+    st.sidebar.header("2. Definição de Órgãos")
+    
+    # INPUTS PRIMEIRO
+    termo_fonte = st.sidebar.text_input("Fonte (Comparação):", key="fonte_val", placeholder="Digite ou selecione abaixo...")
+    termo_alvo = st.sidebar.text_input("Alvo (Seu Foco):", key="alvo_val", placeholder="Digite ou selecione abaixo...")
+    
+    # BOTÕES DE CARREGAMENTO EMBAIXO
+    st.sidebar.caption("Ou carregue um modelo pronto:")
+    if st.sidebar.button("🧪 (Sugestão Lemos) - Comparar Tudo"): 
+        carregar_orgaos("(Sugestão Lemos)")
+    
     col_p1, col_p2 = st.sidebar.columns(2)
     if col_p1.button("Rim ➡️ Bexiga"): carregar_orgaos("Rim/Vaso -> Bexiga")
     if col_p2.button("Cérebro ➡️ Intestino"): carregar_orgaos("Cérebro -> Intestino")
     
-    st.sidebar.caption("Configuração Atual:")
-    termo_fonte = st.sidebar.text_input("Fonte:", key="fonte_val", placeholder="Carregue um botão acima...")
-    termo_alvo = st.sidebar.text_input("Alvo:", key="alvo_val", placeholder="Carregue um botão acima...")
+    st.sidebar.markdown("---")
+    st.sidebar.header("3. Lista de Alvos")
+    
+    # TEXT AREA PRIMEIRO
+    alvos_input = st.sidebar.text_area("Digite seus alvos:", key="alvos_val", height=200, placeholder="Digite ou clique no botão abaixo...")
+    
+    # BOTÃO EMBAIXO
+    if st.sidebar.button("📥 Carregar Minha Lista Completa"): carregar_alvos()
     
     st.sidebar.markdown("---")
-    st.sidebar.header("3. Sua Lista de Alvos")
-    if st.sidebar.button("📥 Carregar Minha Lista Completa"): carregar_alvos()
-    alvos_input = st.sidebar.text_area("Alvos:", key="alvos_val", height=200)
 
     # Processamento Desktop
     if st.sidebar.button("🚀 Iniciar Minha Análise", type="primary"):
@@ -159,7 +170,6 @@ if modo == "Desktop (Completo)":
             alvos_lista = [x.strip() for x in alvos_input.split(",") if x.strip()]
             resultados = []
             
-            # Barra de progresso com texto explicativo
             progresso_texto = st.empty()
             bar = st.progress(0)
             
@@ -184,22 +194,14 @@ if modo == "Desktop (Completo)":
         
         col1, col2 = st.columns([2, 1])
         with col1:
-            # Gráfico limitado aos Top 20 para visualização
             fig = px.bar(df.head(20), x="Alvo", y="Potencial", color="Potencial", title="Top 20 Alvos (Visualização)", color_continuous_scale="Bluered")
             st.plotly_chart(fig, use_container_width=True)
             st.caption("*O gráfico mostra apenas os 20 primeiros. A tabela ao lado e o download contêm TODOS.*")
         with col2:
             st.dataframe(df[["Alvo", "Fonte Total", "Alvo Total", "Potencial"]].style.background_gradient(subset=['Potencial'], cmap="Greens").hide(axis="index"), use_container_width=True, height=500)
             
-            # BOTÃO DE DOWNLOAD (NOVIDADE)
             csv = df.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="📥 Baixar Tabela Completa (Excel/CSV)",
-                data=csv,
-                file_name=f'analise_lemos_{len(df)}_alvos.csv',
-                mime='text/csv',
-                use_container_width=True
-            )
+            st.download_button("📥 Baixar Tabela Completa (Excel/CSV)", data=csv, file_name=f'analise_lemos_{len(df)}_alvos.csv', mime='text/csv', use_container_width=True)
             
         st.divider()
         st.header("🔎 Raio-X Traduzido")
@@ -221,11 +223,20 @@ elif modo == "Mobile (Pocket)":
     
     with st.expander("⚙️ Configurar Busca"):
         anos_mob = st.slider("📅 Anos:", 1990, 2025, (2010, 2025))
-        if st.button("🧪 (Sugestão Lemos)", key="mob_lemos"): carregar_orgaos("(Sugestão Lemos)")
+        
+        # Inputs Mobile Primeiro
         t_fonte_mob = st.text_input("Fonte:", key="fonte_val", placeholder="Fonte...")
         t_alvo_mob = st.text_input("Alvo:", key="alvo_val", placeholder="Alvo...")
-        if st.button("📥 Minha Lista", key="mob_alvos"): carregar_alvos()
+        
+        # Botões Mobile Embaixo
+        if st.button("🧪 (Sugestão Lemos)", key="mob_lemos"): carregar_orgaos("(Sugestão Lemos)")
+        
+        st.markdown("---")
+        
+        # Alvos Input Primeiro
         alvos_mob = st.text_area("Alvos:", key="alvos_val", height=150)
+        # Botão Alvos Embaixo
+        if st.button("📥 Minha Lista", key="mob_alvos"): carregar_alvos()
         
     if st.button("🚀 INICIAR", type="primary", use_container_width=True):
         if not email_mob: st.error("E-mail necessário")
@@ -248,7 +259,6 @@ elif modo == "Mobile (Pocket)":
         st.divider()
         st.metric("🏆 Vencedor", t['Alvo'], f"{t['Potencial']}x")
         
-        # Botão Download Mobile também
         csv_mob = d.to_csv(index=False).encode('utf-8')
         st.download_button("📥 Baixar CSV", csv_mob, "resultados_mobile.csv", "text/csv", use_container_width=True)
         
