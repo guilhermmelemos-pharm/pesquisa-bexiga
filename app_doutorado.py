@@ -41,7 +41,6 @@ Estrogen Receptor Alpha (ESR1), Estrogen Receptor Beta (ESR2), Androgen Receptor
 """
 LISTA_ALVOS_LIMPA = " ".join(SUGESTOES_ALVOS.replace("\n", " ").split())
 
-# PRESETS DE ÓRGÃOS
 PRESETS_ORGAOS = {
     "(Sugestão Lemos)": {
         "fonte": "Kidney OR Renal OR Blood Vessels OR Vascular OR Intestine OR Gut OR Lung OR Airway OR Uterus OR Prostate OR Heart OR Cardiac OR Smooth Muscle",
@@ -73,7 +72,7 @@ PRESETS_ORGAOS = {
     }
 }
 
-# --- FUNÇÕES DE CALLBACK (CORREÇÃO DO ERRO) ---
+# --- FUNÇÕES DE CALLBACK ---
 def carregar_setup_lemos():
     st.session_state.alvos_val = LISTA_ALVOS_LIMPA
     st.session_state.fonte_val = PRESETS_ORGAOS["(Sugestão Lemos)"]["fonte"]
@@ -165,16 +164,16 @@ if modo == "Desktop (Completo)":
     # --- CONFIGURAÇÃO DE ÓRGÃOS ---
     st.sidebar.header("2. Configuração de Órgãos")
     
-    # Inputs (Ligados ao Session State)
+    # Inputs
     termo_fonte = st.sidebar.text_input("Fonte:", key="fonte_val", placeholder="Orgãos de Comparação...")
     termo_alvo = st.sidebar.text_input("Alvo:", key="alvo_val", placeholder="Orgão Alvo (Bexiga)...")
     
     st.sidebar.caption("👇 Ou preencha com um clique:")
     
-    # Botão Master (Usa on_click para evitar o erro)
+    # Botão Master (Callback)
     st.sidebar.button("🧪 (Sugestão Lemos) - Comparar Tudo", type="primary", on_click=carregar_setup_lemos)
     
-    # Botões Específicos (Usam on_click com args)
+    # Botões Específicos (Callback com args)
     c1, c2 = st.sidebar.columns(2)
     c1.button("Rim ➡️ Bexiga", on_click=carregar_orgaos, args=("Rim/Vaso -> Bexiga",))
     c2.button("Próstata ➡️ Bexiga", on_click=carregar_orgaos, args=("Próstata/Uretra -> Bexiga",))
@@ -191,15 +190,18 @@ if modo == "Desktop (Completo)":
     # Input
     alvos_input = st.sidebar.text_area("Lista de Pesquisa:", key="alvos_val", height=150, placeholder="Digite ou carregue a lista...")
     
-    # Botão (Usa on_click para evitar o erro)
+    # Botão
     st.sidebar.button("📥 Restaurar Lista Completa (+90 Alvos)", on_click=carregar_alvos_apenas)
 
     st.sidebar.markdown("---")
 
     if st.sidebar.button("🚀 INICIAR VARREDURA", type="secondary"):
-        if not email_user or "@" not in email_user: st.error("E-mail obrigatório!")
-        elif not termo_fonte or not termo_alvo: st.warning("Configure os órgãos!")
-        elif not alvos_input: st.warning("Lista vazia!")
+        if not email_user or "@" not in email_user: 
+            st.error("E-mail obrigatório!")
+        elif not termo_fonte or not termo_alvo: 
+            st.warning("Configure os órgãos!")
+        elif not alvos_input: 
+            st.warning("Lista vazia!")
         else:
             alvos_lista = [x.strip() for x in alvos_input.split(",") if x.strip()]
             resultados = []
@@ -208,3 +210,97 @@ if modo == "Desktop (Completo)":
             bar = st.progress(0)
             
             for i, alvo in enumerate(alvos_lista):
+                progresso_texto.text(f"⏳ Processando {i+1}/{len(alvos_lista)}: {alvo}")
+                n_fonte = consultar_pubmed_count(alvo, termo_fonte, email_user, min_year, max_year)
+                n_bexiga = consultar_pubmed_count(alvo, termo_alvo, email_user, min_year, max_year)
+                if n_fonte != -1:
+                    ratio = n_fonte / n_bexiga if n_bexiga > 0 else n_fonte
+                    resultados.append({"Alvo": alvo, "Fonte Total": n_fonte, "Alvo Total": n_bexiga, "Potencial": round(ratio, 1)})
+                bar.progress((i+1)/len(alvos_lista))
+            
+            progresso_texto.empty()
+            st.session_state['dados_desk'] = pd.DataFrame(resultados).sort_values(by="Potencial", ascending=False)
+
+    if 'dados_desk' in st.session_state:
+        df = st.session_state['dados_desk']
+        top = df.iloc[0]
+        st.success(f"✅ Processado! Destaque: **{top['Alvo']}**.")
+        
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            fig = px.bar(df.head(20), x="Alvo", y="Potencial", color="Potencial", title="Top 20 Oportunidades", color_continuous_scale="Bluered")
+            st.plotly_chart(fig, use_container_width=True)
+        with col2:
+            st.dataframe(df[["Alvo", "Fonte Total", "Alvo Total", "Potencial"]].style.background_gradient(subset=['Potencial'], cmap="Greens").hide(axis="index"), use_container_width=True, height=500)
+            csv = df.to_csv(index=False).encode('utf-8')
+            st.download_button("📥 Baixar Planilha Completa", csv, f'analise_lemos_{datetime.now().strftime("%Y%m%d")}.csv', 'text/csv', use_container_width=True)
+            
+        st.divider()
+        st.header("🔎 Raio-X & Tradução")
+        sel = st.selectbox("Investigar Alvo:", df['Alvo'].tolist())
+        
+        col_btn1, col_btn2 = st.columns([1,4])
+        if col_btn1.button("Ler Artigos"):
+            with st.spinner("Buscando..."):
+                arts = buscar_resumos_detalhados(sel, termo_alvo, email_user, min_year, max_year)
+                if not arts: st.info("Zero artigos encontrados.")
+                else:
+                    for a in arts:
+                        with st.expander(f"📄 {a['Title']}"):
+                            st.write(f"**Revista:** {a['Source']}")
+                            st.success(a['Resumo_IA'])
+                            st.markdown(f"[Link PubMed](https://pubmed.ncbi.nlm.nih.gov/{a['PMID']})")
+        
+        if col_btn2.button("🎓 Buscar no Google Scholar"):
+             st.markdown(f"👉 [Clique aqui para abrir **{sel} + Bexiga** no Google Scholar](https://scholar.google.com.br/scholar?q={sel}+AND+bladder)", unsafe_allow_html=True)
+
+elif modo == "Mobile (Pocket)":
+    st.title("📱 Lemos Pocket")
+    email_mob = st.text_input("📧 E-mail:", placeholder="pesquisador@unifesp.br", key="email_mob")
+    
+    with st.expander("⚙️ Configurar Busca"):
+        anos_mob = st.slider("📅 Anos:", 1990, 2025, (2010, 2025))
+        
+        t_fonte_mob = st.text_input("Fonte:", key="fonte_val", placeholder="Fonte...")
+        t_alvo_mob = st.text_input("Alvo:", key="alvo_val", placeholder="Alvo...")
+        
+        st.caption("Preenchimento Rápido:")
+        st.button("🧪 SETUP COMPLETO", key="mob_lemos", type="primary", on_click=carregar_setup_lemos)
+        
+        st.markdown("---")
+        alvos_mob = st.text_area("Alvos:", key="alvos_val", height=150)
+        st.button("📥 Restaurar Lista", key="mob_alvos", on_click=carregar_alvos_apenas)
+        
+    if st.button("🚀 INICIAR", type="secondary", use_container_width=True):
+        if not email_mob: st.error("E-mail necessário")
+        else:
+            lst = [x.strip() for x in alvos_mob.split(",") if x.strip()]
+            res = []
+            pg = st.progress(0)
+            for i, al in enumerate(lst):
+                nf = consultar_pubmed_count(al, t_fonte_mob, email_mob, anos_mob[0], anos_mob[1])
+                nb = consultar_pubmed_count(al, t_alvo_mob, email_mob, anos_mob[0], anos_mob[1])
+                if nf!=-1:
+                    rat = nf/nb if nb>0 else nf
+                    res.append({"Alvo": al, "Potencial": round(rat, 1)})
+                pg.progress((i+1)/len(lst))
+            st.session_state['dados_mob'] = pd.DataFrame(res).sort_values(by="Potencial", ascending=False)
+            
+    if 'dados_mob' in st.session_state:
+        d = st.session_state['dados_mob']
+        t = d.iloc[0]
+        st.divider()
+        st.metric("🏆 Top 1", t['Alvo'], f"{t['Potencial']}x")
+        csv_mob = d.to_csv(index=False).encode('utf-8')
+        st.download_button("📥 Baixar CSV", csv_mob, "mobile.csv", "text/csv", use_container_width=True)
+        with st.expander("Ver Lista"): st.dataframe(d, use_container_width=True, hide_index=True)
+        st.divider()
+        sl = st.selectbox("Ler:", d['Alvo'].tolist())
+        if st.button("Ler", use_container_width=True):
+            with st.spinner("Traduzindo..."):
+                as_mob = buscar_resumos_detalhados(sl, t_alvo_mob, email_mob, anos_mob[0], anos_mob[1], limit=3)
+                if not as_mob: st.info("Sem artigos!")
+                else:
+                    for am in as_mob:
+                        st.success(f"**{am['Title']}**\n\n{am['Resumo_IA']}")
+                        st.write("---")
