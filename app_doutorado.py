@@ -15,9 +15,10 @@ st.set_page_config(
 
 st.title("🧬 Lemos Buscador")
 st.markdown("""
-**Ferramenta de Inteligência Bibliométrica Personalizada**
-1. Identifique o nicho numérico na tabela.
-2. **Selecione o alvo no final da página** para ler os resumos do que já foi publicado na Bexiga.
+**Ferramenta de Inteligência Bibliométrica**
+1. Insira seu e-mail (obrigatório).
+2. O sistema fará a varredura e gerará um **Relatório de Inteligência** automático.
+3. No final, use o **Raio-X** para ver os artigos reais.
 """)
 
 # ==========================================
@@ -26,9 +27,9 @@ st.markdown("""
 st.sidebar.header("⚙️ Parâmetros de Pesquisa")
 
 email_user = st.sidebar.text_input("Seu E-mail (Obrigatório):", 
-                                  value="pesquisador@unifesp.br")
+                                  value="", placeholder="ex: pesquisador@unifesp.br")
 
-# LISTA MESTRA
+# LISTA MESTRA (Mantivemos a mesma lista completa)
 lista_sugestao = """
 -- AUTOFAGIA --
 Autophagy, LC3B (MAP1LC3B), Beclin-1 (BECN1), p62 (SQSTM1), 
@@ -65,7 +66,7 @@ termo_alvo = st.sidebar.text_input("Termos Alvo (Bexiga):",
 botao_buscar = st.sidebar.button("🚀 Iniciar Lemos Buscador", type="primary")
 
 # ==========================================
-# 3. FUNÇÕES PUBMED (CONTAGEM E DETALHES)
+# 3. FUNÇÕES (PUBMED E ANÁLISE)
 # ==========================================
 def consultar_pubmed_count(termo_farmaco, termo_orgao, email):
     Entrez.email = email
@@ -79,25 +80,20 @@ def consultar_pubmed_count(termo_farmaco, termo_orgao, email):
         return -1
 
 def buscar_resumos_bexiga(termo_farmaco, termo_orgao, email, max_results=5):
-    """ Busca os detalhes (Título/Abstract) dos artigos encontrados na Bexiga """
     Entrez.email = email
     termo_farmaco = termo_farmaco.replace(",", "").strip()
     query = f"({termo_farmaco}) AND ({termo_orgao})"
     
     try:
-        # 1. Pega os IDs dos artigos
         handle = Entrez.esearch(db="pubmed", term=query, retmax=max_results, sort="relevance")
         record = Entrez.read(handle)
         id_list = record["IdList"]
         
-        if not id_list:
-            return []
+        if not id_list: return []
             
-        # 2. Baixa os detalhes desses IDs
         handle = Entrez.efetch(db="pubmed", id=id_list, rettype="medline", retmode="text")
         records = handle.read()
         
-        # Processamento simples do texto retornado
         artigos = []
         raw_articles = records.split("\n\n")
         
@@ -106,27 +102,49 @@ def buscar_resumos_bexiga(termo_farmaco, termo_orgao, email, max_results=5):
             title = "Sem Título"
             source = "Fonte desconhecida"
             pmid = "N/A"
-            
             for line in lines:
                 if line.startswith("TI  - "): title = line[6:]
                 if line.startswith("TA  - "): source = line[6:]
                 if line.startswith("PMID- "): pmid = line[6:]
-            
             if pmid != "N/A":
                 artigos.append({"PMID": pmid, "Título": title, "Revista": source})
-                
         return artigos
     except Exception as e:
         return [{"Erro": str(e)}]
+
+def gerar_analise_textual(df):
+    """ Gera um resumo inteligente baseado nos dados """
+    top_nicho = df.iloc[0]
+    total_nichos = len(df[df['Potencial'] > 10])
+    
+    texto = f"""
+    ### 🧠 Análise Automática
+    O algoritmo varreu **{len(df)} alvos farmacológicos**.
+    
+    **1. O Grande Destaque:**
+    A maior oportunidade detectada foi para **{top_nicho['Alvo']}**. 
+    Este alvo é **{top_nicho['Potencial']} vezes mais estudado** nos modelos comparativos (Rim/Vaso/Pulmão) do que na Bexiga.
+    Isso indica uma maturidade científica alta em outras áreas, mas um terreno quase virgem no seu campo.
+    
+    **2. Volume de Oportunidades:**
+    Encontramos **{total_nichos} alvos classificados como 'Nichos de Ouro'** (Ratio > 10x). 
+    Esses são os candidatos ideais para reposicionamento imediato.
+    
+    **3. Sugestão de Próximo Passo:**
+    Recomendamos focar a leitura nos resumos de **{top_nicho['Alvo']}** (usando a ferramenta abaixo) para verificar se os poucos artigos existentes ({top_nicho['Bexiga Total']}) já cobriram o mecanismo que você deseja propor.
+    """
+    return texto
 
 # ==========================================
 # 4. LÓGICA PRINCIPAL
 # ==========================================
 if botao_buscar:
-    if not email_user or "@" not in email_user:
-        st.error("⚠️ Insira um e-mail válido.")
+    # --- BLOQUEIO DE E-MAIL ---
+    if not email_user or "@" not in email_user or len(email_user) < 5:
+        st.error("⛔ PARE! O preenchimento do E-mail é obrigatório para acessar o PubMed.")
+        st.stop() # Para a execução aqui se não tiver e-mail
+    
     else:
-        # --- PARTE 1: A VARREDURA NUMÉRICA ---
         alvos_lista = [x.strip() for x in alvos_input.split(",") if x.strip()]
         resultados = []
         progresso = st.progress(0)
@@ -145,17 +163,24 @@ if botao_buscar:
                     "Potencial": round(ratio, 1)
                 })
             progresso.progress((i + 1) / total)
-            time.sleep(0.1) 
+            time.sleep(0.1)
 
-        # Salva no Session State
         st.session_state['dados'] = pd.DataFrame(resultados).sort_values(by="Potencial", ascending=False)
         st.success("Varredura concluída!")
 
-# --- PARTE 2: EXIBIÇÃO E RAIO-X ---
+# --- PARTE 2: EXIBIÇÃO ---
 if 'dados' in st.session_state:
     df = st.session_state['dados']
     
-    # 1. Gráfico e Tabela
+    # 1. RESUMO DE INTELIGÊNCIA (NOVIDADE)
+    st.divider()
+    with st.container():
+        st.markdown("## 📝 Resumo de Inteligência")
+        st.info(gerar_analise_textual(df))
+    
+    st.divider()
+
+    # 2. Gráfico e Tabela
     col_chart, col_table = st.columns([1, 1])
     
     with col_chart:
@@ -171,25 +196,23 @@ if 'dados' in st.session_state:
 
     st.divider()
 
-    # --- RAIO-X DE ARTIGOS ---
-    st.header("🔎 Raio-X do Nicho: O que já existe?")
-    st.markdown("Selecione um alvo abaixo para ver os **5 artigos mais relevantes** publicados sobre ele na Bexiga.")
+    # 3. RAIO-X
+    st.header("🔎 Raio-X do Nicho: Validação")
+    st.markdown("Selecione um alvo para ler os resumos:")
     
     lista_alvos = df['Alvo'].tolist()
-    alvo_selecionado = st.selectbox("Selecione o Alvo para investigar:", lista_alvos)
+    alvo_selecionado = st.selectbox("Alvo:", lista_alvos)
     
-    if st.button(f"Buscar Artigos sobre {alvo_selecionado} na Bexiga"):
-        with st.spinner(f"O Lemos Buscador está lendo o PubMed sobre {alvo_selecionado}..."):
-            # Busca os detalhes
+    if st.button(f"Buscar Artigos sobre {alvo_selecionado}"):
+        with st.spinner(f"Lemos Buscador investigando {alvo_selecionado}..."):
             artigos = buscar_resumos_bexiga(alvo_selecionado, termo_alvo, email_user)
             
             if not artigos:
                 st.balloons()
-                st.success(f"💎 NICHO CONFIRMADO! Nenhum artigo encontrado sobre '{alvo_selecionado}' com os termos atuais.")
+                st.success(f"💎 CONFIRMADO! Zero artigos encontrados para '{alvo_selecionado}' na bexiga.")
             else:
-                st.write(f"Foram encontrados {len(artigos)} artigos principais. Confira se o tema já está saturado:")
+                st.warning(f"Atenção: Já existem {len(artigos)} artigos principais. Verifique se não saturaram o tema.")
                 for art in artigos:
                     with st.expander(f"📄 {art.get('Título', 'Sem Título')}"):
                         st.write(f"**Revista:** {art.get('Revista', 'N/A')}")
-                        st.write(f"**PMID:** {art.get('PMID', 'N/A')}")
                         st.markdown(f"[Ler no PubMed](https://pubmed.ncbi.nlm.nih.gov/{art.get('PMID', '')})")
