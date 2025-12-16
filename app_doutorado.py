@@ -3,75 +3,25 @@ import pandas as pd
 from Bio import Entrez
 import time
 import plotly.express as px
+import re
 
 # ==========================================
-# 1. CONFIGURAÇÃO INICIAL DA PÁGINA
+# 1. CONFIGURAÇÃO GLOBAL
 # ==========================================
 st.set_page_config(
     page_title="Lemos Buscador", 
     page_icon="🧬", 
-    layout="wide"
+    layout="wide" # Layout wide funciona bem para ambos (no mobile ele empilha)
 )
 
-st.title("🧬 Lemos Buscador")
-st.markdown("""
-**Ferramenta de Inteligência Bibliométrica**
-1. Insira seu e-mail (obrigatório).
-2. O sistema fará a varredura e gerará um **Relatório de Inteligência** automático.
-3. No final, use o **Raio-X** para ver os artigos reais.
-""")
-
 # ==========================================
-# 2. BARRA LATERAL (INPUTS)
+# 2. FUNÇÕES COMUNS (O CÉREBRO DO APP)
 # ==========================================
-st.sidebar.header("⚙️ Parâmetros de Pesquisa")
-
-email_user = st.sidebar.text_input("Seu E-mail (Obrigatório):", 
-                                  value="", placeholder="ex: pesquisador@unifesp.br")
-
-# LISTA MESTRA (Mantivemos a mesma lista completa)
-lista_sugestao = """
--- AUTOFAGIA --
-Autophagy, LC3B (MAP1LC3B), Beclin-1 (BECN1), p62 (SQSTM1), 
-ATG5, ATG7, ULK1, LAMP2, TFEB, AMPK, mTOR,
-
--- FATORES DE CRESCIMENTO & FIBROSE --
-VEGF, VEGFR1, VEGFR2, NRP1 (Neuropilin), VEGF-B,
-TGF-beta1, CTGF, Galectin-3, MMP-9, NGF, BDNF,
-
--- CANAIS IÔNICOS & RECEPTORES --
-P2X3, P2X7, TRPV1, TRPV4, BK channel, Kv7.4, SK3, 
-Piezo1, Piezo2, Beta-3 Adrenergic, Muscarinic M3,
-Cannabinoid CB1, Cannabinoid CB2,
-
--- ENZIMAS, INFLAMAÇÃO & OUTROS --
-SGLT2, PDE5, ROCK (Rho-kinase), ACE2, Angiotensin II,
-COX-2, NLRP3, IL-17, TLR4, Nrf2, PPAR-gamma
-"""
-
-lista_limpa = lista_sugestao.replace("\n", " ").replace("-- AUTOFAGIA --", "").replace("-- FATORES DE CRESCIMENTO & FIBROSE --", "").replace("-- CANAIS IÔNICOS & RECEPTORES --", "").replace("-- ENZIMAS, INFLAMAÇÃO & OUTROS --", "")
-lista_limpa = " ".join(lista_limpa.split())
-
-alvos_input = st.sidebar.text_area("Lista de Alvos:", value=lista_limpa, height=300)
-
-st.sidebar.markdown("---")
-st.sidebar.info("Buscas em INGLÊS com operadores booleanos.")
-
-termo_fonte = st.sidebar.text_input("Termos Fonte (Modelos):", 
-                                    value="Kidney OR Renal OR Blood Vessels OR Vascular OR Lung OR Airway OR Intestine OR Gut OR Diabetic Nephropathy")
-
-termo_alvo = st.sidebar.text_input("Termos Alvo (Bexiga):", 
-                                   value="Bladder OR Vesical OR Urothelium OR Detrusor OR Cystitis OR Painful Bladder OR Overactive Bladder")
-
-botao_buscar = st.sidebar.button("🚀 Iniciar Lemos Buscador", type="primary")
-
-# ==========================================
-# 3. FUNÇÕES (PUBMED E ANÁLISE)
-# ==========================================
-def consultar_pubmed_count(termo_farmaco, termo_orgao, email):
+def consultar_pubmed_count(termo_farmaco, termo_orgao, email, y_start, y_end):
+    if not email: return -1
     Entrez.email = email
     termo_farmaco = termo_farmaco.replace(",", "").strip()
-    query = f"({termo_farmaco}) AND ({termo_orgao})"
+    query = f"({termo_farmaco}) AND ({termo_orgao}) AND {y_start}:{y_end}[DP]"
     try:
         handle = Entrez.esearch(db="pubmed", term=query, retmax=0)
         record = Entrez.read(handle)
@@ -79,140 +29,184 @@ def consultar_pubmed_count(termo_farmaco, termo_orgao, email):
     except:
         return -1
 
-def buscar_resumos_bexiga(termo_farmaco, termo_orgao, email, max_results=5):
+def extrair_conclusao(abstract_text):
+    if not abstract_text: return "Resumo não disponível."
+    match = re.search(r'(Conclusion|Conclusions|In conclusion|Summary|Results suggest that)(.*)', abstract_text, re.IGNORECASE | re.DOTALL)
+    if match: return "➡️ " + match.group(2).strip()[:300] + "..." 
+    return "➡️ " + abstract_text[:200] + "..."
+
+def buscar_resumos_detalhados(termo_farmaco, termo_orgao, email, y_start, y_end, limit=5):
+    if not email: return []
     Entrez.email = email
     termo_farmaco = termo_farmaco.replace(",", "").strip()
-    query = f"({termo_farmaco}) AND ({termo_orgao})"
-    
+    query = f"({termo_farmaco}) AND ({termo_orgao}) AND {y_start}:{y_end}[DP]"
     try:
-        handle = Entrez.esearch(db="pubmed", term=query, retmax=max_results, sort="relevance")
+        handle = Entrez.esearch(db="pubmed", term=query, retmax=limit, sort="relevance")
         record = Entrez.read(handle)
         id_list = record["IdList"]
-        
         if not id_list: return []
-            
         handle = Entrez.efetch(db="pubmed", id=id_list, rettype="medline", retmode="text")
         records = handle.read()
-        
         artigos = []
         raw_articles = records.split("\n\n")
-        
-        for art in raw_articles:
-            lines = art.split("\n")
-            title = "Sem Título"
-            source = "Fonte desconhecida"
-            pmid = "N/A"
+        for art_text in raw_articles:
+            lines = art_text.split("\n")
+            art_data = {"PMID": "N/A", "Title": "S/T", "Source": "N/A", "Abstract": ""}
+            current_tag = ""
             for line in lines:
-                if line.startswith("TI  - "): title = line[6:]
-                if line.startswith("TA  - "): source = line[6:]
-                if line.startswith("PMID- "): pmid = line[6:]
-            if pmid != "N/A":
-                artigos.append({"PMID": pmid, "Título": title, "Revista": source})
+                if len(line)<4: continue
+                tag, content = line[:4].strip(), line[6:]
+                if tag=="PMID": art_data["PMID"]=content
+                elif tag=="TI": art_data["Title"]=content; current_tag="TI"
+                elif tag=="TA": art_data["Source"]=content
+                elif tag=="AB": art_data["Abstract"]=content; current_tag="AB"
+                elif tag=="" and current_tag=="AB": art_data["Abstract"]+=" "+line.strip()
+                elif tag=="" and current_tag=="TI": art_data["Title"]+=" "+line.strip()
+            if art_data["PMID"]!="N/A":
+                art_data["Resumo_IA"] = extrair_conclusao(art_data["Abstract"])
+                artigos.append(art_data)
         return artigos
-    except Exception as e:
-        return [{"Erro": str(e)}]
-
-def gerar_analise_textual(df):
-    """ Gera um resumo inteligente baseado nos dados """
-    top_nicho = df.iloc[0]
-    total_nichos = len(df[df['Potencial'] > 10])
-    
-    texto = f"""
-    ### 🧠 Análise Automática
-    O algoritmo varreu **{len(df)} alvos farmacológicos**.
-    
-    **1. O Grande Destaque:**
-    A maior oportunidade detectada foi para **{top_nicho['Alvo']}**. 
-    Este alvo é **{top_nicho['Potencial']} vezes mais estudado** nos modelos comparativos (Rim/Vaso/Pulmão) do que na Bexiga.
-    Isso indica uma maturidade científica alta em outras áreas, mas um terreno quase virgem no seu campo.
-    
-    **2. Volume de Oportunidades:**
-    Encontramos **{total_nichos} alvos classificados como 'Nichos de Ouro'** (Ratio > 10x). 
-    Esses são os candidatos ideais para reposicionamento imediato.
-    
-    **3. Sugestão de Próximo Passo:**
-    Recomendamos focar a leitura nos resumos de **{top_nicho['Alvo']}** (usando a ferramenta abaixo) para verificar se os poucos artigos existentes ({top_nicho['Bexiga Total']}) já cobriram o mecanismo que você deseja propor.
-    """
-    return texto
+    except Exception as e: return []
 
 # ==========================================
-# 4. LÓGICA PRINCIPAL
+# 3. SELETOR DE MODO (A MÁGICA)
 # ==========================================
-if botao_buscar:
-    # --- BLOQUEIO DE E-MAIL ---
-    if not email_user or "@" not in email_user or len(email_user) < 5:
-        st.error("⛔ PARE! O preenchimento do E-mail é obrigatório para acessar o PubMed.")
-        st.stop() # Para a execução aqui se não tiver e-mail
+# Menu lateral fixo para troca de versão
+modo = st.sidebar.radio("📱 Escolha a Versão:", ["Desktop (Completo)", "Mobile (Pocket)"], index=0)
+st.sidebar.markdown("---")
+
+# Listas Padrão
+lista_padrao = """Autophagy, LC3B (MAP1LC3B), Beclin-1 (BECN1), p62 (SQSTM1), ATG5, mTOR, VEGF, VEGFR1, VEGFR2, TGF-beta1, CTGF, Galectin-3, P2X3, TRPV1, TRPV4, Beta-3 Adrenergic, SGLT2, ROCK (Rho-kinase), NLRP3, IL-17"""
+lista_limpa = " ".join(lista_padrao.replace("\n", " ").split())
+
+# ==========================================
+# 4. VERSÃO DESKTOP PRO (Lógica V6.0)
+# ==========================================
+if modo == "Desktop (Completo)":
+    st.title("🧬 Lemos Buscador: Desktop Pro")
+    st.markdown("**Ferramenta de Inteligência Bibliométrica Avançada**")
+
+    # --- Sidebar Desktop ---
+    st.sidebar.header("⚙️ Parâmetros")
+    email_user = st.sidebar.text_input("Seu E-mail:", placeholder="pesquisador@unifesp.br", key="email_desk")
+    anos = st.sidebar.slider("📅 Período:", 1990, 2025, (2010, 2025), key="anos_desk")
+    min_year, max_year = anos
     
-    else:
-        alvos_lista = [x.strip() for x in alvos_input.split(",") if x.strip()]
-        resultados = []
-        progresso = st.progress(0)
-        total = len(alvos_lista)
-        
-        for i, alvo in enumerate(alvos_lista):
-            n_fonte = consultar_pubmed_count(alvo, termo_fonte, email_user)
-            n_bexiga = consultar_pubmed_count(alvo, termo_alvo, email_user)
+    alvos_input = st.sidebar.text_area("Lista de Alvos:", value=lista_limpa, height=250, key="alvos_desk")
+    st.sidebar.info("Use vírgulas para separar os alvos.")
+    
+    termo_fonte = st.sidebar.text_input("Fonte (Comparação):", value="Kidney OR Renal OR Blood Vessels OR Vascular OR Lung OR Gut", key="fonte_desk")
+    termo_alvo = st.sidebar.text_input("Alvo (Seu Foco):", value="Bladder OR Vesical OR Urothelium OR Detrusor OR Cystitis", key="alvo_desk")
+    
+    if st.sidebar.button("🚀 Iniciar Análise Completa", type="primary"):
+        if not email_user or "@" not in email_user:
+            st.error("E-mail obrigatório!")
+        else:
+            alvos_lista = [x.strip() for x in alvos_input.split(",") if x.strip()]
+            resultados = []
+            bar = st.progress(0)
             
-            if n_fonte != -1:
-                ratio = n_fonte / n_bexiga if n_bexiga > 0 else n_fonte
-                resultados.append({
-                    "Alvo": alvo,
-                    "Fonte Total": n_fonte,
-                    "Bexiga Total": n_bexiga,
-                    "Potencial": round(ratio, 1)
-                })
-            progresso.progress((i + 1) / total)
-            time.sleep(0.1)
-
-        st.session_state['dados'] = pd.DataFrame(resultados).sort_values(by="Potencial", ascending=False)
-        st.success("Varredura concluída!")
-
-# --- PARTE 2: EXIBIÇÃO ---
-if 'dados' in st.session_state:
-    df = st.session_state['dados']
-    
-    # 1. RESUMO DE INTELIGÊNCIA (NOVIDADE)
-    st.divider()
-    with st.container():
-        st.markdown("## 📝 Resumo de Inteligência")
-        st.info(gerar_analise_textual(df))
-    
-    st.divider()
-
-    # 2. Gráfico e Tabela
-    col_chart, col_table = st.columns([1, 1])
-    
-    with col_chart:
-        st.subheader("📊 Ranking de Oportunidade")
-        fig = px.bar(df.head(15), x="Alvo", y="Potencial", color="Potencial", 
-                     title="Top 15 Nichos (Ratio Fonte/Bexiga)", color_continuous_scale="Bluered")
-        st.plotly_chart(fig, use_container_width=True)
-        
-    with col_table:
-        st.subheader("📋 Dados Brutos")
-        st.dataframe(df.style.background_gradient(subset=['Potencial'], cmap="Greens").hide(axis="index"), 
-                     use_container_width=True, height=400)
-
-    st.divider()
-
-    # 3. RAIO-X
-    st.header("🔎 Raio-X do Nicho: Validação")
-    st.markdown("Selecione um alvo para ler os resumos:")
-    
-    lista_alvos = df['Alvo'].tolist()
-    alvo_selecionado = st.selectbox("Alvo:", lista_alvos)
-    
-    if st.button(f"Buscar Artigos sobre {alvo_selecionado}"):
-        with st.spinner(f"Lemos Buscador investigando {alvo_selecionado}..."):
-            artigos = buscar_resumos_bexiga(alvo_selecionado, termo_alvo, email_user)
+            for i, alvo in enumerate(alvos_lista):
+                n_fonte = consultar_pubmed_count(alvo, termo_fonte, email_user, min_year, max_year)
+                n_bexiga = consultar_pubmed_count(alvo, termo_alvo, email_user, min_year, max_year)
+                if n_fonte != -1:
+                    ratio = n_fonte / n_bexiga if n_bexiga > 0 else n_fonte
+                    resultados.append({"Alvo": alvo, "Fonte Total": n_fonte, "Bexiga Total": n_bexiga, "Potencial": round(ratio, 1)})
+                bar.progress((i+1)/len(alvos_lista))
             
-            if not artigos:
-                st.balloons()
-                st.success(f"💎 CONFIRMADO! Zero artigos encontrados para '{alvo_selecionado}' na bexiga.")
-            else:
-                st.warning(f"Atenção: Já existem {len(artigos)} artigos principais. Verifique se não saturaram o tema.")
-                for art in artigos:
-                    with st.expander(f"📄 {art.get('Título', 'Sem Título')}"):
-                        st.write(f"**Revista:** {art.get('Revista', 'N/A')}")
-                        st.markdown(f"[Ler no PubMed](https://pubmed.ncbi.nlm.nih.gov/{art.get('PMID', '')})")
+            st.session_state['dados_desk'] = pd.DataFrame(resultados).sort_values(by="Potencial", ascending=False)
+            st.success("Análise finalizada!")
+
+    # --- Resultados Desktop ---
+    if 'dados_desk' in st.session_state:
+        df = st.session_state['dados_desk']
+        
+        # Resumo Inteligente
+        top = df.iloc[0]
+        st.info(f"💡 **Insight Rápido:** A maior oportunidade encontrada foi **{top['Alvo']}**, que é **{top['Potencial']}x** mais estudado fora da bexiga. Existem {len(df[df['Potencial']>10])} alvos com alto potencial de ineditismo.")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.subheader("📊 Gráfico de Nichos")
+            fig = px.bar(df.head(15), x="Alvo", y="Potencial", color="Potencial", color_continuous_scale="Bluered")
+            st.plotly_chart(fig, use_container_width=True)
+        with col2:
+            st.subheader("📋 Tabela de Dados")
+            st.dataframe(df.style.background_gradient(subset=['Potencial'], cmap="Greens").hide(axis="index"), use_container_width=True, height=400)
+            
+        st.divider()
+        st.header("🔎 Raio-X Detalhado")
+        sel_alvo = st.selectbox("Selecione para ver os artigos:", df['Alvo'].tolist())
+        
+        if st.button("Buscar Artigos (Desktop)"):
+            with st.spinner("Lendo conclusões..."):
+                artigos = buscar_resumos_detalhados(sel_alvo, termo_alvo, email_user, min_year, max_year)
+                if not artigos: st.balloons(); st.success("Nicho Confirmado! Zero artigos encontrados.")
+                else:
+                    for art in artigos:
+                        with st.expander(f"📄 {art['Title']}"):
+                            st.write(f"**Fonte:** {art['Source']}")
+                            st.info(art['Resumo_IA'])
+                            st.caption(art['Abstract'][:300] + "...")
+                            st.markdown(f"[Link PubMed](https://pubmed.ncbi.nlm.nih.gov/{art['PMID']})")
+
+# ==========================================
+# 5. VERSÃO MOBILE POCKET (Lógica V7.0)
+# ==========================================
+elif modo == "Mobile (Pocket)":
+    st.title("📱 Lemos Pocket")
+    st.caption("Interface simplificada para uso em celular.")
+
+    # --- Inputs Mobile (No centro, escondidos em Expander) ---
+    email_mobile = st.text_input("📧 E-mail (Obrigatório):", placeholder="pesquisador@unifesp.br", key="email_mob")
+    
+    with st.expander("⚙️ Configurar Busca (Toque para abrir)"):
+        anos_mob = st.slider("📅 Anos:", 1990, 2025, (2010, 2025), key="anos_mob")
+        alvos_mob = st.text_area("Alvos:", value=lista_limpa, height=150, key="alvos_mob")
+        t_fonte_mob = st.text_input("Fonte:", value="Kidney OR Vascular OR Lung", key="f_mob")
+        t_alvo_mob = st.text_input("Alvo:", value="Bladder OR Cystitis", key="a_mob")
+    
+    if st.button("🚀 INICIAR (Modo Rápido)", type="primary", use_container_width=True):
+        if not email_mobile or "@" not in email_mobile:
+            st.error("Preencha o e-mail!")
+        else:
+            alvos_lista = [x.strip() for x in alvos_mob.split(",") if x.strip()]
+            resultados = []
+            progresso = st.progress(0)
+            for i, alvo in enumerate(alvos_lista):
+                n_fonte = consultar_pubmed_count(alvo, t_fonte_mob, email_mobile, anos_mob[0], anos_mob[1])
+                n_bexiga = consultar_pubmed_count(alvo, t_alvo_mob, email_mobile, anos_mob[0], anos_mob[1])
+                if n_fonte != -1:
+                    ratio = n_fonte / n_bexiga if n_bexiga > 0 else n_fonte
+                    resultados.append({"Alvo": alvo, "Potencial": round(ratio, 1)})
+                progresso.progress((i+1)/len(alvos_lista))
+            
+            st.session_state['dados_mob'] = pd.DataFrame(resultados).sort_values(by="Potencial", ascending=False)
+            st.toast("Busca Concluída!", icon="✅")
+
+    # --- Resultados Mobile ---
+    if 'dados_mob' in st.session_state:
+        df_mob = st.session_state['dados_mob']
+        top_mob = df_mob.iloc[0]
+        
+        st.divider()
+        col_a, col_b = st.columns(2)
+        col_a.metric("🏆 Top Alvo", top_mob['Alvo'])
+        col_b.metric("Potencial", f"{top_mob['Potencial']}x")
+        
+        with st.expander("📋 Ver Lista Completa"):
+            st.dataframe(df_mob, use_container_width=True, hide_index=True)
+            
+        st.divider()
+        st.subheader("🔎 Raio-X Rápido")
+        sel_mob = st.selectbox("Escolha o alvo:", df_mob['Alvo'].tolist(), key="sel_mob")
+        
+        if st.button(f"Ler sobre {sel_mob}", use_container_width=True):
+            with st.spinner("Lendo..."):
+                arts_mob = buscar_resumos_detalhados(sel_mob, t_alvo_mob, email_mobile, anos_mob[0], anos_mob[1], limit=3)
+                if not arts_mob: st.info("Nenhum artigo encontrado!")
+                else:
+                    for art in arts_mob:
+                        st.success(f"**{art['Title']}**\n\n{art['Resumo_IA']}")
+                        st.link_button("Abrir PubMed", f"https://pubmed.ncbi.nlm.nih.gov/{art['PMID']}", use_container_width=True)
+                        st.write("---")
