@@ -10,7 +10,7 @@ from datetime import datetime
 # ==========================================
 # 1. CONFIGURAÇÃO GLOBAL
 # ==========================================
-st.set_page_config(page_title="Lemos Buscador Stable", page_icon="🧬", layout="wide")
+st.set_page_config(page_title="Lemos Gold", page_icon="🎓", layout="wide")
 
 # Inicialização do Session State
 if 'alvos_val' not in st.session_state: st.session_state.alvos_val = ""
@@ -18,26 +18,23 @@ if 'fonte_val' not in st.session_state: st.session_state.fonte_val = ""
 if 'alvo_val' not in st.session_state: st.session_state.alvo_val = ""
 
 # ==========================================
-# 2. BANCO DE DADOS
+# 2. BANCO DE DADOS INTELIGENTE
 # ==========================================
 SUGESTOES_ALVOS = """
--- ALVOS MAIS PROMISSORES (PRIORIDADE) --
+-- ALVOS PRIORITÁRIOS (Chance de Ouro?) --
 Autophagy, LC3B, Beclin-1, p62, mTOR, AMPK, VEGF, VEGFR2, TGF-beta1, CTGF, Galectin-3, P2X3, P2X7, TRPV1, TRPV4, TRPM8, Beta-3 Adrenergic, Muscarinic M3, Cannabinoid CB2
 
 -- FÁRMACOS & TOXINAS --
 Mirabegron, Solifenacin, Oxybutynin, Botulinum toxin A (BoNT/A), Resiniferatoxin (RTX), Tadalafil, Sildenafil, Rapamycin, Metformin, Silodosin, Tamsulosin
 
--- CANAIS IÔNICOS (MUSCULO LISO & NERVO) --
+-- CANAIS IÔNICOS --
 BK channel (KCa1.1), SK3 channel, Kv7.4 (KCNQ4), Kv7.5, KATP channel (Kir6.2), L-type Calcium Channel (Cav1.2), T-type Calcium Channel, Piezo1, Piezo2, ASIC1, ASIC3, TRPA1, TRPC6
 
--- RECEPTORES GPCRS --
+-- RECEPTORES --
 Alpha-1A Adrenergic, Alpha-1D Adrenergic, Beta-2 Adrenergic, Muscarinic M2, Dopamine D2, Serotonin 5-HT, Adenosine A1, Adenosine A2A, P2Y receptors, Angiotensin II receptor (AT1R), Mas receptor
 
--- INFLAMAÇÃO, DOR & NEUROPEPTÍDEOS --
-NLRP3, IL-1beta, IL-6, IL-17, IL-33, TNF-alpha, COX-2, PGE2, NGF, BDNF, CGRP, Substance P, VIP, PACAP, Bradykinin B1, Bradykinin B2
-
--- METABOLISMO, HORMONIOS & ENZIMAS --
-Estrogen Receptor Alpha (ESR1), Estrogen Receptor Beta (ESR2), Androgen Receptor, ROCK (Rho-kinase), RhoA, PDE4, PDE5, nNOS, eNOS, iNOS, SGLT2, ACE2, Nrf2, HO-1, Sirtuin-1
+-- INFLAMAÇÃO & OUTROS --
+NLRP3, IL-1beta, IL-6, IL-17, IL-33, TNF-alpha, COX-2, PGE2, NGF, BDNF, CGRP, Substance P, VIP, PACAP, Bradykinin B1, Bradykinin B2, ROCK (Rho-kinase), RhoA, PDE4, PDE5, nNOS, eNOS, iNOS, SGLT2, ACE2, Nrf2, HO-1, Sirtuin-1
 """
 LISTA_ALVOS_LIMPA = " ".join(SUGESTOES_ALVOS.replace("\n", " ").split())
 
@@ -45,30 +42,6 @@ PRESETS_ORGAOS = {
     "(Sugestão Lemos)": {
         "fonte": "Kidney OR Renal OR Blood Vessels OR Vascular OR Intestine OR Gut OR Lung OR Airway OR Uterus OR Prostate OR Heart OR Cardiac OR Smooth Muscle",
         "alvo": "Bladder OR Vesical OR Urothelium OR Detrusor OR Cystitis OR Overactive Bladder OR Painful Bladder"
-    },
-    "Rim/Vaso -> Bexiga": {
-        "fonte": "Kidney OR Renal OR Blood Vessels OR Vascular OR Hypertension",
-        "alvo": "Bladder OR Vesical OR Urothelium OR Detrusor OR Cystitis"
-    },
-    "Próstata/Uretra -> Bexiga": {
-        "fonte": "Prostate OR Prostatic OR Urethra OR Urethral OR BPH OR LUTS",
-        "alvo": "Bladder OR Detrusor OR Overactive Bladder"
-    },
-    "Pulmão/Asma -> Bexiga": {
-        "fonte": "Lung OR Pulmonary OR Airway OR Bronchial OR Asthma OR COPD",
-        "alvo": "Bladder OR Detrusor OR Smooth Muscle"
-    },
-    "Útero -> Bexiga": {
-        "fonte": "Uterus OR Uterine OR Myometrium OR Endometrium",
-        "alvo": "Bladder OR Detrusor OR Smooth Muscle"
-    },
-    "Coração -> Bexiga": {
-        "fonte": "Heart OR Cardiac OR Myocardium OR Cardiomyocyte",
-        "alvo": "Bladder OR Detrusor OR Smooth Muscle"
-    },
-    "Intestino -> Bexiga": {
-        "fonte": "Gut OR Intestine OR Colon OR Bowel OR Enteric",
-        "alvo": "Bladder OR Cystitis"
     }
 }
 
@@ -77,15 +50,10 @@ def carregar_setup_lemos():
     st.session_state.alvos_val = LISTA_ALVOS_LIMPA
     st.session_state.fonte_val = PRESETS_ORGAOS["(Sugestão Lemos)"]["fonte"]
     st.session_state.alvo_val = PRESETS_ORGAOS["(Sugestão Lemos)"]["alvo"]
-    st.toast("Setup Carregado com Sucesso!", icon="✅")
+    st.toast("Ambiente Doutorado Configurado!", icon="🎓")
 
 def carregar_alvos_apenas(): 
     st.session_state.alvos_val = LISTA_ALVOS_LIMPA
-
-def carregar_orgaos(preset_name):
-    dados = PRESETS_ORGAOS[preset_name]
-    st.session_state.fonte_val = dados["fonte"]
-    st.session_state.alvo_val = dados["alvo"]
 
 # ==========================================
 # 3. FUNÇÕES TÉCNICAS
@@ -151,47 +119,31 @@ modo = st.sidebar.radio("📱 Modo:", ["Desktop (Completo)", "Mobile (Pocket)"],
 st.sidebar.markdown("---")
 
 if modo == "Desktop (Completo)":
-    st.title("🔬 Lemos Ultimate Edition")
-    st.markdown("**Ferramenta Bibliométrica Personalizada**")
+    st.title("🎓 Lemos Doutorado")
+    st.markdown("**Ferramenta de Inteligência Bibliométrica**")
 
-    st.sidebar.header("1. Identificação")
+    st.sidebar.header("1. Credenciais")
     email_user = st.sidebar.text_input("Seu E-mail:", placeholder="pesquisador@unifesp.br", key="email_desk")
     anos = st.sidebar.slider("📅 Período:", 1990, 2025, (2010, 2025), key="anos_desk")
     min_year, max_year = anos
     
     st.sidebar.markdown("---")
+    st.sidebar.header("2. Configuração")
     
-    # --- CONFIGURAÇÃO DE ÓRGÃOS ---
-    st.sidebar.header("2. Configuração de Órgãos")
+    # Inputs Visíveis
+    termo_fonte = st.sidebar.text_input("Fonte (Comparação):", key="fonte_val", placeholder="Sistemas Consolidados...")
+    termo_alvo = st.sidebar.text_input("Alvo (Seu Foco):", key="alvo_val", placeholder="Bexiga/Urotélio...")
     
-    # Inputs
-    termo_fonte = st.sidebar.text_input("Fonte:", key="fonte_val", placeholder="Orgãos de Comparação...")
-    termo_alvo = st.sidebar.text_input("Alvo:", key="alvo_val", placeholder="Orgão Alvo (Bexiga)...")
+    st.sidebar.caption("👇 Configuração com um clique:")
     
-    st.sidebar.caption("👇 Ou preencha com um clique:")
-    
-    # Botão Master (Callback)
-    st.sidebar.button("🧪 (Sugestão Lemos) - Comparar Tudo", type="primary", on_click=carregar_setup_lemos)
-    
-    # Botões Específicos (Callback com args)
-    c1, c2 = st.sidebar.columns(2)
-    c1.button("Rim ➡️ Bexiga", on_click=carregar_orgaos, args=("Rim/Vaso -> Bexiga",))
-    c2.button("Próstata ➡️ Bexiga", on_click=carregar_orgaos, args=("Próstata/Uretra -> Bexiga",))
-    
-    c3, c4 = st.sidebar.columns(2)
-    c3.button("Pulmão ➡️ Bexiga", on_click=carregar_orgaos, args=("Pulmão/Asma -> Bexiga",))
-    c4.button("Intestino ➡️ Bexiga", on_click=carregar_orgaos, args=("Intestino -> Bexiga",))
+    # BOTÃO RENOMEADO (SEM 'COMPARAR TUDO')
+    st.sidebar.button("🎓 Doutorado Guilherme Lemos", type="primary", on_click=carregar_setup_lemos)
     
     st.sidebar.markdown("---")
+    st.sidebar.header("3. Alvos")
     
-    # --- CONFIGURAÇÃO DE ALVOS ---
-    st.sidebar.header("3. Lista de Alvos")
-    
-    # Input
-    alvos_input = st.sidebar.text_area("Lista de Pesquisa:", key="alvos_val", height=150, placeholder="Digite ou carregue a lista...")
-    
-    # Botão
-    st.sidebar.button("📥 Restaurar Lista Completa (+90 Alvos)", on_click=carregar_alvos_apenas)
+    alvos_input = st.sidebar.text_area("Lista de Pesquisa:", key="alvos_val", height=150, placeholder="Carregue a lista...")
+    st.sidebar.button("📥 Restaurar Lista Completa", on_click=carregar_alvos_apenas)
 
     st.sidebar.markdown("---")
 
@@ -213,25 +165,68 @@ if modo == "Desktop (Completo)":
                 progresso_texto.text(f"⏳ Processando {i+1}/{len(alvos_lista)}: {alvo}")
                 n_fonte = consultar_pubmed_count(alvo, termo_fonte, email_user, min_year, max_year)
                 n_bexiga = consultar_pubmed_count(alvo, termo_alvo, email_user, min_year, max_year)
+                
                 if n_fonte != -1:
                     ratio = n_fonte / n_bexiga if n_bexiga > 0 else n_fonte
-                    resultados.append({"Alvo": alvo, "Fonte Total": n_fonte, "Alvo Total": n_bexiga, "Potencial": round(ratio, 1)})
+                    
+                    # --- LÓGICA DE STATUS (A "MELHOR FORMA") ---
+                    status = "N/A"
+                    if n_bexiga >= n_fonte:
+                        status = "🔴 Saturado" # Já tem mais na bexiga que fora
+                    elif ratio > 10 and n_fonte > 200:
+                        status = "💎 Chance de OURO" # Muito famoso fora, virgem na bexiga
+                    elif ratio > 5 and n_fonte > 100:
+                        status = "🥇 Chance Alta"
+                    elif ratio > 3:
+                        status = "🥇 Chance Média"
+                    elif ratio > 1.5:
+                        status = "🥈 Chance Baixa"
+                    else:
+                        status = "🔴 Saturado"
+                    
+                    resultados.append({
+                        "Alvo": alvo, 
+                        "Status": status, # Coluna Nova
+                        "Potencial (x)": round(ratio, 1),
+                        "Fonte Total": n_fonte, 
+                        "Bexiga Total": n_bexiga
+                    })
                 bar.progress((i+1)/len(alvos_lista))
             
             progresso_texto.empty()
-            st.session_state['dados_desk'] = pd.DataFrame(resultados).sort_values(by="Potencial", ascending=False)
+            st.session_state['dados_desk'] = pd.DataFrame(resultados).sort_values(by="Potencial (x)", ascending=False)
 
     if 'dados_desk' in st.session_state:
         df = st.session_state['dados_desk']
         top = df.iloc[0]
-        st.success(f"✅ Processado! Destaque: **{top['Alvo']}**.")
+        
+        # Métricas de Resumo
+        total_ouro = len(df[df['Status'].str.contains("OURO")])
+        st.success(f"✅ Varredura Concluída! Encontramos **{total_ouro} Chances de Ouro**. O maior destaque é **{top['Alvo']}**.")
         
         col1, col2 = st.columns([2, 1])
         with col1:
-            fig = px.bar(df.head(20), x="Alvo", y="Potencial", color="Potencial", title="Top 20 Oportunidades", color_continuous_scale="Bluered")
+            fig = px.bar(df.head(20), x="Alvo", y="Potencial (x)", color="Status", 
+                         title="Top 20 Oportunidades (Por Status)", 
+                         color_discrete_map={
+                             "💎 Chance de OURO": "#00CC96", # Verde/Ciano
+                             "🥇 Chance Alta": "#636EFA",    # Azul
+                             "🥇 Chance Média": "#AB63FA",   # Roxo
+                             "🥈 Chance Baixa": "#FFA15A",   # Laranja
+                             "🔴 Saturado": "#EF553B"        # Vermelho
+                         })
             st.plotly_chart(fig, use_container_width=True)
+            
         with col2:
-            st.dataframe(df[["Alvo", "Fonte Total", "Alvo Total", "Potencial"]].style.background_gradient(subset=['Potencial'], cmap="Greens").hide(axis="index"), use_container_width=True, height=500)
+            # Tabela com a coluna Status visível
+            st.dataframe(
+                df[["Alvo", "Status", "Potencial (x)", "Fonte Total", "Bexiga Total"]]
+                .style.applymap(lambda v: 'color: red;' if 'Saturado' in str(v) else ('color: green; font-weight: bold;' if 'OURO' in str(v) else ''), subset=['Status'])
+                .hide(axis="index"), 
+                use_container_width=True, 
+                height=500
+            )
+            
             csv = df.to_csv(index=False).encode('utf-8')
             st.download_button("📥 Baixar Planilha Completa", csv, f'analise_lemos_{datetime.now().strftime("%Y%m%d")}.csv', 'text/csv', use_container_width=True)
             
@@ -243,7 +238,7 @@ if modo == "Desktop (Completo)":
         if col_btn1.button("Ler Artigos"):
             with st.spinner("Buscando..."):
                 arts = buscar_resumos_detalhados(sel, termo_alvo, email_user, min_year, max_year)
-                if not arts: st.info("Zero artigos encontrados.")
+                if not arts: st.info("Zero artigos encontrados na bexiga. (Isso confirma o Status!)")
                 else:
                     for a in arts:
                         with st.expander(f"📄 {a['Title']}"):
@@ -251,8 +246,8 @@ if modo == "Desktop (Completo)":
                             st.success(a['Resumo_IA'])
                             st.markdown(f"[Link PubMed](https://pubmed.ncbi.nlm.nih.gov/{a['PMID']})")
         
-        if col_btn2.button("🎓 Buscar no Google Scholar"):
-             st.markdown(f"👉 [Clique aqui para abrir **{sel} + Bexiga** no Google Scholar](https://scholar.google.com.br/scholar?q={sel}+AND+bladder)", unsafe_allow_html=True)
+        if col_btn2.button("🎓 Google Scholar"):
+             st.markdown(f"👉 [Ver **{sel} + Bexiga** no Scholar](https://scholar.google.com.br/scholar?q={sel}+AND+bladder)", unsafe_allow_html=True)
 
 elif modo == "Mobile (Pocket)":
     st.title("📱 Lemos Pocket")
@@ -264,8 +259,8 @@ elif modo == "Mobile (Pocket)":
         t_fonte_mob = st.text_input("Fonte:", key="fonte_val", placeholder="Fonte...")
         t_alvo_mob = st.text_input("Alvo:", key="alvo_val", placeholder="Alvo...")
         
-        st.caption("Preenchimento Rápido:")
-        st.button("🧪 SETUP COMPLETO", key="mob_lemos", type="primary", on_click=carregar_setup_lemos)
+        # Botão Mobile RENOMEADO
+        st.button("🎓 Doutorado Guilherme Lemos", key="mob_lemos", type="primary", on_click=carregar_setup_lemos)
         
         st.markdown("---")
         alvos_mob = st.text_area("Alvos:", key="alvos_val", height=150)
@@ -282,7 +277,15 @@ elif modo == "Mobile (Pocket)":
                 nb = consultar_pubmed_count(al, t_alvo_mob, email_mob, anos_mob[0], anos_mob[1])
                 if nf!=-1:
                     rat = nf/nb if nb>0 else nf
-                    res.append({"Alvo": al, "Potencial": round(rat, 1)})
+                    
+                    # Lógica Simplificada para Mobile
+                    stat = "N/A"
+                    if nb >= nf: stat = "🔴"
+                    elif rat > 10 and nf > 200: stat = "💎 OURO"
+                    elif rat > 5: stat = "🥇 ALTA"
+                    else: stat = "🥈 MÉDIA"
+                    
+                    res.append({"Alvo": al, "Status": stat, "Potencial": round(rat, 1)})
                 pg.progress((i+1)/len(lst))
             st.session_state['dados_mob'] = pd.DataFrame(res).sort_values(by="Potencial", ascending=False)
             
@@ -290,7 +293,7 @@ elif modo == "Mobile (Pocket)":
         d = st.session_state['dados_mob']
         t = d.iloc[0]
         st.divider()
-        st.metric("🏆 Top 1", t['Alvo'], f"{t['Potencial']}x")
+        st.metric("🏆 Top 1", t['Alvo'], f"{t['Potencial']}x ({t['Status']})")
         csv_mob = d.to_csv(index=False).encode('utf-8')
         st.download_button("📥 Baixar CSV", csv_mob, "mobile.csv", "text/csv", use_container_width=True)
         with st.expander("Ver Lista"): st.dataframe(d, use_container_width=True, hide_index=True)
