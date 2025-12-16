@@ -9,14 +9,67 @@ from deep_translator import GoogleTranslator
 # ==========================================
 # 1. CONFIGURAÇÃO GLOBAL
 # ==========================================
-st.set_page_config(
-    page_title="Lemos Buscador", 
-    page_icon="🇧🇷", 
-    layout="wide" 
-)
+st.set_page_config(page_title="Lemos Buscador Private", page_icon="🔬", layout="wide")
+
+# Inicialização do Session State
+if 'alvos_val' not in st.session_state: st.session_state.alvos_val = ""
+if 'fonte_val' not in st.session_state: st.session_state.fonte_val = ""
+if 'alvo_val' not in st.session_state: st.session_state.alvo_val = ""
 
 # ==========================================
-# 2. FUNÇÕES DO SISTEMA
+# 2. BANCO DE DADOS (EXPANDIDO PARA DOUTORADO)
+# ==========================================
+
+# SUA LISTA EXCLUSIVA (Personalizada e Expandida)
+SUGESTOES_ALVOS = """
+-- ALVOS MAIS PROMISSORES (PRIORIDADE) --
+Autophagy, LC3B, Beclin-1, p62, mTOR, AMPK, VEGF, VEGFR2, TGF-beta1, CTGF, Galectin-3, P2X3, P2X7, TRPV1, TRPV4, TRPM8, Beta-3 Adrenergic, Muscarinic M3, Cannabinoid CB2
+
+-- FÁRMACOS & TOXINAS --
+Mirabegron, Solifenacin, Oxybutynin, Botulinum toxin A (BoNT/A), Resiniferatoxin (RTX), Tadalafil, Sildenafil, Rapamycin, Metformin
+
+-- CANAIS IÔNICOS (MUSCULO LISO & NERVO) --
+BK channel (KCa1.1), SK3 channel, Kv7.4 (KCNQ4), Kv7.5, KATP channel (Kir6.2), L-type Calcium Channel (Cav1.2), T-type Calcium Channel, Piezo1, Piezo2, ASIC1, ASIC3, TRPA1, TRPC6
+
+-- RECEPTORES ACOPLADOS A G (GPCRS) --
+Alpha-1A Adrenergic, Alpha-1D Adrenergic, Beta-2 Adrenergic, Muscarinic M2, Dopamine D2, Serotonin 5-HT, Adenosine A1, Adenosine A2A, P2Y receptors, Angiotensin II receptor (AT1R), Mas receptor
+
+-- INFLAMAÇÃO, DOR & NEUROPEPTÍDEOS --
+NLRP3, IL-1beta, IL-6, IL-17, IL-33, TNF-alpha, COX-2, PGE2, NGF, BDNF, CGRP, Substance P, VIP, PACAP, Bradykinin B1, Bradykinin B2
+
+-- METABOLISMO, HORMONIOS & ENZIMAS --
+Estrogen Receptor Alpha (ESR1), Estrogen Receptor Beta (ESR2), Androgen Receptor, ROCK (Rho-kinase), RhoA, PDE4, PDE5, nNOS, eNOS, iNOS, SGLT2, ACE2, Nrf2, HO-1, Sirtuin-1
+"""
+LISTA_ALVOS_LIMPA = " ".join(SUGESTOES_ALVOS.replace("\n", " ").split())
+
+# PRESETS DE ÓRGÃOS
+PRESETS_ORGAOS = {
+    "(Sugestão Lemos)": {
+        # O Padrão Ouro: Compara Bexiga com TUDO que é parecido (Rim, Intestino, Vaso, Útero, Pulmão)
+        "fonte": "Kidney OR Renal OR Blood Vessels OR Vascular OR Intestine OR Gut OR Colon OR Lung OR Airway OR Uterus OR Myometrium OR Smooth Muscle",
+        "alvo": "Bladder OR Vesical OR Urothelium OR Detrusor OR Cystitis OR Overactive Bladder OR Painful Bladder"
+    },
+    "Rim/Vaso -> Bexiga": {
+        "fonte": "Kidney OR Renal OR Blood Vessels OR Vascular OR Hypertension",
+        "alvo": "Bladder OR Vesical OR Urothelium OR Detrusor OR Cystitis"
+    },
+    "Cérebro -> Intestino (Gut-Brain)": {
+        "fonte": "Brain OR CNS OR Central Nervous System OR Neuronal",
+        "alvo": "Gut OR Intestine OR Colon OR Enteric Nervous System"
+    }
+}
+
+# Funções de Callback
+def carregar_alvos():
+    st.session_state.alvos_val = LISTA_ALVOS_LIMPA
+
+def carregar_orgaos(preset_name):
+    dados = PRESETS_ORGAOS[preset_name]
+    st.session_state.fonte_val = dados["fonte"]
+    st.session_state.alvo_val = dados["alvo"]
+
+# ==========================================
+# 3. FUNÇÕES (BUSCA + TRADUÇÃO)
 # ==========================================
 def consultar_pubmed_count(termo_farmaco, termo_orgao, email, y_start, y_end):
     if not email: return -1
@@ -31,31 +84,15 @@ def consultar_pubmed_count(termo_farmaco, termo_orgao, email, y_start, y_end):
         return -1
 
 def traduzir_para_pt(texto):
-    """ Traduz do Inglês para Português usando Deep Translator """
     try:
-        tradutor = GoogleTranslator(source='auto', target='pt')
-        return tradutor.translate(texto)
+        return GoogleTranslator(source='auto', target='pt').translate(texto)
     except:
-        return texto # Se der erro, devolve em inglês mesmo
+        return texto
 
 def extrair_conclusao(abstract_text):
     if not abstract_text: return "Resumo não disponível."
-    
-    # Tenta achar a conclusão em inglês
     match = re.search(r'(Conclusion|Conclusions|In conclusion|Summary|Results suggest that)(.*)', abstract_text, re.IGNORECASE | re.DOTALL)
-    
-    texto_final = ""
-    if match: 
-        texto_final = match.group(2).strip()[:400] # Pega até 400 caracteres
-    else:
-        # Se não achar a palavra mágica, pega as últimas 3 frases
-        frases = abstract_text.split(". ")
-        if len(frases) > 3:
-            texto_final = ". ".join(frases[-3:])
-        else:
-            texto_final = abstract_text[:300]
-            
-    # TRADUZ A CONCLUSÃO ENCONTRADA
+    texto_final = match.group(2).strip()[:400] if match else abstract_text[-400:]
     return "🇧🇷 " + traduzir_para_pt(texto_final) + "..."
 
 def buscar_resumos_detalhados(termo_farmaco, termo_orgao, email, y_start, y_end, limit=5):
@@ -86,62 +123,51 @@ def buscar_resumos_detalhados(termo_farmaco, termo_orgao, email, y_start, y_end,
                 elif tag=="" and current_tag=="AB": art_data["Abstract"]+=" "+line.strip()
                 elif tag=="" and current_tag=="TI": art_data["Title"]+=" "+line.strip()
             if art_data["PMID"]!="N/A":
-                # Aqui chamamos a tradução
                 art_data["Resumo_IA"] = extrair_conclusao(art_data["Abstract"])
                 artigos.append(art_data)
         return artigos
-    except Exception as e: return []
+    except: return []
 
 # ==========================================
-# 3. INTERFACE E MODOS
+# 4. INTERFACE
 # ==========================================
-modo = st.sidebar.radio("📱 Modo de Visualização:", ["Desktop (Completo)", "Mobile (Pocket)"], index=0)
+modo = st.sidebar.radio("📱 Modo:", ["Desktop (Completo)", "Mobile (Pocket)"], index=0)
 st.sidebar.markdown("---")
 
-# LISTA COMPLETA (SUGESTÃO)
-lista_sugestao_completa = """
-Autophagy, LC3B (MAP1LC3B), Beclin-1 (BECN1), p62 (SQSTM1), ATG5, mTOR, 
-VEGF, VEGFR1, VEGFR2, NRP1 (Neuropilin), VEGF-B, 
-TGF-beta1, CTGF, Galectin-3, MMP-9, 
-P2X3, TRPV1, TRPV4, Beta-3 Adrenergic, Muscarinic M3, 
-SGLT2, ROCK (Rho-kinase), NLRP3, IL-17, Nrf2
-"""
-lista_limpa = " ".join(lista_sugestao_completa.replace("\n", " ").split())
-
-# ==========================================
-# 4. VERSÃO DESKTOP
-# ==========================================
 if modo == "Desktop (Completo)":
-    st.title("🧬 Lemos Buscador: Versão Tradutor")
-    st.markdown("**Ferramenta de Inteligência Bibliométrica com IA de Tradução**")
+    st.title("🔬 Lemos Private Edition")
+    st.markdown("**Ferramenta Bibliométrica Personalizada para Doutorado**")
 
-    # Sidebar
-    st.sidebar.header("⚙️ Parâmetros")
+    st.sidebar.header("1. Identificação")
     email_user = st.sidebar.text_input("Seu E-mail:", placeholder="pesquisador@unifesp.br", key="email_desk")
     anos = st.sidebar.slider("📅 Período:", 1990, 2025, (2010, 2025), key="anos_desk")
     min_year, max_year = anos
     
-    # LÓGICA DO BOTÃO DE SUGESTÃO (DESKTOP)
-    if "alvos_desk_val" not in st.session_state: st.session_state.alvos_desk_val = ""
+    st.sidebar.markdown("---")
+    st.sidebar.header("2. Seus Órgãos")
     
-    def carregar_sugestao_desk():
-        st.session_state.alvos_desk_val = lista_limpa
+    # SEU BOTÃO PERSONALIZADO
+    if st.sidebar.button("🧪 (Sugestão Lemos) - Comparar Tudo"): 
+        carregar_orgaos("(Sugestão Lemos)")
+    
+    col_p1, col_p2 = st.sidebar.columns(2)
+    if col_p1.button("Rim ➡️ Bexiga"): carregar_orgaos("Rim/Vaso -> Bexiga")
+    if col_p2.button("Cérebro ➡️ Intestino"): carregar_orgaos("Cérebro -> Intestino (Gut-Brain)")
+    
+    st.sidebar.caption("Configuração Atual:")
+    termo_fonte = st.sidebar.text_input("Fonte:", key="fonte_val", placeholder="Carregue um botão acima...")
+    termo_alvo = st.sidebar.text_input("Alvo:", key="alvo_val", placeholder="Carregue um botão acima...")
+    
+    st.sidebar.markdown("---")
+    st.sidebar.header("3. Sua Lista de Alvos")
+    st.sidebar.caption("Inclui: Autofagia, Canais, Receptores, Hormônios e Fármacos.")
+    if st.sidebar.button("📥 Carregar Minha Lista Completa"): carregar_alvos()
+    alvos_input = st.sidebar.text_area("Alvos:", key="alvos_val", height=200)
 
-    st.sidebar.markdown("### 🎯 Alvos Moleculares")
-    # Botão que carrega a lista
-    st.sidebar.button("📥 Carregar Sugestões do Doutorado", on_click=carregar_sugestao_desk)
-    
-    # Caixa de texto vinculada ao Session State (começa vazia, enche se clicar no botão)
-    alvos_input = st.sidebar.text_area("Lista para Pesquisa:", key="alvos_desk_val", height=250)
-    
-    termo_fonte = st.sidebar.text_input("Fonte (Comparação):", value="Kidney OR Renal OR Blood Vessels OR Vascular OR Lung OR Gut", key="fonte_desk")
-    termo_alvo = st.sidebar.text_input("Alvo (Seu Foco):", value="Bladder OR Vesical OR Urothelium OR Detrusor OR Cystitis", key="alvo_desk")
-    
-    if st.sidebar.button("🚀 Iniciar Análise", type="primary"):
-        if not email_user or "@" not in email_user:
-            st.error("E-mail obrigatório!")
-        elif not alvos_input:
-            st.warning("A lista de alvos está vazia! Digite algo ou clique em 'Carregar Sugestões'.")
+    if st.sidebar.button("🚀 Iniciar Minha Análise", type="primary"):
+        if not email_user or "@" not in email_user: st.error("E-mail obrigatório!")
+        elif not termo_fonte or not termo_alvo: st.warning("Escolha os órgãos!")
+        elif not alvos_input: st.warning("Lista vazia!")
         else:
             alvos_lista = [x.strip() for x in alvos_input.split(",") if x.strip()]
             resultados = []
@@ -151,99 +177,80 @@ if modo == "Desktop (Completo)":
                 n_bexiga = consultar_pubmed_count(alvo, termo_alvo, email_user, min_year, max_year)
                 if n_fonte != -1:
                     ratio = n_fonte / n_bexiga if n_bexiga > 0 else n_fonte
-                    resultados.append({"Alvo": alvo, "Fonte Total": n_fonte, "Bexiga Total": n_bexiga, "Potencial": round(ratio, 1)})
+                    resultados.append({"Alvo": alvo, "Fonte Total": n_fonte, "Alvo Total": n_bexiga, "Potencial": round(ratio, 1)})
                 bar.progress((i+1)/len(alvos_lista))
             st.session_state['dados_desk'] = pd.DataFrame(resultados).sort_values(by="Potencial", ascending=False)
 
-    # Resultados Desktop
     if 'dados_desk' in st.session_state:
         df = st.session_state['dados_desk']
         top = df.iloc[0]
-        st.info(f"💡 **Insight:** O maior nicho é **{top['Alvo']}** ({top['Potencial']}x).")
+        st.success(f"💎 **Maior Oportunidade:** {top['Alvo']} ({top['Potencial']}x).")
         
-        col1, col2 = st.columns(2)
+        col1, col2 = st.columns([2, 1])
         with col1:
-            fig = px.bar(df.head(15), x="Alvo", y="Potencial", color="Potencial", color_continuous_scale="Bluered")
+            fig = px.bar(df.head(20), x="Alvo", y="Potencial", color="Potencial", title="Top 20 Alvos Promissores", color_continuous_scale="Bluered")
             st.plotly_chart(fig, use_container_width=True)
         with col2:
-            st.dataframe(df.style.background_gradient(subset=['Potencial'], cmap="Greens").hide(axis="index"), use_container_width=True, height=400)
+            st.dataframe(df[["Alvo", "Fonte Total", "Alvo Total", "Potencial"]].style.background_gradient(subset=['Potencial'], cmap="Greens").hide(axis="index"), use_container_width=True, height=500)
             
         st.divider()
-        st.header("🔎 Raio-X (Com Tradução PT-BR)")
-        st.caption("O sistema vai ler o abstract em inglês e traduzir a conclusão para você.")
-        
-        sel_alvo = st.selectbox("Selecione o alvo:", df['Alvo'].tolist())
-        
-        if st.button("Buscar e Traduzir Artigos"):
-            with st.spinner(f"Lendo e traduzindo artigos sobre {sel_alvo}... (Isso pode levar alguns segundos)"):
-                artigos = buscar_resumos_detalhados(sel_alvo, termo_alvo, email_user, min_year, max_year)
-                if not artigos: st.balloons(); st.success("Nicho Confirmado! Zero artigos encontrados.")
+        st.header("🔎 Raio-X Traduzido")
+        sel = st.selectbox("Investigar Alvo:", df['Alvo'].tolist())
+        if st.button("Ler e Traduzir"):
+            with st.spinner("Processando..."):
+                arts = buscar_resumos_detalhados(sel, termo_alvo, email_user, min_year, max_year)
+                if not arts: st.info("Zero artigos encontrados (Nicho Puro!)")
                 else:
-                    for art in artigos:
-                        with st.expander(f"📄 {art['Title']}"):
-                            st.write(f"**Fonte:** {art['Source']}")
-                            # Exibe a tradução em destaque
-                            st.success(art['Resumo_IA'])
-                            st.caption(f"Original (En): {art['Abstract'][:200]}...")
-                            st.markdown(f"[Link PubMed](https://pubmed.ncbi.nlm.nih.gov/{art['PMID']})")
+                    for a in arts:
+                        with st.expander(f"📄 {a['Title']}"):
+                            st.write(f"**Revista:** {a['Source']}")
+                            st.success(a['Resumo_IA'])
+                            st.markdown(f"[Link PubMed](https://pubmed.ncbi.nlm.nih.gov/{a['PMID']})")
 
-# ==========================================
-# 5. VERSÃO MOBILE
-# ==========================================
 elif modo == "Mobile (Pocket)":
-    st.title("📱 Lemos Pocket Tradutor")
+    st.title("📱 Lemos Pocket")
+    email_mob = st.text_input("📧 E-mail:", placeholder="pesquisador@unifesp.br", key="email_mob")
     
-    email_mobile = st.text_input("📧 E-mail:", placeholder="pesquisador@unifesp.br", key="email_mob")
-    
-    # LÓGICA DO BOTÃO DE SUGESTÃO (MOBILE)
-    if "alvos_mob_val" not in st.session_state: st.session_state.alvos_mob_val = ""
-    def carregar_sugestao_mob(): st.session_state.alvos_mob_val = lista_limpa
-
     with st.expander("⚙️ Configurar Busca"):
-        anos_mob = st.slider("📅 Anos:", 1990, 2025, (2010, 2025), key="anos_mob")
-        st.button("📥 Usar Sugestões Padrão", on_click=carregar_sugestao_mob, key="btn_mob_sug")
-        alvos_mob = st.text_area("Alvos:", key="alvos_mob_val", height=150)
-        t_fonte_mob = st.text_input("Fonte:", value="Kidney OR Vascular OR Lung", key="f_mob")
-        t_alvo_mob = st.text_input("Alvo:", value="Bladder OR Cystitis", key="a_mob")
-    
+        anos_mob = st.slider("📅 Anos:", 1990, 2025, (2010, 2025))
+        
+        # BOTÃO MOBILE
+        if st.button("🧪 (Sugestão Lemos)", key="mob_lemos"): carregar_orgaos("(Sugestão Lemos)")
+        
+        t_fonte_mob = st.text_input("Fonte:", key="fonte_val", placeholder="Fonte...")
+        t_alvo_mob = st.text_input("Alvo:", key="alvo_val", placeholder="Alvo...")
+        
+        if st.button("📥 Minha Lista", key="mob_alvos"): carregar_alvos()
+        alvos_mob = st.text_area("Alvos:", key="alvos_val", height=150)
+        
     if st.button("🚀 INICIAR", type="primary", use_container_width=True):
-        if not email_mobile or "@" not in email_mobile: st.error("Preencha o e-mail!")
-        elif not alvos_mob: st.warning("Lista vazia!")
+        if not email_mob: st.error("E-mail necessário")
         else:
-            alvos_lista = [x.strip() for x in alvos_mob.split(",") if x.strip()]
-            resultados = []
-            progresso = st.progress(0)
-            for i, alvo in enumerate(alvos_lista):
-                n_fonte = consultar_pubmed_count(alvo, t_fonte_mob, email_mobile, anos_mob[0], anos_mob[1])
-                n_bexiga = consultar_pubmed_count(alvo, t_alvo_mob, email_mobile, anos_mob[0], anos_mob[1])
-                if n_fonte != -1:
-                    ratio = n_fonte / n_bexiga if n_bexiga > 0 else n_fonte
-                    resultados.append({"Alvo": alvo, "Potencial": round(ratio, 1)})
-                progresso.progress((i+1)/len(alvos_lista))
-            st.session_state['dados_mob'] = pd.DataFrame(resultados).sort_values(by="Potencial", ascending=False)
-
-    if 'dados_mob' in st.session_state:
-        df_mob = st.session_state['dados_mob']
-        top_mob = df_mob.iloc[0]
-        
-        st.divider()
-        col_a, col_b = st.columns(2)
-        col_a.metric("🏆 Top 1", top_mob['Alvo'])
-        col_b.metric("Potencial", f"{top_mob['Potencial']}x")
-        
-        with st.expander("📋 Ver Lista Completa"):
-            st.dataframe(df_mob, use_container_width=True, hide_index=True)
+            lst = [x.strip() for x in alvos_mob.split(",") if x.strip()]
+            res = []
+            pg = st.progress(0)
+            for i, al in enumerate(lst):
+                nf = consultar_pubmed_count(al, t_fonte_mob, email_mob, anos_mob[0], anos_mob[1])
+                nb = consultar_pubmed_count(al, t_alvo_mob, email_mob, anos_mob[0], anos_mob[1])
+                if nf!=-1:
+                    rat = nf/nb if nb>0 else nf
+                    res.append({"Alvo": al, "Potencial": round(rat, 1)})
+                pg.progress((i+1)/len(lst))
+            st.session_state['dados_mob'] = pd.DataFrame(res).sort_values(by="Potencial", ascending=False)
             
+    if 'dados_mob' in st.session_state:
+        d = st.session_state['dados_mob']
+        t = d.iloc[0]
         st.divider()
-        st.subheader("🔎 Raio-X Traduzido")
-        sel_mob = st.selectbox("Escolha:", df_mob['Alvo'].tolist(), key="sel_mob")
-        
-        if st.button(f"Ler sobre {sel_mob}", use_container_width=True):
+        st.metric("🏆 Vencedor", t['Alvo'], f"{t['Potencial']}x")
+        with st.expander("Ver Lista"): st.dataframe(d, use_container_width=True, hide_index=True)
+        st.divider()
+        sl = st.selectbox("Ler sobre:", d['Alvo'].tolist())
+        if st.button("Ler", use_container_width=True):
             with st.spinner("Traduzindo..."):
-                arts_mob = buscar_resumos_detalhados(sel_mob, t_alvo_mob, email_mobile, anos_mob[0], anos_mob[1], limit=3)
-                if not arts_mob: st.info("Nenhum artigo!")
+                as_mob = buscar_resumos_detalhados(sl, t_alvo_mob, email_mob, anos_mob[0], anos_mob[1], limit=3)
+                if not as_mob: st.info("Sem artigos!")
                 else:
-                    for art in arts_mob:
-                        st.success(f"**{art['Title']}**\n\n{art['Resumo_IA']}")
-                        st.link_button("Ver Original", f"https://pubmed.ncbi.nlm.nih.gov/{art['PMID']}", use_container_width=True)
+                    for am in as_mob:
+                        st.success(f"**{am['Title']}**\n\n{am['Resumo_IA']}")
                         st.write("---")
