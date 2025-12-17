@@ -15,7 +15,7 @@ import random
 # ==========================================
 st.set_page_config(page_title="Lemos Doutorado", page_icon="🎓", layout="wide")
 
-# CSS
+# CSS: Padroniza imagens e garante largura total dos botões
 st.markdown("""
     <style>
     div[data-testid="stImage"] img {
@@ -115,7 +115,6 @@ def exibir_radar_cientifico():
 # ==========================================
 # 3. BANCO DE DADOS (CANDIDATOS À MINERAÇÃO)
 # ==========================================
-# Esta é a lista "Secreta" que o botão de mineração vai usar para testar
 CANDIDATOS_MINERACAO = [
     "GPR37", "GPR17", "GPR55", "GPR84", "GPR35", "TAAR1", "P2Y14", "FFAR2", "FFAR3", 
     "SUCNR1", "OXGR1", "HCAR1", "LGR4", "LGR5", "MRGPRX2", "MRGPRD", "ASIC1a", "ASIC2", 
@@ -205,44 +204,40 @@ def limpar_campo_fonte(): st.session_state.fonte_val = ""
 def limpar_campo_alvo(): st.session_state.alvo_val = ""
 def limpar_campo_alvos(): st.session_state.alvos_val = ""
 
-# --- MINERADOR DE BLUE OCEANS ---
+# --- MINERADOR DE BLUE OCEANS (CALLBACK) ---
 def minerar_blue_oceans(orgao, email):
     if not orgao or not email:
-        st.error("Para minerar, preencha o campo 'Alvo' e seu 'E-mail'.")
+        st.toast("⚠️ Preencha o 'Alvo' e 'E-mail' para minerar!", icon="⚠️")
         return
 
     encontrados = []
-    total = len(CANDIDATOS_MINERACAO)
-    my_bar = st.progress(0, text="⛏️ Iniciando mineração de alvos raros...")
-    
     Entrez.email = email
     
-    for i, termo in enumerate(CANDIDATOS_MINERACAO):
+    st.toast("⛏️ Mineração iniciada... testando alvos raros!", icon="⏳")
+    
+    # Testa uma amostra para não estourar tempo de execução
+    amostra = CANDIDATOS_MINERACAO # Pode limitar com [:15] se ficar lento
+    
+    for termo in amostra:
         try:
-            # Busca: Termo AND Orgao (Últimos 15 anos para garantir relevância)
+            # Busca: Termo AND Orgao
             query = f"({termo}) AND ({orgao}) AND 2010:2025[DP]"
             handle = Entrez.esearch(db="pubmed", term=query, retmax=0)
             record = Entrez.read(handle)
             count = int(record["Count"])
             
-            # CRITÉRIO DE OURO: Menos de 100 artigos (pouco estudado), mas existe conceitualmente.
-            # Se for 0, as vezes é arriscado demais, mas incluímos para avaliar.
-            if count < 150: 
+            # CRITÉRIO DE OURO: Menos de 100 artigos (Raro mas existente)
+            if 0 <= count < 150: 
                 encontrados.append(f"{termo}")
-                
-            time.sleep(0.1) # Respeitar API
-            my_bar.progress((i + 1) / total, text=f"⛏️ Testando: {termo} ({count} artigos)")
-            
+            time.sleep(0.05) 
         except: continue
         
-    my_bar.empty()
-    
     if encontrados:
         nova_lista = ", ".join(encontrados)
         st.session_state.alvos_val = nova_lista
-        st.toast(f"Sucesso! {len(encontrados)} oportunidades raras encontradas para {orgao}!", icon="💎")
+        st.toast(f"💎 Sucesso! {len(encontrados)} alvos raros para {orgao}!", icon="✅")
     else:
-        st.warning("Nenhum termo raro encontrado para este órgão (talvez ele seja muito estudado?).")
+        st.toast("Nenhum alvo raro encontrado (Talvez o órgão seja muito estudado?)", icon="🤷")
 
 def processar_upload():
     uploaded_file = st.session_state.get('uploader_key')
@@ -265,7 +260,7 @@ def processar_upload():
         except Exception as e: st.error(f"Erro: {e}")
 
 # ==========================================
-# 4. FUNÇÕES PUBMED (BUSCA FLEXÍVEL)
+# 4. FUNÇÕES PUBMED
 # ==========================================
 def consultar_pubmed_count(termo_farmaco, termo_orgao, email, y_start, y_end):
     if not email: return -1
@@ -345,7 +340,7 @@ if modo == "Desktop (Completo)":
     st.sidebar.markdown("---")
     st.sidebar.header("2. Configuração (Órgãos)")
     
-    # ALINHAMENTO LABEL EXTERNO
+    # Label Externo
     st.sidebar.markdown("**Fonte (Opcional):**") 
     col_fonte, col_limp_f = st.sidebar.columns([6, 1])
     with col_fonte: 
@@ -376,13 +371,11 @@ if modo == "Desktop (Completo)":
     with col_limp_l: 
         st.button("🗑️", key="btn_cls_l_dk", on_click=limpar_campo_alvos)
 
-    # Botões Lado a Lado
     cb1, cb2 = st.sidebar.columns(2)
     cb1.button("📥 Restaurar Padrão", on_click=carregar_alvos_apenas)
     
-    # BOTÃO DE MINERAÇÃO (INTELIGENTE)
-    if cb2.button("⛏️ Minerar 'Blue Oceans'"):
-        minerar_blue_oceans(termo_alvo, email_user) # Chama a função que varre e filtra
+    # Callback Corrigido (Passando argumentos)
+    cb2.button("⛏️ Minerar 'Blue Oceans'", on_click=minerar_blue_oceans, args=(termo_alvo, email_user))
     
     st.sidebar.markdown("---")
 
@@ -456,7 +449,6 @@ if modo == "Desktop (Completo)":
     if 'dados_desk' in st.session_state:
         df = st.session_state['dados_desk']
         col_metrica = [c for c in df.columns if c not in ["Alvo", "Status", "Fonte", "Alvo/Global"]][0]
-        
         top = df.iloc[0]
         st.success(f"✅ Análise Pronta. Destaque: **{top['Alvo']}**.")
         
@@ -530,7 +522,7 @@ elif modo == "Mobile (Pocket)":
         
         cb1, cb2 = st.columns(2)
         cb1.button("📥 Restaurar", key="mob_alvos", on_click=carregar_alvos_apenas)
-        if cb2.button("⛏️ Minerar", key="mob_raros"): # Minerador Mobile
+        if cb2.button("⛏️ Minerar", key="mob_raros"):
              minerar_blue_oceans(t_alvo_mob, email_mob)
         
     if st.button("🚀 Rumo ao Avanço", type="primary", use_container_width=True):
