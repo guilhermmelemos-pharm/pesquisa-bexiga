@@ -10,7 +10,7 @@ from datetime import datetime
 # ==========================================
 # 1. CONFIGURAÇÃO GLOBAL
 # ==========================================
-st.set_page_config(page_title="Lemos Gold", page_icon="🎓", layout="wide")
+st.set_page_config(page_title="Lemos Doutorado", page_icon="🎓", layout="wide")
 
 # Inicialização do Session State
 if 'alvos_val' not in st.session_state: st.session_state.alvos_val = ""
@@ -18,25 +18,37 @@ if 'fonte_val' not in st.session_state: st.session_state.fonte_val = ""
 if 'alvo_val' not in st.session_state: st.session_state.alvo_val = ""
 
 # ==========================================
-# 2. BANCO DE DADOS INTELIGENTE
+# 2. BANCO DE DADOS LIMPO
 # ==========================================
-SUGESTOES_ALVOS = """
--- ALVOS PRIORITÁRIOS (Chance de Ouro?) --
+SUGESTOES_ALVOS_RAW = """
+-- ALVOS PRIORITÁRIOS --
 Autophagy, LC3B, Beclin-1, p62, mTOR, AMPK, VEGF, VEGFR2, TGF-beta1, CTGF, Galectin-3, P2X3, P2X7, TRPV1, TRPV4, TRPM8, Beta-3 Adrenergic, Muscarinic M3, Cannabinoid CB2
 
 -- FÁRMACOS & TOXINAS --
-Mirabegron, Solifenacin, Oxybutynin, Botulinum toxin A (BoNT/A), Resiniferatoxin (RTX), Tadalafil, Sildenafil, Rapamycin, Metformin, Silodosin, Tamsulosin
+Mirabegron, Solifenacin, Oxybutynin, Botulinum toxin A, Resiniferatoxin, Tadalafil, Sildenafil, Rapamycin, Metformin, Silodosin, Tamsulosin
 
 -- CANAIS IÔNICOS --
-BK channel (KCa1.1), SK3 channel, Kv7.4 (KCNQ4), Kv7.5, KATP channel (Kir6.2), L-type Calcium Channel (Cav1.2), T-type Calcium Channel, Piezo1, Piezo2, ASIC1, ASIC3, TRPA1, TRPC6
+BK channel, SK3 channel, Kv7.4, Kv7.5, KATP channel, L-type Calcium Channel, T-type Calcium Channel, Piezo1, Piezo2, ASIC1, ASIC3, TRPA1, TRPC6
 
 -- RECEPTORES --
-Alpha-1A Adrenergic, Alpha-1D Adrenergic, Beta-2 Adrenergic, Muscarinic M2, Dopamine D2, Serotonin 5-HT, Adenosine A1, Adenosine A2A, P2Y receptors, Angiotensin II receptor (AT1R), Mas receptor
+Alpha-1A Adrenergic, Alpha-1D Adrenergic, Beta-2 Adrenergic, Muscarinic M2, Dopamine D2, Serotonin 5-HT, Adenosine A1, Adenosine A2A, P2Y receptors, Angiotensin II receptor, Mas receptor
 
 -- INFLAMAÇÃO & OUTROS --
-NLRP3, IL-1beta, IL-6, IL-17, IL-33, TNF-alpha, COX-2, PGE2, NGF, BDNF, CGRP, Substance P, VIP, PACAP, Bradykinin B1, Bradykinin B2, ROCK (Rho-kinase), RhoA, PDE4, PDE5, nNOS, eNOS, iNOS, SGLT2, ACE2, Nrf2, HO-1, Sirtuin-1
+NLRP3, IL-1beta, IL-6, IL-17, IL-33, TNF-alpha, COX-2, PGE2, NGF, BDNF, CGRP, Substance P, VIP, PACAP, Bradykinin B1, Bradykinin B2, ROCK, RhoA, PDE4, PDE5, nNOS, eNOS, iNOS, SGLT2, ACE2, Nrf2, HO-1, Sirtuin-1
 """
-LISTA_ALVOS_LIMPA = " ".join(SUGESTOES_ALVOS.replace("\n", " ").split())
+
+# FUNÇÃO DE LIMPEZA (Remove os -- Títulos -- e deixa só as vírgulas)
+def limpar_lista_alvos(texto_bruto):
+    linhas = texto_bruto.split('\n')
+    alvos_limpos = []
+    for linha in linhas:
+        # Ignora linhas vazias ou que começam com --
+        if linha.strip() and not linha.strip().startswith("--"):
+            # Adiciona os itens da linha à lista
+            alvos_limpos.extend([x.strip() for x in linha.split(',') if x.strip()])
+    return ", ".join(alvos_limpos)
+
+LISTA_ALVOS_PRONTA = limpar_lista_alvos(SUGESTOES_ALVOS_RAW)
 
 PRESETS_ORGAOS = {
     "(Sugestão Lemos)": {
@@ -47,13 +59,13 @@ PRESETS_ORGAOS = {
 
 # --- FUNÇÕES DE CALLBACK ---
 def carregar_setup_lemos():
-    st.session_state.alvos_val = LISTA_ALVOS_LIMPA
+    st.session_state.alvos_val = LISTA_ALVOS_PRONTA
     st.session_state.fonte_val = PRESETS_ORGAOS["(Sugestão Lemos)"]["fonte"]
     st.session_state.alvo_val = PRESETS_ORGAOS["(Sugestão Lemos)"]["alvo"]
-    st.toast("Ambiente Doutorado Configurado!", icon="🎓")
+    st.toast("Setup Doutorado Carregado!", icon="🎓")
 
 def carregar_alvos_apenas(): 
-    st.session_state.alvos_val = LISTA_ALVOS_LIMPA
+    st.session_state.alvos_val = LISTA_ALVOS_PRONTA
 
 # ==========================================
 # 3. FUNÇÕES TÉCNICAS
@@ -136,12 +148,13 @@ if modo == "Desktop (Completo)":
     
     st.sidebar.caption("👇 Configuração com um clique:")
     
-    # BOTÃO RENOMEADO (SEM 'COMPARAR TUDO')
+    # BOTÃO RENOMEADO
     st.sidebar.button("🎓 Doutorado Guilherme Lemos", type="primary", on_click=carregar_setup_lemos)
     
     st.sidebar.markdown("---")
     st.sidebar.header("3. Alvos")
     
+    # A lista agora entra LIMPA aqui
     alvos_input = st.sidebar.text_area("Lista de Pesquisa:", key="alvos_val", height=150, placeholder="Carregue a lista...")
     st.sidebar.button("📥 Restaurar Lista Completa", on_click=carregar_alvos_apenas)
 
@@ -169,12 +182,12 @@ if modo == "Desktop (Completo)":
                 if n_fonte != -1:
                     ratio = n_fonte / n_bexiga if n_bexiga > 0 else n_fonte
                     
-                    # --- LÓGICA DE STATUS (A "MELHOR FORMA") ---
+                    # --- LÓGICA DE STATUS MANTIDA ---
                     status = "N/A"
                     if n_bexiga >= n_fonte:
-                        status = "🔴 Saturado" # Já tem mais na bexiga que fora
+                        status = "🔴 Saturado" 
                     elif ratio > 10 and n_fonte > 200:
-                        status = "💎 Chance de OURO" # Muito famoso fora, virgem na bexiga
+                        status = "💎 Chance de OURO" 
                     elif ratio > 5 and n_fonte > 100:
                         status = "🥇 Chance Alta"
                     elif ratio > 3:
@@ -186,7 +199,7 @@ if modo == "Desktop (Completo)":
                     
                     resultados.append({
                         "Alvo": alvo, 
-                        "Status": status, # Coluna Nova
+                        "Status": status, 
                         "Potencial (x)": round(ratio, 1),
                         "Fonte Total": n_fonte, 
                         "Bexiga Total": n_bexiga
@@ -209,16 +222,15 @@ if modo == "Desktop (Completo)":
             fig = px.bar(df.head(20), x="Alvo", y="Potencial (x)", color="Status", 
                          title="Top 20 Oportunidades (Por Status)", 
                          color_discrete_map={
-                             "💎 Chance de OURO": "#00CC96", # Verde/Ciano
-                             "🥇 Chance Alta": "#636EFA",    # Azul
-                             "🥇 Chance Média": "#AB63FA",   # Roxo
-                             "🥈 Chance Baixa": "#FFA15A",   # Laranja
-                             "🔴 Saturado": "#EF553B"        # Vermelho
+                             "💎 Chance de OURO": "#00CC96", 
+                             "🥇 Chance Alta": "#636EFA",    
+                             "🥇 Chance Média": "#AB63FA",   
+                             "🥈 Chance Baixa": "#FFA15A",   
+                             "🔴 Saturado": "#EF553B"        
                          })
             st.plotly_chart(fig, use_container_width=True)
             
         with col2:
-            # Tabela com a coluna Status visível
             st.dataframe(
                 df[["Alvo", "Status", "Potencial (x)", "Fonte Total", "Bexiga Total"]]
                 .style.applymap(lambda v: 'color: red;' if 'Saturado' in str(v) else ('color: green; font-weight: bold;' if 'OURO' in str(v) else ''), subset=['Status'])
@@ -232,7 +244,10 @@ if modo == "Desktop (Completo)":
             
         st.divider()
         st.header("🔎 Raio-X & Tradução")
-        sel = st.selectbox("Investigar Alvo:", df['Alvo'].tolist())
+        
+        # CORREÇÃO: Ordem Alfabética na lista de seleção
+        lista_ordenada = sorted(df['Alvo'].unique().tolist())
+        sel = st.selectbox("Investigar Alvo (A-Z):", lista_ordenada)
         
         col_btn1, col_btn2 = st.columns([1,4])
         if col_btn1.button("Ler Artigos"):
@@ -259,7 +274,6 @@ elif modo == "Mobile (Pocket)":
         t_fonte_mob = st.text_input("Fonte:", key="fonte_val", placeholder="Fonte...")
         t_alvo_mob = st.text_input("Alvo:", key="alvo_val", placeholder="Alvo...")
         
-        # Botão Mobile RENOMEADO
         st.button("🎓 Doutorado Guilherme Lemos", key="mob_lemos", type="primary", on_click=carregar_setup_lemos)
         
         st.markdown("---")
@@ -278,7 +292,6 @@ elif modo == "Mobile (Pocket)":
                 if nf!=-1:
                     rat = nf/nb if nb>0 else nf
                     
-                    # Lógica Simplificada para Mobile
                     stat = "N/A"
                     if nb >= nf: stat = "🔴"
                     elif rat > 10 and nf > 200: stat = "💎 OURO"
@@ -298,7 +311,9 @@ elif modo == "Mobile (Pocket)":
         st.download_button("📥 Baixar CSV", csv_mob, "mobile.csv", "text/csv", use_container_width=True)
         with st.expander("Ver Lista"): st.dataframe(d, use_container_width=True, hide_index=True)
         st.divider()
-        sl = st.selectbox("Ler:", d['Alvo'].tolist())
+        # CORREÇÃO MOBILE: Ordem Alfabética
+        lista_ordenada_mob = sorted(d['Alvo'].unique().tolist())
+        sl = st.selectbox("Ler:", lista_ordenada_mob)
         if st.button("Ler", use_container_width=True):
             with st.spinner("Traduzindo..."):
                 as_mob = buscar_resumos_detalhados(sl, t_alvo_mob, email_mob, anos_mob[0], anos_mob[1], limit=3)
