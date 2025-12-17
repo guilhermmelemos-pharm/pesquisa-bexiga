@@ -7,7 +7,8 @@ import re
 from deep_translator import GoogleTranslator
 from datetime import datetime
 import io
-import feedparser # BIBLIOTECA NOVA PARA NOTÍCIAS
+import feedparser
+import random
 
 # ==========================================
 # 1. CONFIGURAÇÃO GLOBAL
@@ -18,34 +19,103 @@ st.set_page_config(page_title="Lemos Doutorado", page_icon="🎓", layout="wide"
 if 'alvos_val' not in st.session_state: st.session_state.alvos_val = ""
 if 'fonte_val' not in st.session_state: st.session_state.fonte_val = ""
 if 'alvo_val' not in st.session_state: st.session_state.alvo_val = ""
+if 'news_index' not in st.session_state: st.session_state.news_index = 0
 
 # ==========================================
-# 2. FUNÇÃO DE NOTÍCIAS (LIVE SCIENCE)
+# 2. FUNÇÃO DE NOTÍCIAS (CARROSSEL AUTOMÁTICO)
 # ==========================================
-@st.cache_data(ttl=3600) # Atualiza a cada 1 hora para não pesar
-def buscar_noticias_ciencia():
+@st.cache_data(ttl=3600)
+def buscar_todas_noticias():
     feeds = [
-        # ScienceDaily - Pharmacology
-        "https://www.sciencedaily.com/rss/health_medicine/pharmacology.xml",
-        # FierceBiotech - Biotech Industry
-        "https://www.fiercebiotech.com/rss/biotech",
+        {"url": "https://www.sciencedaily.com/rss/health_medicine/pharmacology.xml", "lang": "🇺🇸"},
+        {"url": "https://agencia.fapesp.br/rss/", "lang": "🇧🇷"},
+        {"url": "https://canaltech.com.br/rss/ciencia/", "lang": "🇧🇷"},
+        {"url": "https://www.fiercebiotech.com/rss/biotech", "lang": "🇺🇸"},
+        {"url": "https://www.nature.com/nbt.rss", "lang": "🇬🇧"}
     ]
+    
     noticias = []
-    for url in feeds:
+    # Imagens de backup (Ciência) para quando não tiver foto no RSS
+    backups = [
+        "https://images.unsplash.com/photo-1532094349884-543bc11b234d?auto=format&fit=crop&w=400&q=80", # Lab
+        "https://images.unsplash.com/photo-1576086213369-97a306d36557?auto=format&fit=crop&w=400&q=80", # Microscópio
+        "https://images.unsplash.com/photo-1581093458791-9f3c3900df4b?auto=format&fit=crop&w=400&q=80", # DNA
+        "https://images.unsplash.com/photo-1530026405186-ed1f139313f8?auto=format&fit=crop&w=400&q=80"  # Células
+    ]
+    
+    for fonte in feeds:
         try:
-            feed = feedparser.parse(url)
-            for entry in feed.entries[:2]: # Pega as 2 mais recentes de cada
+            feed = feedparser.parse(fonte["url"])
+            for entry in feed.entries[:4]: # Pega as 4 mais recentes de cada
+                img_url = None
+                
+                # Tenta achar imagem no RSS
+                if 'media_content' in entry:
+                    img_url = entry.media_content[0]['url']
+                elif 'links' in entry:
+                    for link in entry.links:
+                        if link['type'].startswith('image'):
+                            img_url = link['href']
+                            break
+                elif 'summary' in entry:
+                    # Tenta achar tag <img src="..."> no resumo
+                    match = re.search(r'src="(http.*?)"', entry.summary)
+                    if match: img_url = match.group(1)
+
+                # Se falhar, usa backup aleatório
+                if not img_url:
+                    img_url = random.choice(backups)
+
                 noticias.append({
                     "titulo": entry.title,
                     "link": entry.link,
-                    "fonte": feed.feed.title.split(" - ")[0] if " - " in feed.feed.title else feed.feed.title
+                    "fonte": feed.feed.title.split("-")[0].strip()[:20],
+                    "img": img_url,
+                    "bandeira": fonte["lang"]
                 })
-        except:
-            continue
+        except: continue
+            
+    random.shuffle(noticias)
     return noticias
 
+# --- O FRAGMENTO MÁGICO (ATUALIZA SOZINHO) ---
+@st.fragment(run_every=30) # Atualiza a cada 30 segundos
+def exibir_radar_cientifico():
+    news_list = buscar_todas_noticias()
+    
+    if not news_list:
+        st.caption("Carregando feed de ciência...")
+        return
+
+    # Lógica de Rotação (Ciclo)
+    total_news = len(news_list)
+    qtd_por_vez = 3
+    
+    # Define o início e fim da fatia atual
+    start_idx = st.session_state.news_index % total_news
+    end_idx = start_idx + qtd_por_vez
+    
+    # Pega as 3 notícias da vez (com loop se chegar no fim)
+    batch = []
+    for i in range(start_idx, end_idx):
+        batch.append(news_list[i % total_news])
+    
+    # Atualiza o índice para a próxima vez (30s depois)
+    st.session_state.news_index += qtd_por_vez
+    
+    # Renderiza os Cartões
+    with st.container(border=True):
+        st.caption(f"📡 **Radar Científico (Atualizando em Tempo Real...)** | Mostrando {start_idx+1}-{start_idx+3} de {total_news}")
+        cols = st.columns(3)
+        for i, n in enumerate(batch):
+            with cols[i]:
+                st.image(n['img'], use_column_width=True, clamp=True)
+                st.markdown(f"**{n['bandeira']} {n['titulo'][:60]}...**")
+                st.caption(f"Fonte: {n['fonte']}")
+                st.link_button("Ler", n['link'], use_container_width=True)
+
 # ==========================================
-# 3. BANCO DE DADOS (FRONTEIRA EXTREMA)
+# 3. BANCO DE DADOS
 # ==========================================
 SUGESTOES_ALVOS_RAW = """
 -- GENÉTICA REGULATÓRIA (lncRNAs & microRNAs) --
@@ -54,32 +124,32 @@ MALAT1, HOTAIR, MEG3, H19, GAS5, miR-29b, miR-132, miR-199a, miR-21, miR-145, An
 -- COMUNICAÇÃO CELULAR (Exossomos & Vesículas) --
 Exosomes, CD63, CD9, CD81, TSG101, Alix, Extracellular Vesicles, Microvesicles, MVBs
 
--- IMUNOLOGIA AVANÇADA (Checkpoints) --
-PD-1 (Programmed cell death protein 1), PD-L1, CTLA-4, LAG-3, TIM-3, Siglec-8, Mast Cell Tryptase
+-- IMUNOLOGIA AVANÇADA (Checkpoints em Inflamação) --
+PD-1 (Programmed cell death protein 1), PD-L1, CTLA-4, LAG-3, TIM-3, Siglec-8, Mast Cell Tryptase, Eosinophil Cationic Protein
 
--- SENSORS "EXÓTICOS" (Olfato/Sabor na Bexiga) --
-Olfactory Receptors, OR51E2, OR1D2, Taste Receptors, TAS2R, TAS1R3, TRPM5
+-- SENSORS "EXÓTICOS" (Olfato & Sabor na Bexiga) --
+Olfactory Receptors, OR51E2, OR1D2, Taste Receptors, TAS2R (Bitter), TAS1R3 (Sweet), TRPM5, VN1R1
 
--- CRONOBIOLOGIA (Relógio Biológico) --
-Clock genes, BMAL1, CLOCK, PER1, PER2, CRY1, Rev-erb alpha, Melatonin Receptor MT1
+-- CRONOBIOLOGIA (Relógio da Bexiga) --
+Clock genes, BMAL1, CLOCK, PER1, PER2, CRY1, Rev-erb alpha, Melatonin Receptor MT1, MT2
 
 -- MECANO-BIOLOGIA & FIBROSE --
-YAP, TAZ, Hippo pathway, Piezo1, Piezo2, Integrin beta-1, FAK, CTGF, LOX
+YAP, TAZ, Hippo pathway, Piezo1, Piezo2, Integrin beta-1, FAK, CTGF, LOX, Caveolin-1
 
 -- EPIGENÉTICA --
-HDAC inhibitors, HDAC1, Valproic acid, Vorinostat, DNMT1, TET2, EZH2
+HDAC inhibitors, HDAC1, Valproic acid, Vorinostat, DNMT1, TET2, EZH2, Bromodomain
 
 -- METABOLISMO MITOCONDRIAL --
-Mitochondrial dynamics, Drp1, Mfn2, PGC-1alpha, Sirtuin-1, NAMPT, NAD+
+Mitochondrial dynamics, Drp1, Mfn2, PGC-1alpha, Sirtuin-1, Sirtuin-3, NAMPT, NAD+
 
 -- NOVAS VIAS DE MORTE --
-Ferroptosis, GPX4, SLC7A11, Pyroptosis, Gasdermin D, Necroptosis, RIPK1, MLKL
+Ferroptosis, GPX4, SLC7A11, Pyroptosis, Gasdermin D, Necroptosis, RIPK1, RIPK3, MLKL
 
 -- TOXICOLOGIA AMBIENTAL --
-Microplastics, Nanoplastics, Bisphenol S, Phthalates, Glyphosate, Acrolein
+Microplastics, Nanoplastics, Bisphenol S, Phthalates, Glyphosate, Acrolein, Cadmium
 
 -- CANAIS IÔNICOS RAROS --
-TMEM16A, HCN1, HCN4, Kv7.1, TREK-1, TRAAK
+TMEM16A, HCN1, HCN4, Kv7.1, TREK-1, TRAAK, TRPML1
 """
 
 def limpar_lista_alvos(texto_bruto):
@@ -90,8 +160,7 @@ def limpar_lista_alvos(texto_bruto):
             itens = linha.split(',')
             for item in itens:
                 item_limpo = item.split('(')[0].strip()
-                if item_limpo:
-                    alvos_limpos.append(item_limpo)
+                if item_limpo: alvos_limpos.append(item_limpo)
     return ", ".join(alvos_limpos)
 
 LISTA_ALVOS_PRONTA = limpar_lista_alvos(SUGESTOES_ALVOS_RAW)
@@ -103,7 +172,6 @@ PRESETS_ORGAOS = {
     }
 }
 
-# --- CALLBACKS & HELPERS ---
 def carregar_setup_lemos():
     st.session_state.alvos_val = LISTA_ALVOS_PRONTA
     st.session_state.fonte_val = PRESETS_ORGAOS["(Sugestão Lemos)"]["fonte"]
@@ -141,7 +209,7 @@ def processar_upload():
             st.error(f"Erro: {e}")
 
 # ==========================================
-# 4. FUNÇÕES PUBMED & TRADUÇÃO
+# 4. FUNÇÕES PUBMED
 # ==========================================
 def consultar_pubmed_count(termo_farmaco, termo_orgao, email, y_start, y_end):
     if not email: return -1
@@ -192,26 +260,20 @@ def buscar_resumos_detalhados(termo_farmaco, termo_orgao, email, y_start, y_end,
     except: return []
 
 # ==========================================
-# 5. INTERFACE (FRONT-END)
+# 5. INTERFACE (UI)
 # ==========================================
 modo = st.sidebar.radio("📱 Modo:", ["Desktop (Completo)", "Mobile (Pocket)"], index=0)
 st.sidebar.markdown("---")
 
 if modo == "Desktop (Completo)":
-    # --- CABEÇALHO COM NEWS TICKER ---
     st.title("🎓 Lemos Doutorado: Deep Science")
     st.markdown("**Ferramenta de Prospecção de Alto Impacto**")
     
-    # RADAR CIENTÍFICO (NEWS)
-    with st.expander("📡 Radar Científico (Últimas Notícias - ScienceDaily & FierceBiotech)", expanded=False):
-        news = buscar_noticias_ciencia()
-        if news:
-            for n in news:
-                st.markdown(f"**[{n['fonte']}]** [{n['titulo']}]({n['link']})")
-        else:
-            st.caption("Carregando notícias ou feed indisponível...")
+    # --- CHAMADA DO FRAGMENTO (CARROSSEL) ---
+    exibir_radar_cientifico()
+    # ----------------------------------------
     
-    # --- SIDEBAR DESKTOP ---
+    # Sidebar
     st.sidebar.header("1. Credenciais")
     email_user = st.sidebar.text_input("Seu E-mail:", placeholder="pesquisador@unifesp.br", key="email_desk")
     anos = st.sidebar.slider("📅 Período:", 1990, 2025, (2010, 2025), key="anos_desk")
@@ -220,39 +282,40 @@ if modo == "Desktop (Completo)":
     st.sidebar.markdown("---")
     st.sidebar.header("2. Configuração (Órgãos)")
     
-    # Layout colado (Lixeiras perto) - Ratio [5, 1]
+    # Layout colado (Lixeiras perto)
     col_fonte, col_limp_f = st.sidebar.columns([5, 1])
-    with col_fonte: termo_fonte = st.text_input("Fonte (Comparação):", key="fonte_val", placeholder="Sistemas Consolidados...")
+    with col_fonte: 
+        termo_fonte = st.text_input("Fonte (Comparação):", key="fonte_val", placeholder="Sistemas Consolidados...")
     with col_limp_f: 
-        st.write(""); st.write("")
+        st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
         st.button("🗑️", key="btn_cls_f_dk", on_click=limpar_campo_fonte, help="Limpar")
 
     col_alvo, col_limp_a = st.sidebar.columns([5, 1])
-    with col_alvo: termo_alvo = st.text_input("Alvo (Seu Foco):", key="alvo_val", placeholder="Bexiga/Urotélio...")
+    with col_alvo: 
+        termo_alvo = st.text_input("Alvo (Seu Foco):", key="alvo_val", placeholder="Bexiga/Urotélio...")
     with col_limp_a: 
-        st.write(""); st.write("")
+        st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
         st.button("🗑️", key="btn_cls_a_dk", on_click=limpar_campo_alvo, help="Limpar")
     
     st.sidebar.caption("👇 Setup Automático:")
-    # BOTÃO CINZA (SECUNDÁRIO)
     st.sidebar.button("🎓 Doutorado Guilherme Lemos", on_click=carregar_setup_lemos)
     
     st.sidebar.markdown("---")
     st.sidebar.header("3. Alvos")
     
-    with st.sidebar.expander("📂 Importar Biblioteca (.csv/.txt)"):
-        st.file_uploader("Upload:", type=["csv", "txt"], key="uploader_key", on_change=processar_upload)
+    with st.sidebar.expander("📂 Importar Biblioteca"):
+        st.file_uploader("Upload .csv/.txt", type=["csv", "txt"], key="uploader_key", on_change=processar_upload)
     
     col_lista, col_limp_l = st.sidebar.columns([5, 1])
-    with col_lista: alvos_input = st.text_area("Lista de Pesquisa:", key="alvos_val", height=150, placeholder="Carregue a lista...")
+    with col_lista: 
+        alvos_input = st.text_area("Lista de Pesquisa:", key="alvos_val", height=150, placeholder="Carregue a lista...")
     with col_limp_l: 
-        st.write(""); st.write("")
+        st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
         st.button("🗑️", key="btn_cls_l_dk", on_click=limpar_campo_alvos, help="Limpar")
 
     st.sidebar.button("📥 Restaurar Lista Padrão", on_click=carregar_alvos_apenas)
     st.sidebar.markdown("---")
 
-    # BOTÃO VERMELHO (PRIMÁRIO) - AÇÃO PRINCIPAL
     if st.sidebar.button("🚀 Rumo ao Avanço", type="primary"):
         if not email_user or "@" not in email_user: st.error("E-mail obrigatório!")
         elif not termo_fonte or not termo_alvo: st.warning("Configure os órgãos!")
@@ -286,7 +349,6 @@ if modo == "Desktop (Completo)":
             progresso_texto.empty()
             st.session_state['dados_desk'] = pd.DataFrame(resultados).sort_values(by="Potencial (x)", ascending=False)
 
-    # --- RESULTADOS ---
     if 'dados_desk' in st.session_state:
         df = st.session_state['dados_desk']
         top = df.iloc[0]
@@ -322,32 +384,34 @@ if modo == "Desktop (Completo)":
 
 elif modo == "Mobile (Pocket)":
     st.title("📱 Lemos Pocket")
-    # News Ticker Mobile
-    with st.expander("📡 News", expanded=False):
-        news = buscar_noticias_ciencia()
-        if news:
-            for n in news: st.markdown(f"- [{n['titulo']}]({n['link']})")
+    exibir_radar_cientifico() # News Mobile
             
     email_mob = st.text_input("📧 E-mail:", placeholder="pesquisador@unifesp.br", key="email_mob")
     with st.expander("⚙️ Configurar"):
         anos_mob = st.slider("📅 Anos:", 1990, 2025, (2010, 2025))
         
-        c1, c2 = st.columns([5,1])
+        c1, c2 = st.columns([0.85, 0.15])
         with c1: t_fonte_mob = st.text_input("Fonte:", key="fonte_val", placeholder="Fonte...")
-        with c2: st.button("🗑️", key="cls_f_mob", on_click=limpar_campo_fonte)
+        with c2: 
+            st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
+            st.button("🗑️", key="cls_f_mob", on_click=limpar_campo_fonte)
         
-        c3, c4 = st.columns([5,1])
+        c3, c4 = st.columns([0.85, 0.15])
         with c3: t_alvo_mob = st.text_input("Alvo:", key="alvo_val", placeholder="Alvo...")
-        with c4: st.button("🗑️", key="cls_a_mob", on_click=limpar_campo_alvo)
+        with c4: 
+            st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
+            st.button("🗑️", key="cls_a_mob", on_click=limpar_campo_alvo)
         
         st.button("🎓 Doutorado Guilherme Lemos", key="mob_lemos", on_click=carregar_setup_lemos)
         st.markdown("---")
         
         st.file_uploader("📂 Upload", type=["csv", "txt"], key="uploader_key_mob", on_change=processar_upload)
         
-        c5, c6 = st.columns([5,1])
+        c5, c6 = st.columns([0.85, 0.15])
         with c5: alvos_mob = st.text_area("Alvos:", key="alvos_val", height=150)
-        with c6: st.button("🗑️", key="cls_l_mob", on_click=limpar_campo_alvos)
+        with c6: 
+            st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
+            st.button("🗑️", key="cls_l_mob", on_click=limpar_campo_alvos)
         
         st.button("📥 Restaurar", key="mob_alvos", on_click=carregar_alvos_apenas)
         
