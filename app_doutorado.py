@@ -45,7 +45,29 @@ def buscar_alvos_emergentes_pubmed(orgao_alvo, email):
         return []
     Entrez.email = email
     # Busca focada em orphan receptors e mecanismos de fronteira para o órgão específico
-    query = f"({orgao_alvo}) AND (receptor OR channel OR protein OR signaling) AND (\"2024\"[Date - Publication] : \"2025\"[Date - Publication])"
+   def buscar_alvos_emergentes_pubmed(orgao_alvo, email):
+    if not orgao_alvo or not email:
+        return []
+    Entrez.email = email
+    
+    # PEGA O ANO ATUAL DINAMICAMENTE
+    ano_fim = datetime.now().year
+    ano_inicio = ano_fim - 1
+    
+    # A query agora usa as variáveis ano_inicio e ano_fim
+    query = f"({orgao_alvo}) AND (receptor OR channel OR protein OR signaling) AND (\"{ano_inicio}\"[Date - Publication] : \"{ano_fim}\"[Date - Publication])"  
+    try:
+        handle = Entrez.esearch(db="pubmed", term=query, retmax=25, sort="relevance")
+        record = Entrez.read(handle)
+        ids = record["IdList"]
+        if not ids: return []
+        handle = Entrez.efetch(db="pubmed", id=ids, rettype="abstract", retmode="text")
+        texto = handle.read()
+        encontrados = re.findall(r'\b[A-Z]{2,6}[0-9]{0,4}\b', texto)
+        blacklist = ["DNA", "RNA", "USA", "NCBI", "NIH", "ATP", "AMP", "GDP", "COVID", "SARS", "PMID", "DOI", "FAPESP"]
+        return sorted(list(set([t for t in encontrados if t not in blacklist and len(t) > 2])))
+    except:
+        return []
     try:
         handle = Entrez.esearch(db="pubmed", term=query, retmax=25, sort="relevance")
         record = Entrez.read(handle)
@@ -479,3 +501,4 @@ elif modo == "Mobile (Pocket)":
         d=st.session_state['dados_mob']
         st.metric("🏆 Top 1", d.iloc[0]['Alvo'], f"{d.iloc[0]['P']:.1f}")
         st.dataframe(d, use_container_width=True, hide_index=True)
+
