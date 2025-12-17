@@ -3,6 +3,24 @@ Lemos Lambda: Deep Science Prospector
 Copyright (c) 2025 Guilherme Lemos
 Licensed under the MIT License.
 
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
 Author: Guilherme Lemos (Unifesp)
 Creation Date: December 2025
 """
@@ -20,28 +38,35 @@ import feedparser
 import random
 
 # ==========================================
-# 0. FUNÇÃO DE AUTOMAÇÃO DE TERMOS (DINÂMICA)
+# 0. FUNÇÃO DE AUTOMAÇÃO DE TERMOS (DINÂMICA E PRECISA)
 # ==========================================
 def buscar_alvos_emergentes_pubmed(orgao_alvo, email):
     if not orgao_alvo or not email:
         return []
     Entrez.email = email
     
+    # PEGA O ANO ATUAL DINAMICAMENTE PARA NÃO EXPIRAR EM 2026
     ano_fim = datetime.now().year
     ano_inicio = ano_fim - 1
     
-    query = f"({orgao_alvo}) AND (receptor OR channel OR protein OR signaling) AND (\"{ano_inicio}\"[Date - Publication] : \"{ano_fim}\"[Date - Publication])"
+    # QUERY OTIMIZADA: FOCO EM ALVOS DE MEMBRANA (BLUE OCEAN)
+    query = (
+        f"({orgao_alvo}) AND ('GPCR' OR 'ion channel' OR 'transporter' OR 'orphan receptor' OR "
+        f"'gasotransmitter' OR 'signaling pathway') AND "
+        f"(\"{ano_inicio}\"[Date - Publication] : \"{ano_fim}\"[Date - Publication])"
+    )
     
     try:
-        handle = Entrez.esearch(db="pubmed", term=query, retmax=25, sort="relevance")
+        handle = Entrez.esearch(db="pubmed", term=query, retmax=35, sort="relevance")
         record = Entrez.read(handle)
         ids = record["IdList"]
         if not ids: return []
         handle = Entrez.efetch(db="pubmed", id=ids, rettype="abstract", retmode="text")
         texto = handle.read()
         encontrados = re.findall(r'\b[A-Z]{2,6}[0-9]{0,4}\b', texto)
-        blacklist = ["DNA", "RNA", "USA", "NCBI", "NIH", "ATP", "AMP", "GDP", "COVID", "SARS", "PMID", "DOI", "FAPESP"]
-        return sorted(list(set([t for t in encontrados if t not in blacklist and len(t) > 2])))
+        blacklist = ["DNA", "RNA", "USA", "NCBI", "NIH", "ATP", "AMP", "GDP", "COVID", "SARS", "PMID", "DOI", 
+                     "FAPESP", "UNIFESP", "HPLC", "PCR", "ANOVA", "SD", "SEM", "GROUP", "MEAN"]
+        return sorted(list(set([t for t in encontrados if t.upper() not in blacklist and len(t) > 2])))
     except:
         return []
 
@@ -111,7 +136,7 @@ TEXTOS = {
         "btn_minerar": "⛏️ Minerar 'Blue Oceans'",
         "btn_trend": "🔍 Injetar Tendências (2025)",
         "toast_aviso_minerar": "⚠️ Preencha o 'Alvo' e 'E-mail' para minerar!",
-        "prog_minerar": "⛏️ Procurando termos chave...",
+        "prog_minerar": "⛏️ Procurando termos chave, após isso clique em 'Rumo ao Avanço'...",
         "prog_testando": "⛏️ Analisando: {termo} ({count} artigos)",
         "toast_sucesso_minerar": "✅ {qtd} termos encontrados!",
         "btn_avanco": "🚀 Rumo ao Avanço",
@@ -190,7 +215,6 @@ TEXTOS = {
 def buscar_todas_noticias(lang_code):
     feeds = [
         {"url": "https://www.sciencedaily.com/rss/health_medicine/pharmacology.xml", "lang": "🇺🇸"},
-        {"url": "https://www.nature.com/nbt.rss", "lang": "🇬🇧"},
         {"url": "https://agencia.fapesp.br/rss/", "lang": "🇧🇷"},
     ]
     noticias = []
@@ -201,13 +225,6 @@ def buscar_todas_noticias(lang_code):
             feed = feedparser.parse(fonte["url"])
             for entry in feed.entries[:3]:
                 img_url = random.choice(backups)
-                if 'media_content' in entry: img_url = entry.media_content[0]['url']
-                elif 'links' in entry:
-                    for link in entry.links:
-                        if link['type'].startswith('image'): img_url = link['href']; break
-                elif 'summary' in entry:
-                    match = re.search(r'src="(http.*?)"', entry.summary)
-                    if match: img_url = match.group(1)
                 titulo = entry.title
                 if lang_code == 'pt' and fonte["lang"] != "🇧🇷":
                     try: titulo = translator.translate(titulo)
@@ -224,7 +241,7 @@ def buscar_todas_noticias(lang_code):
 @st.fragment(run_every=60) 
 def exibir_radar_cientifico(lang_code):
     news_list = buscar_todas_noticias(lang_code)
-    if not news_list: st.caption("Loading feed..."); return
+    if not news_list: return
     total_news = len(news_list)
     idx = st.session_state.news_index % total_news
     batch = news_list[idx:idx+3]
@@ -251,7 +268,7 @@ def carregar_termos_indicados_orgao(orgao, email, t):
     if not orgao or not email:
         st.error("E-mail e Alvo necessários!")
         return
-    with st.spinner("Minerando PubMed..."):
+    with st.spinner("Minerando PubMed com precisão farmacológica..."):
         termos = buscar_alvos_emergentes_pubmed(orgao, email)
         if termos:
             atuais = set([x.strip().upper() for x in st.session_state.alvos_val.split(",") if x.strip()])
@@ -277,8 +294,7 @@ def minerar_blue_oceans(orgao, email, t):
     total = len(amostra)
     for i, termo in enumerate(amostra):
         try:
-            # ATRASO DE SEGURANÇA (MELHORIA 1)
-            time.sleep(0.3)
+            time.sleep(0.3) # Segurança NCBI
             query = f"({termo}) AND ({orgao}) AND 2010:2025[DP]"
             handle = Entrez.esearch(db="pubmed", term=query, retmax=0)
             record = Entrez.read(handle)
@@ -303,8 +319,7 @@ def processar_upload(t):
 def consultar_pubmed_count(termo_farmaco, termo_orgao, email, y_start, y_end):
     if not email: return -1
     Entrez.email = email
-    # PEQUENO ATRASO PARA ESTABILIDADE (MELHORIA 1.1)
-    time.sleep(0.1)
+    time.sleep(0.1) # Segurança NCBI
     query = f"({termo_farmaco}) AND ({termo_orgao}) AND {y_start}:{y_end}[DP]" if termo_orgao else f"({termo_farmaco}) AND {y_start}:{y_end}[DP]"
     try: return int(Entrez.read(Entrez.esearch(db="pubmed", term=query, retmax=0))["Count"])
     except: return -1
@@ -404,7 +419,6 @@ if modo == "Desktop":
                 nf = consultar_pubmed_count(item, t_fonte, email_user, anos[0], anos[1])
                 na = consultar_pubmed_count(item, t_alvo, email_user, anos[0], anos[1])
                 pot = nf/na if na > 0 else nf
-                # CORES DINÂMICAS (MELHORIA 3)
                 stat = "💎 DIAMANTE" if pot > 10 else "🥇 Ouro" if pot > 2 else "🔴 Saturado"
                 res.append({"Alvo": item, "Status": stat, "Ratio": pot, "Fonte": nf, "Alvo_Interest": na})
                 bar.progress((i+1)/len(lst))
@@ -413,13 +427,18 @@ if modo == "Desktop":
 
     if 'dados_desk' in st.session_state:
         df = st.session_state['dados_desk']
-        # GRÁFICO COM CORES MELHORADAS (MELHORIA 3.1)
-        st.plotly_chart(px.bar(df.head(20), x="Alvo", y="Ratio", color="Status", 
+        st.success(t["analise_pronta"].format(top=df.iloc[0]['Alvo']))
+        
+        # FILTRO DE GRÁFICO (MELHORIA)
+        st.subheader("📊 Visualização de Potencial")
+        filt_ops = df['Status'].unique().tolist()
+        escolha = st.multiselect(t["filtro"], filt_ops, default=filt_ops)
+        df_f = df[df['Status'].isin(escolha)].head(20)
+        
+        st.plotly_chart(px.bar(df_f, x="Alvo", y="Ratio", color="Status", 
                                color_discrete_map={"💎 DIAMANTE": "#00CC96", "🥇 Ouro": "#636EFA", "🔴 Saturado": "#EF553B"}), use_container_width=True)
         st.dataframe(df, use_container_width=True, hide_index=True)
-        
-        # BOTÃO EXPORTAÇÃO CSV (MELHORIA 2)
-        st.download_button(t["baixar"], df.to_csv(index=False).encode('utf-8'), "lemos_lambda_prospeccao.csv", "text/csv")
+        st.download_button(t["baixar"], df.to_csv(index=False).encode('utf-8'), "prospeccao_lemos.csv", "text/csv")
         
         st.divider()
         st.header(t["raio_x"])
@@ -463,7 +482,7 @@ elif modo == "Mobile (Pocket)":
             l = [x.strip() for x in st.session_state.alvos_val.split(",") if x.strip()]
             r=[]; p=st.progress(0)
             for i, x in enumerate(l):
-                time.sleep(0.1) # Segurança
+                time.sleep(0.1)
                 nf = consultar_pubmed_count(x, t_fonte_m, email_mob, anos_mob[0], anos_mob[1])
                 na = consultar_pubmed_count(x, t_alvo_m, email_mob, anos_mob[0], anos_mob[1])
                 ratio = nf/na if na > 0 else nf
@@ -475,5 +494,4 @@ elif modo == "Mobile (Pocket)":
         d=st.session_state['dados_mob']
         st.metric("🏆 Top 1", d.iloc[0]['Alvo'], f"{d.iloc[0]['P']:.1f}")
         st.dataframe(d, use_container_width=True, hide_index=True)
-        # MELHORIA 2: DOWNLOAD NO MOBILE TAMBÉM
         st.download_button("📥 CSV", d.to_csv(index=False).encode('utf-8'), "lemos_lambda_mob.csv", "text/csv")
