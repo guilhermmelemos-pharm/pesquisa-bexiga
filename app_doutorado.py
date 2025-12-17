@@ -23,6 +23,11 @@ st.markdown("""
         object-fit: cover !important;
         border-radius: 8px !important;
     }
+    /* Ajuste fino para botões de lixeira ficarem bonitos */
+    div[data-testid="column"] button {
+        height: 100%;
+        width: 100%;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -33,7 +38,7 @@ if 'alvo_val' not in st.session_state: st.session_state.alvo_val = ""
 if 'news_index' not in st.session_state: st.session_state.news_index = 0
 
 # ==========================================
-# 2. FUNÇÃO DE NOTÍCIAS
+# 2. FUNÇÃO DE NOTÍCIAS (FEED CALMO - 60s)
 # ==========================================
 @st.cache_data(ttl=3600)
 def buscar_todas_noticias():
@@ -88,7 +93,8 @@ def buscar_todas_noticias():
     random.shuffle(noticias)
     return noticias
 
-@st.fragment(run_every=30) 
+# ATUALIZADO: run_every=60 (Mais lento/calmo)
+@st.fragment(run_every=60) 
 def exibir_radar_cientifico():
     news_list = buscar_todas_noticias()
     if not news_list:
@@ -107,7 +113,7 @@ def exibir_radar_cientifico():
     st.session_state.news_index += qtd
     
     with st.container(border=True):
-        st.caption(f"📡 **Radar Científico**")
+        st.caption(f"📡 **Radar Científico** (Atualiza a cada 60s)")
         cols = st.columns(3)
         for i, n in enumerate(batch):
             with cols[i]:
@@ -292,12 +298,12 @@ if modo == "Desktop (Completo)":
     st.sidebar.markdown("---")
     st.sidebar.header("2. Configuração (Órgãos)")
     
-    # ALINHAMENTO NATIVO (vertical_alignment="bottom") - Correção da Lixeira
-    col_fonte, col_limp_f = st.sidebar.columns([0.85, 0.15], vertical_alignment="bottom")
+    # ALINHAMENTO CORRIGIDO (Ratio [6,1] + vertical_alignment="bottom")
+    col_fonte, col_limp_f = st.sidebar.columns([6, 1], vertical_alignment="bottom")
     with col_fonte: termo_fonte = st.text_input("Fonte (Comparação):", key="fonte_val", placeholder="Sistemas Consolidados...")
     with col_limp_f: st.button("🗑️", key="btn_cls_f_dk", on_click=limpar_campo_fonte, help="Limpar")
 
-    col_alvo, col_limp_a = st.sidebar.columns([0.85, 0.15], vertical_alignment="bottom")
+    col_alvo, col_limp_a = st.sidebar.columns([6, 1], vertical_alignment="bottom")
     with col_alvo: termo_alvo = st.text_input("Alvo (Seu Foco):", key="alvo_val", placeholder="Bexiga/Urotélio...")
     with col_limp_a: st.button("🗑️", key="btn_cls_a_dk", on_click=limpar_campo_alvo, help="Limpar")
     
@@ -310,7 +316,7 @@ if modo == "Desktop (Completo)":
     with st.sidebar.expander("📂 Importar Biblioteca (.csv/.txt)"):
         st.file_uploader("Upload", type=["csv", "txt"], key="uploader_key", on_change=processar_upload)
     
-    col_lista, col_limp_l = st.sidebar.columns([0.85, 0.15], vertical_alignment="bottom")
+    col_lista, col_limp_l = st.sidebar.columns([6, 1], vertical_alignment="bottom")
     with col_lista: alvos_input = st.text_area("Lista de Pesquisa:", key="alvos_val", height=150, placeholder="Carregue a lista...")
     with col_limp_l: st.button("🗑️", key="btn_cls_l_dk", on_click=limpar_campo_alvos, help="Limpar")
 
@@ -356,11 +362,25 @@ if modo == "Desktop (Completo)":
         top = df.iloc[0]
         st.success(f"✅ Análise Pronta. Maior Potencial: **{top['Alvo']}**.")
         
+        # --- PAINEL DE CONTROLE DO GRÁFICO (PERSONALIZAÇÃO) ---
+        col_ctrl1, col_ctrl2 = st.columns(2)
+        with col_ctrl1:
+            # Filtro de Quantidade
+            qtd_grafico = st.slider("📊 Quantidade de Alvos no Gráfico:", 10, 100, 20)
+        with col_ctrl2:
+            # Filtro de Status
+            opcoes_status = df['Status'].unique().tolist()
+            filtro_status = st.multiselect("🔍 Filtrar por Status:", options=opcoes_status, default=opcoes_status)
+        
+        # APLICA FILTROS
+        df_filtrado = df[df['Status'].isin(filtro_status)].head(qtd_grafico)
+        # -----------------------------------------------------
+
         col1, col2 = st.columns([2, 1])
         with col1:
-            fig = px.bar(df.head(20), x="Alvo", y="Potencial (x)", color="Status", 
-                         title="Top 20 Alvos Inovadores", 
-                         color_discrete_map={"💎 DIAMANTE": "#00CC96", "🥇 Ouro": "#636EFA", "🔴 Saturado": "#EF553B"})
+            fig = px.bar(df_filtrado, x="Alvo", y="Potencial (x)", color="Status", 
+                         title=f"Top {len(df_filtrado)} Alvos (Filtrados)", 
+                         color_discrete_map={"💎 DIAMANTE": "#00CC96", "🥇 Ouro": "#636EFA", "🥈 Prata": "#FFA15A", "🔴 Saturado": "#EF553B", "🥚 Embrionário": "#AB63FA"})
             st.plotly_chart(fig, use_container_width=True)
         with col2:
             st.dataframe(df[["Alvo", "Status", "Potencial (x)", "Fonte Total", "Bexiga Total"]].style.hide(axis="index"), use_container_width=True, height=500)
@@ -395,11 +415,11 @@ elif modo == "Mobile (Pocket)":
     with st.expander("⚙️ Configurar"):
         anos_mob = st.slider("📅 Anos:", 1990, 2025, (2010, 2025))
         
-        c1, c2 = st.columns([0.85, 0.15], vertical_alignment="bottom")
+        c1, c2 = st.columns([6, 1], vertical_alignment="bottom")
         with c1: t_fonte_mob = st.text_input("Fonte:", key="fonte_val", placeholder="Fonte...")
         with c2: st.button("🗑️", key="cls_f_mob", on_click=limpar_campo_fonte)
         
-        c3, c4 = st.columns([0.85, 0.15], vertical_alignment="bottom")
+        c3, c4 = st.columns([6, 1], vertical_alignment="bottom")
         with c3: t_alvo_mob = st.text_input("Alvo:", key="alvo_val", placeholder="Alvo...")
         with c4: st.button("🗑️", key="cls_a_mob", on_click=limpar_campo_alvo)
         
@@ -408,7 +428,7 @@ elif modo == "Mobile (Pocket)":
         
         st.file_uploader("📂 Upload", type=["csv", "txt"], key="uploader_key_mob", on_change=processar_upload)
         
-        c5, c6 = st.columns([0.85, 0.15], vertical_alignment="bottom")
+        c5, c6 = st.columns([6, 1], vertical_alignment="bottom")
         with c5: alvos_mob = st.text_area("Alvos:", key="alvos_val", height=150)
         with c6: st.button("🗑️", key="cls_l_mob", on_click=limpar_campo_alvos)
         
