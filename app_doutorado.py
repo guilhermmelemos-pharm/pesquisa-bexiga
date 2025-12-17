@@ -7,6 +7,7 @@ import re
 from deep_translator import GoogleTranslator
 from datetime import datetime
 import io
+import feedparser # BIBLIOTECA NOVA PARA NOTÍCIAS
 
 # ==========================================
 # 1. CONFIGURAÇÃO GLOBAL
@@ -19,7 +20,32 @@ if 'fonte_val' not in st.session_state: st.session_state.fonte_val = ""
 if 'alvo_val' not in st.session_state: st.session_state.alvo_val = ""
 
 # ==========================================
-# 2. BANCO DE DADOS (FRONTEIRA EXTREMA)
+# 2. FUNÇÃO DE NOTÍCIAS (LIVE SCIENCE)
+# ==========================================
+@st.cache_data(ttl=3600) # Atualiza a cada 1 hora para não pesar
+def buscar_noticias_ciencia():
+    feeds = [
+        # ScienceDaily - Pharmacology
+        "https://www.sciencedaily.com/rss/health_medicine/pharmacology.xml",
+        # FierceBiotech - Biotech Industry
+        "https://www.fiercebiotech.com/rss/biotech",
+    ]
+    noticias = []
+    for url in feeds:
+        try:
+            feed = feedparser.parse(url)
+            for entry in feed.entries[:2]: # Pega as 2 mais recentes de cada
+                noticias.append({
+                    "titulo": entry.title,
+                    "link": entry.link,
+                    "fonte": feed.feed.title.split(" - ")[0] if " - " in feed.feed.title else feed.feed.title
+                })
+        except:
+            continue
+    return noticias
+
+# ==========================================
+# 3. BANCO DE DADOS (FRONTEIRA EXTREMA)
 # ==========================================
 SUGESTOES_ALVOS_RAW = """
 -- GENÉTICA REGULATÓRIA (lncRNAs & microRNAs) --
@@ -28,35 +54,34 @@ MALAT1, HOTAIR, MEG3, H19, GAS5, miR-29b, miR-132, miR-199a, miR-21, miR-145, An
 -- COMUNICAÇÃO CELULAR (Exossomos & Vesículas) --
 Exosomes, CD63, CD9, CD81, TSG101, Alix, Extracellular Vesicles, Microvesicles, MVBs
 
--- IMUNOLOGIA AVANÇADA (Checkpoints em Inflamação) --
-PD-1 (Programmed cell death protein 1), PD-L1, CTLA-4, LAG-3, TIM-3, Siglec-8, Mast Cell Tryptase, Eosinophil Cationic Protein
+-- IMUNOLOGIA AVANÇADA (Checkpoints) --
+PD-1 (Programmed cell death protein 1), PD-L1, CTLA-4, LAG-3, TIM-3, Siglec-8, Mast Cell Tryptase
 
--- SENSORS "EXÓTICOS" (Olfato & Sabor na Bexiga) --
-Olfactory Receptors, OR51E2, OR1D2, Taste Receptors, TAS2R (Bitter), TAS1R3 (Sweet), TRPM5, VN1R1
+-- SENSORS "EXÓTICOS" (Olfato/Sabor na Bexiga) --
+Olfactory Receptors, OR51E2, OR1D2, Taste Receptors, TAS2R, TAS1R3, TRPM5
 
--- CRONOBIOLOGIA (Relógio da Bexiga) --
-Clock genes, BMAL1, CLOCK, PER1, PER2, CRY1, Rev-erb alpha, Melatonin Receptor MT1, MT2
+-- CRONOBIOLOGIA (Relógio Biológico) --
+Clock genes, BMAL1, CLOCK, PER1, PER2, CRY1, Rev-erb alpha, Melatonin Receptor MT1
 
 -- MECANO-BIOLOGIA & FIBROSE --
-YAP, TAZ, Hippo pathway, Piezo1, Piezo2, Integrin beta-1, FAK, CTGF, LOX, Caveolin-1
+YAP, TAZ, Hippo pathway, Piezo1, Piezo2, Integrin beta-1, FAK, CTGF, LOX
 
 -- EPIGENÉTICA --
-HDAC inhibitors, HDAC1, Valproic acid, Vorinostat, DNMT1, TET2, EZH2, Bromodomain
+HDAC inhibitors, HDAC1, Valproic acid, Vorinostat, DNMT1, TET2, EZH2
 
 -- METABOLISMO MITOCONDRIAL --
-Mitochondrial dynamics, Drp1, Mfn2, PGC-1alpha, Sirtuin-1, Sirtuin-3, NAMPT, NAD+
+Mitochondrial dynamics, Drp1, Mfn2, PGC-1alpha, Sirtuin-1, NAMPT, NAD+
 
 -- NOVAS VIAS DE MORTE --
-Ferroptosis, GPX4, SLC7A11, Pyroptosis, Gasdermin D, Necroptosis, RIPK1, RIPK3, MLKL
+Ferroptosis, GPX4, SLC7A11, Pyroptosis, Gasdermin D, Necroptosis, RIPK1, MLKL
 
 -- TOXICOLOGIA AMBIENTAL --
-Microplastics, Nanoplastics, Bisphenol S, Phthalates, Glyphosate, Acrolein, Cadmium
+Microplastics, Nanoplastics, Bisphenol S, Phthalates, Glyphosate, Acrolein
 
 -- CANAIS IÔNICOS RAROS --
-TMEM16A, HCN1, HCN4, Kv7.1, TREK-1, TRAAK, TRPML1
+TMEM16A, HCN1, HCN4, Kv7.1, TREK-1, TRAAK
 """
 
-# FUNÇÃO DE LIMPEZA
 def limpar_lista_alvos(texto_bruto):
     linhas = texto_bruto.split('\n')
     alvos_limpos = []
@@ -78,7 +103,7 @@ PRESETS_ORGAOS = {
     }
 }
 
-# --- FUNÇÕES DE CALLBACK & UPLOAD ---
+# --- CALLBACKS & HELPERS ---
 def carregar_setup_lemos():
     st.session_state.alvos_val = LISTA_ALVOS_PRONTA
     st.session_state.fonte_val = PRESETS_ORGAOS["(Sugestão Lemos)"]["fonte"]
@@ -93,37 +118,30 @@ def limpar_campo_fonte(): st.session_state.fonte_val = ""
 def limpar_campo_alvo(): st.session_state.alvo_val = ""
 def limpar_campo_alvos(): st.session_state.alvos_val = ""
 
-# LOGICA DE IMPORTAÇÃO
 def processar_upload():
     uploaded_file = st.session_state.get('uploader_key')
     if uploaded_file is not None:
         try:
             string_final = ""
-            # Se for CSV
             if uploaded_file.name.endswith('.csv'):
                 df = pd.read_csv(uploaded_file, header=None)
-                # Pega todos os valores, transforma em string, remove vazios e junta
                 lista_itens = df.stack().dropna().astype(str).tolist()
                 string_final = ", ".join(lista_itens)
-            
-            # Se for TXT
             elif uploaded_file.name.endswith('.txt'):
                 stringio = io.StringIO(uploaded_file.getvalue().decode("utf-8"))
                 conteudo = stringio.read()
-                # Substitui quebras de linha por vírgula e limpa
                 string_final = " ".join(conteudo.replace("\n", ",").split())
             
             if string_final:
                 st.session_state.alvos_val = string_final
-                st.toast(f"Biblioteca '{uploaded_file.name}' importada com sucesso!", icon="📂")
+                st.toast(f"Biblioteca '{uploaded_file.name}' importada!", icon="📂")
             else:
-                st.error("O arquivo parece vazio ou inválido.")
-                
+                st.error("Arquivo vazio ou inválido.")
         except Exception as e:
-            st.error(f"Erro ao ler arquivo: {e}")
+            st.error(f"Erro: {e}")
 
 # ==========================================
-# 3. FUNÇÕES TÉCNICAS
+# 4. FUNÇÕES PUBMED & TRADUÇÃO
 # ==========================================
 def consultar_pubmed_count(termo_farmaco, termo_orgao, email, y_start, y_end):
     if not email: return -1
@@ -174,15 +192,26 @@ def buscar_resumos_detalhados(termo_farmaco, termo_orgao, email, y_start, y_end,
     except: return []
 
 # ==========================================
-# 4. INTERFACE
+# 5. INTERFACE (FRONT-END)
 # ==========================================
 modo = st.sidebar.radio("📱 Modo:", ["Desktop (Completo)", "Mobile (Pocket)"], index=0)
 st.sidebar.markdown("---")
 
 if modo == "Desktop (Completo)":
+    # --- CABEÇALHO COM NEWS TICKER ---
     st.title("🎓 Lemos Doutorado: Deep Science")
     st.markdown("**Ferramenta de Prospecção de Alto Impacto**")
-
+    
+    # RADAR CIENTÍFICO (NEWS)
+    with st.expander("📡 Radar Científico (Últimas Notícias - ScienceDaily & FierceBiotech)", expanded=False):
+        news = buscar_noticias_ciencia()
+        if news:
+            for n in news:
+                st.markdown(f"**[{n['fonte']}]** [{n['titulo']}]({n['link']})")
+        else:
+            st.caption("Carregando notícias ou feed indisponível...")
+    
+    # --- SIDEBAR DESKTOP ---
     st.sidebar.header("1. Credenciais")
     email_user = st.sidebar.text_input("Seu E-mail:", placeholder="pesquisador@unifesp.br", key="email_desk")
     anos = st.sidebar.slider("📅 Período:", 1990, 2025, (2010, 2025), key="anos_desk")
@@ -191,48 +220,40 @@ if modo == "Desktop (Completo)":
     st.sidebar.markdown("---")
     st.sidebar.header("2. Configuração (Órgãos)")
     
-    col_fonte, col_limp_f = st.sidebar.columns([8, 1])
+    # Layout colado (Lixeiras perto) - Ratio [5, 1]
+    col_fonte, col_limp_f = st.sidebar.columns([5, 1])
     with col_fonte: termo_fonte = st.text_input("Fonte (Comparação):", key="fonte_val", placeholder="Sistemas Consolidados...")
     with col_limp_f: 
         st.write(""); st.write("")
-        st.button("🗑️", key="btn_cls_fonte", on_click=limpar_campo_fonte)
+        st.button("🗑️", key="btn_cls_f_dk", on_click=limpar_campo_fonte, help="Limpar")
 
-    col_alvo, col_limp_a = st.sidebar.columns([8, 1])
+    col_alvo, col_limp_a = st.sidebar.columns([5, 1])
     with col_alvo: termo_alvo = st.text_input("Alvo (Seu Foco):", key="alvo_val", placeholder="Bexiga/Urotélio...")
     with col_limp_a: 
         st.write(""); st.write("")
-        st.button("🗑️", key="btn_cls_alvo", on_click=limpar_campo_alvo)
+        st.button("🗑️", key="btn_cls_a_dk", on_click=limpar_campo_alvo, help="Limpar")
     
-    st.sidebar.caption("👇 Configuração Automática:")
-    st.sidebar.button("🎓 Doutorado Guilherme Lemos", type="primary", on_click=carregar_setup_lemos)
+    st.sidebar.caption("👇 Setup Automático:")
+    # BOTÃO CINZA (SECUNDÁRIO)
+    st.sidebar.button("🎓 Doutorado Guilherme Lemos", on_click=carregar_setup_lemos)
     
     st.sidebar.markdown("---")
-    st.sidebar.header("3. Alvos (Inovação & Importação)")
+    st.sidebar.header("3. Alvos")
     
-    # --- ÁREA DE IMPORTAÇÃO ---
-    with st.sidebar.expander("📂 Importar sua Biblioteca (Clique Aqui)"):
-        st.info("""
-        **Formatos Aceitos:**
-        - **.CSV:** Uma coluna com os termos.
-        - **.TXT:** Termos separados por vírgula ou um por linha.
-        
-        *Dica: Você pode usar operadores como 'OR' e 'AND' dentro dos termos.*
-        """)
-        st.file_uploader("Carregar arquivo:", type=["csv", "txt"], key="uploader_key", on_change=processar_upload)
-    # --------------------------
+    with st.sidebar.expander("📂 Importar Biblioteca (.csv/.txt)"):
+        st.file_uploader("Upload:", type=["csv", "txt"], key="uploader_key", on_change=processar_upload)
     
-    col_lista, col_limp_l = st.sidebar.columns([8, 1])
-    with col_lista:
-        alvos_input = st.text_area("Lista de Pesquisa:", key="alvos_val", height=150, placeholder="Carregue a lista ou importe um arquivo...")
-    with col_limp_l:
+    col_lista, col_limp_l = st.sidebar.columns([5, 1])
+    with col_lista: alvos_input = st.text_area("Lista de Pesquisa:", key="alvos_val", height=150, placeholder="Carregue a lista...")
+    with col_limp_l: 
         st.write(""); st.write("")
-        st.button("🗑️", key="btn_cls_lista", on_click=limpar_campo_alvos)
+        st.button("🗑️", key="btn_cls_l_dk", on_click=limpar_campo_alvos, help="Limpar")
 
-    st.sidebar.button("📥 Restaurar Lista Inovadora (Padrão)", on_click=carregar_alvos_apenas)
-
+    st.sidebar.button("📥 Restaurar Lista Padrão", on_click=carregar_alvos_apenas)
     st.sidebar.markdown("---")
 
-    if st.sidebar.button("🚀 INICIAR VARREDURA", type="primary"):
+    # BOTÃO VERMELHO (PRIMÁRIO) - AÇÃO PRINCIPAL
+    if st.sidebar.button("🚀 Rumo ao Avanço", type="primary"):
         if not email_user or "@" not in email_user: st.error("E-mail obrigatório!")
         elif not termo_fonte or not termo_alvo: st.warning("Configure os órgãos!")
         elif not alvos_input: st.warning("Lista vazia!")
@@ -265,6 +286,7 @@ if modo == "Desktop (Completo)":
             progresso_texto.empty()
             st.session_state['dados_desk'] = pd.DataFrame(resultados).sort_values(by="Potencial (x)", ascending=False)
 
+    # --- RESULTADOS ---
     if 'dados_desk' in st.session_state:
         df = st.session_state['dados_desk']
         top = df.iloc[0]
@@ -300,6 +322,12 @@ if modo == "Desktop (Completo)":
 
 elif modo == "Mobile (Pocket)":
     st.title("📱 Lemos Pocket")
+    # News Ticker Mobile
+    with st.expander("📡 News", expanded=False):
+        news = buscar_noticias_ciencia()
+        if news:
+            for n in news: st.markdown(f"- [{n['titulo']}]({n['link']})")
+            
     email_mob = st.text_input("📧 E-mail:", placeholder="pesquisador@unifesp.br", key="email_mob")
     with st.expander("⚙️ Configurar"):
         anos_mob = st.slider("📅 Anos:", 1990, 2025, (2010, 2025))
@@ -312,20 +340,18 @@ elif modo == "Mobile (Pocket)":
         with c3: t_alvo_mob = st.text_input("Alvo:", key="alvo_val", placeholder="Alvo...")
         with c4: st.button("🗑️", key="cls_a_mob", on_click=limpar_campo_alvo)
         
-        st.button("🎓 Doutorado Guilherme Lemos", key="mob_lemos", type="primary", on_click=carregar_setup_lemos)
+        st.button("🎓 Doutorado Guilherme Lemos", key="mob_lemos", on_click=carregar_setup_lemos)
         st.markdown("---")
         
-        # --- UPLOAD MOBILE ---
-        st.file_uploader("📂 Importar Biblioteca (.csv/.txt)", type=["csv", "txt"], key="uploader_key_mob", on_change=processar_upload)
-        # ---------------------
+        st.file_uploader("📂 Upload", type=["csv", "txt"], key="uploader_key_mob", on_change=processar_upload)
         
         c5, c6 = st.columns([5,1])
         with c5: alvos_mob = st.text_area("Alvos:", key="alvos_val", height=150)
         with c6: st.button("🗑️", key="cls_l_mob", on_click=limpar_campo_alvos)
         
-        st.button("📥 Restaurar Padrão", key="mob_alvos", on_click=carregar_alvos_apenas)
+        st.button("📥 Restaurar", key="mob_alvos", on_click=carregar_alvos_apenas)
         
-    if st.button("🚀 INICIAR", type="primary", use_container_width=True):
+    if st.button("🚀 Rumo ao Avanço", type="primary", use_container_width=True):
         if not email_mob: st.error("E-mail necessário")
         else:
             lst = [x.strip() for x in alvos_mob.split(",") if x.strip()]
