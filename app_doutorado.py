@@ -2,27 +2,6 @@
 Lemos Lambda: Deep Science Prospector
 Copyright (c) 2025 Guilherme Lemos
 Licensed under the MIT License.
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-Author: Guilherme Lemos (Unifesp)
-Creation Date: December 2025
 """
 
 import streamlit as st
@@ -36,6 +15,26 @@ from datetime import datetime
 import io
 import feedparser
 import random
+
+# ==========================================
+# FUNÇÃO DE AUTOMAÇÃO DE TERMOS (NOVO)
+# ==========================================
+def buscar_alvos_emergentes_pubmed(email):
+    Entrez.email = email
+    # Query filtrando termos de fronteira e poucos explorados (2024-2025)
+    query = '("orphan receptor" OR "GPR" OR "Piezo channel" OR "TAS2R" OR "ferroptosis" OR "SPM mediator") AND ("2024"[Date - Publication] : "2025"[Date - Publication])'
+    try:
+        handle = Entrez.esearch(db="pubmed", term=query, retmax=20)
+        record = Entrez.read(handle)
+        if not record["IdList"]: return []
+        handle = Entrez.efetch(db="pubmed", id=record["IdList"], rettype="abstract", retmode="text")
+        texto = handle.read()
+        # Filtra siglas proteicas e genes
+        encontrados = re.findall(r'\b[A-Z]{2,6}[0-9]{1,4}\b', texto)
+        blacklist = ["DNA", "RNA", "USA", "NCBI", "NIH", "ATP", "AMP", "GDP", "COVID", "SARS"]
+        return sorted(list(set([t for t in encontrados if t not in blacklist and len(t) > 2])))
+    except:
+        return []
 
 # ==========================================
 # 1. CONFIGURAÇÃO GLOBAL
@@ -75,14 +74,15 @@ TEXTOS = {
         "holder_alvo": "Ex: Bladder...",
         "btn_setup": "🎓 Doutorado Guilherme Lemos",
         "toast_setup": "Setup 'Deep Science' Carregado!",
-        "sec_alvos": "3. Alvos",
+        "sec_alvos": "3. Palavras-chave",
         "expander_upload": "📂 Importar Biblioteca (.csv/.txt)",
         "toast_upload": "Biblioteca importada!",
-        "label_lista": "**Lista de Pesquisa:**",
-        "holder_lista": "Carregue a lista...",
+        "label_lista": "**Palavras-chave de Pesquisa:**",
+        "holder_lista": "Carregue a lista ou use a automação...",
         "btn_restaurar": "📥 Restaurar Padrão",
         "toast_restaurar": "Lista Inovadora Restaurada!",
         "btn_minerar": "⛏️ Minerar 'Blue Oceans'",
+        "btn_trend": "🔍 Injetar Tendências (2025)",
         "toast_aviso_minerar": "⚠️ Preencha o 'Alvo' e 'E-mail' para minerar!",
         "prog_minerar": "⛏️ Procurando termos chave, após isso clique em 'Rumo ao Avanço'...",
         "prog_testando": "⛏️ Analisando: {termo} ({count} artigos)",
@@ -90,7 +90,7 @@ TEXTOS = {
         "toast_fail_minerar": "Nenhum alvo raro encontrado.",
         "btn_avanco": "🚀 Rumo ao Avanço",
         "erro_email": "E-mail obrigatório!",
-        "aviso_lista": "Lista de Alvos vazia!",
+        "aviso_lista": "Lista de Palavras-chave vazia!",
         "prog_investigando": "⏳ Investigando {atual}/{total}: {alvo}",
         "analise_pronta": "✅ Análise Pronta. Destaque: **{top}**.",
         "col_artigos": "Artigos",
@@ -122,14 +122,15 @@ TEXTOS = {
         "holder_alvo": "Ex: Bladder...",
         "btn_setup": "🎓 Guilherme Lemos PhD Setup",
         "toast_setup": "'Deep Science' Setup Loaded!",
-        "sec_alvos": "3. Targets",
+        "sec_alvos": "3. Keywords",
         "expander_upload": "📂 Import Library (.csv/.txt)",
         "toast_upload": "Library imported!",
-        "label_lista": "**Search List:**",
-        "holder_lista": "Load the list...",
+        "label_lista": "**Research Keywords:**",
+        "holder_lista": "Load the list or use automation...",
         "btn_restaurar": "📥 Restore Default",
         "toast_restaurar": "Innovative List Restored!",
         "btn_minerar": "⛏️ Mine 'Blue Oceans'",
+        "btn_trend": "🔍 Inject Trends (2025)",
         "toast_aviso_minerar": "⚠️ Fill in 'Target' and 'E-mail' to mine!",
         "prog_minerar": "⛏️ Searching for key terms, then click 'Launch'...",
         "prog_testando": "⛏️ Analyzing: {termo} ({count} papers)",
@@ -137,7 +138,7 @@ TEXTOS = {
         "toast_fail_minerar": "No rare targets found.",
         "btn_avanco": "🚀 Launch Analysis",
         "erro_email": "E-mail required!",
-        "aviso_lista": "Target list is empty!",
+        "aviso_lista": "Keyword list is empty!",
         "prog_investigando": "⏳ Investigating {atual}/{total}: {alvo}",
         "analise_pronta": "✅ Analysis Ready. Highlight: **{top}**.",
         "col_artigos": "Papers",
@@ -186,7 +187,6 @@ def buscar_todas_noticias(lang_code):
                     if match: img_url = match.group(1)
                 
                 titulo = entry.title
-                # Traduz se o idioma da fonte for diferente do idioma do app
                 if lang_code == 'pt' and fonte["lang"] != "🇧🇷":
                     try: titulo = translator.translate(titulo)
                     except: pass
@@ -374,8 +374,31 @@ if modo == "Desktop":
     
     st.sidebar.markdown(t["label_lista"])
     c5, c6 = st.sidebar.columns([6, 1], vertical_alignment="bottom")
-    with c5: alvos_in = st.text_area("Lista", key="alvos_val", height=150, placeholder=t["holder_lista"], label_visibility="collapsed")
+    
+    # --- PALAVRAS-CHAVE E AUTOMAÇÃO (DESKTOP) ---
+    with c5: 
+        # Importante: usamos 'value' para sincronizar com o session_state sem travar a edição
+        alvos_in = st.text_area(t["label_lista"], value=st.session_state.alvos_val, height=150, placeholder=t["holder_lista"], label_visibility="collapsed")
+        st.session_state.alvos_val = alvos_in # Sincroniza o digitado
+
     with c6: st.button("🗑️", key="del_l", on_click=limpar_campo_alvos)
+
+    # NOVO BOTÃO DE INJEÇÃO (DESKTOP)
+    if st.sidebar.button(t["btn_trend"], key="trend_desk"):
+        if email_user and "@" in email_user:
+            with st.sidebar.status("Automatizando prospecção no PubMed..."):
+                novos = buscar_alvos_emergentes_pubmed(email_user)
+                if novos:
+                    txt_novos = ", ".join(novos)
+                    # Concatena sem apagar
+                    if st.session_state.alvos_val:
+                        st.session_state.alvos_val = (st.session_state.alvos_val.strip(", ") + ", " + txt_novos)
+                    else:
+                        st.session_state.alvos_val = txt_novos
+                    st.sidebar.success("Novos alvos injetados!")
+                    time.sleep(1)
+                    st.rerun()
+        else: st.sidebar.error("E-mail necessário.")
 
     b1, b2 = st.sidebar.columns(2)
     b1.button(t["btn_restaurar"], on_click=carregar_alvos_apenas, args=(t,))
@@ -385,9 +408,9 @@ if modo == "Desktop":
 
     if st.sidebar.button(t["btn_avanco"], type="primary"):
         if not email_user: st.error(t["erro_email"])
-        elif not alvos_in: st.warning(t["aviso_lista"])
+        elif not st.session_state.alvos_val: st.warning(t["aviso_lista"])
         else:
-            lst = [x.strip() for x in alvos_in.split(",") if x.strip()]
+            lst = [x.strip() for x in st.session_state.alvos_val.split(",") if x.strip()]
             res = []
             pg = st.empty()
             bar = st.progress(0)
@@ -479,15 +502,31 @@ elif modo == "Mobile (Pocket)":
         
         st.button(t["btn_setup"], on_click=carregar_setup_lemos, args=(t,))
         st.file_uploader("Upload", type=["csv"], key="um", on_change=processar_upload, args=(t,))
+        
+        # --- PALAVRAS-CHAVE E AUTOMAÇÃO (MOBILE) ---
         st.markdown(t["label_lista"]); c5,c6=st.columns([6,1], vertical_alignment="bottom");
-        with c5: alvos_m=st.text_area("L",key="alm",height=100, label_visibility="collapsed")
+        with c5: 
+            alvos_m = st.text_area(t["label_lista"], value=st.session_state.alvos_val, height=100, label_visibility="collapsed")
+            st.session_state.alvos_val = alvos_m
+
         with c6: st.button("🗑️",key="xl",on_click=limpar_campo_alvos)
+        
+        # NOVO BOTÃO DE INJEÇÃO (MOBILE)
+        if st.button(t["btn_trend"], key="trend_mob"):
+            if email_mob:
+                n = buscar_alvos_emergentes_pubmed(email_mob)
+                if n:
+                    txt = ", ".join(n)
+                    if st.session_state.alvos_val: st.session_state.alvos_val += ", " + txt
+                    else: st.session_state.alvos_val = txt
+                    st.rerun()
+
         b1,b2=st.columns(2); b1.button(t["btn_restaurar"],on_click=carregar_alvos_apenas,args=(t,)); b2.button(t["btn_minerar"],on_click=minerar_blue_oceans,args=(t_alvo_m,email_mob,t))
 
     if st.button(t["btn_avanco"], type="primary"):
         if not email_mob: st.error(t["erro_email"])
         else:
-            l = [x.strip() for x in alvos_m.split(",") if x.strip()]
+            l = [x.strip() for x in st.session_state.alvos_val.split(",") if x.strip()]
             r=[]; p=st.progress(0)
             for i, x in enumerate(l):
                 nf = consultar_pubmed_count(x, t_fonte_m, email_mob, anos_mob[0], anos_mob[1]) if t_fonte_m else 0
