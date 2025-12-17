@@ -15,7 +15,7 @@ import random
 # ==========================================
 st.set_page_config(page_title="Lemos Doutorado", page_icon="🎓", layout="wide")
 
-# CSS para padronizar imagens
+# CSS para padronizar imagens (Cards)
 st.markdown("""
     <style>
     div[data-testid="stImage"] img {
@@ -119,17 +119,26 @@ def exibir_radar_cientifico():
                 st.link_button("Ler", n['link'], use_container_width=True)
 
 # ==========================================
-# 3. BANCO DE DADOS
+# 3. BANCO DE DADOS (MEGA EXPANDIDO)
 # ==========================================
 SUGESTOES_ALVOS_RAW = """
+-- GASOTRANSMISSORES & SINALIZAÇÃO GASOSA (O Novo Hype) --
+Hydrogen Sulfide (H2S), CBS (Cystathionine beta-synthase), CSE (Cystathionine gamma-lyase), GYY4137, AP39, Nitric Oxide, sGC stimulators, Riociguat, Vericiguat, Carbon Monoxide (CO), Heme Oxygenase-1 (HO-1)
+
+-- PURINÉRGICOS & ENDOCANABINÓIDES --
+P2X1 receptor, P2X3, P2X7, P2Y6, P2Y12, Adenosine A2A, FAAH (Fatty Acid Amide Hydrolase), MAGL (Monoacylglycerol lipase), Anandamide, 2-AG, GPR55
+
+-- CANAIS DE POTÁSSIO ESPECÍFICOS --
+KATP channel, Kir6.1, Kir6.2, Glibenclamide, Cromakalim, SK channels, SK3, KCa2.3, Kv7.2, Kv7.3, Kv7.4, Retigabine, BKCa (Slo1)
+
 -- GENÉTICA REGULATÓRIA (lncRNAs & microRNAs) --
-MALAT1, HOTAIR, MEG3, H19, GAS5, miR-29b, miR-132, miR-199a, miR-21, miR-145, Antagomirs
+MALAT1, HOTAIR, MEG3, H19, GAS5, miR-29b, miR-132, miR-199a, miR-21, miR-145, Antagomirs, siRNA therapy
 
 -- COMUNICAÇÃO CELULAR (Exossomos & Vesículas) --
-Exosomes, CD63, CD9, CD81, TSG101, Alix, Extracellular Vesicles, Microvesicles, MVBs
+Exosomes, CD63, CD9, CD81, TSG101, Alix, Extracellular Vesicles, Microvesicles, MVBs, Gap Junctions, Connexin 43
 
 -- IMUNOLOGIA AVANÇADA (Checkpoints em Inflamação) --
-PD-1 (Programmed cell death protein 1), PD-L1, CTLA-4, LAG-3, TIM-3, Siglec-8, Mast Cell Tryptase, Eosinophil Cationic Protein
+PD-1, PD-L1, CTLA-4, LAG-3, TIM-3, Siglec-8, Mast Cell Tryptase, Eosinophil Cationic Protein, IL-33, ST2 receptor
 
 -- SENSORS "EXÓTICOS" (Olfato & Sabor na Bexiga) --
 Olfactory Receptors, OR51E2, OR1D2, Taste Receptors, TAS2R (Bitter), TAS1R3 (Sweet), TRPM5, VN1R1
@@ -138,7 +147,7 @@ Olfactory Receptors, OR51E2, OR1D2, Taste Receptors, TAS2R (Bitter), TAS1R3 (Swe
 Clock genes, BMAL1, CLOCK, PER1, PER2, CRY1, Rev-erb alpha, Melatonin Receptor MT1, MT2
 
 -- MECANO-BIOLOGIA & FIBROSE --
-YAP, TAZ, Hippo pathway, Piezo1, Piezo2, Integrin beta-1, FAK, CTGF, LOX, Caveolin-1
+YAP, TAZ, Hippo pathway, Piezo1, Piezo2, Integrin beta-1, FAK, CTGF, LOX, Caveolin-1, Pirfenidone, Nintedanib
 
 -- EPIGENÉTICA --
 HDAC inhibitors, HDAC1, Valproic acid, Vorinostat, DNMT1, TET2, EZH2, Bromodomain
@@ -180,11 +189,11 @@ def carregar_setup_lemos():
     st.session_state.alvos_val = LISTA_ALVOS_PRONTA
     st.session_state.fonte_val = PRESETS_ORGAOS["(Sugestão Lemos)"]["fonte"]
     st.session_state.alvo_val = PRESETS_ORGAOS["(Sugestão Lemos)"]["alvo"]
-    st.toast("Setup Carregado!", icon="🧬")
+    st.toast("Setup 'Deep Science' Carregado!", icon="🧬")
 
 def carregar_alvos_apenas(): 
     st.session_state.alvos_val = LISTA_ALVOS_PRONTA
-    st.toast("Lista Restaurada!", icon="✨")
+    st.toast("Lista Inovadora Restaurada!", icon="✨")
 
 def limpar_campo_fonte(): st.session_state.fonte_val = ""
 def limpar_campo_alvo(): st.session_state.alvo_val = ""
@@ -207,7 +216,7 @@ def processar_upload():
             if string_final:
                 st.session_state.alvos_val = string_final
                 st.toast(f"Biblioteca '{uploaded_file.name}' importada!", icon="📂")
-            else: st.error("Arquivo inválido.")
+            else: st.error("Arquivo vazio ou inválido.")
         except Exception as e: st.error(f"Erro: {e}")
 
 # ==========================================
@@ -271,10 +280,9 @@ if modo == "Desktop (Completo)":
     st.title("🎓 Lemos Doutorado: Deep Science")
     st.markdown("**Ferramenta de Prospecção de Alto Impacto**")
     
-    # --- FEED CONDICIONAL: Só aparece se NÃO tiver resultados ---
+    # Feed condicional
     if 'dados_desk' not in st.session_state:
         exibir_radar_cientifico()
-    # -----------------------------------------------------------
     
     st.sidebar.header("1. Credenciais")
     email_user = st.sidebar.text_input("Seu E-mail:", placeholder="pesquisador@unifesp.br", key="email_desk")
@@ -284,17 +292,14 @@ if modo == "Desktop (Completo)":
     st.sidebar.markdown("---")
     st.sidebar.header("2. Configuração (Órgãos)")
     
-    col_fonte, col_limp_f = st.sidebar.columns([5, 1])
+    # ALINHAMENTO NATIVO (vertical_alignment="bottom") - Correção da Lixeira
+    col_fonte, col_limp_f = st.sidebar.columns([0.85, 0.15], vertical_alignment="bottom")
     with col_fonte: termo_fonte = st.text_input("Fonte (Comparação):", key="fonte_val", placeholder="Sistemas Consolidados...")
-    with col_limp_f: 
-        st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
-        st.button("🗑️", key="btn_cls_f_dk", on_click=limpar_campo_fonte, help="Limpar")
+    with col_limp_f: st.button("🗑️", key="btn_cls_f_dk", on_click=limpar_campo_fonte, help="Limpar")
 
-    col_alvo, col_limp_a = st.sidebar.columns([5, 1])
+    col_alvo, col_limp_a = st.sidebar.columns([0.85, 0.15], vertical_alignment="bottom")
     with col_alvo: termo_alvo = st.text_input("Alvo (Seu Foco):", key="alvo_val", placeholder="Bexiga/Urotélio...")
-    with col_limp_a: 
-        st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
-        st.button("🗑️", key="btn_cls_a_dk", on_click=limpar_campo_alvo, help="Limpar")
+    with col_limp_a: st.button("🗑️", key="btn_cls_a_dk", on_click=limpar_campo_alvo, help="Limpar")
     
     st.sidebar.caption("👇 Setup Automático:")
     st.sidebar.button("🎓 Doutorado Guilherme Lemos", on_click=carregar_setup_lemos)
@@ -305,11 +310,9 @@ if modo == "Desktop (Completo)":
     with st.sidebar.expander("📂 Importar Biblioteca (.csv/.txt)"):
         st.file_uploader("Upload", type=["csv", "txt"], key="uploader_key", on_change=processar_upload)
     
-    col_lista, col_limp_l = st.sidebar.columns([5, 1])
+    col_lista, col_limp_l = st.sidebar.columns([0.85, 0.15], vertical_alignment="bottom")
     with col_lista: alvos_input = st.text_area("Lista de Pesquisa:", key="alvos_val", height=150, placeholder="Carregue a lista...")
-    with col_limp_l: 
-        st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
-        st.button("🗑️", key="btn_cls_l_dk", on_click=limpar_campo_alvos, help="Limpar")
+    with col_limp_l: st.button("🗑️", key="btn_cls_l_dk", on_click=limpar_campo_alvos, help="Limpar")
 
     st.sidebar.button("📥 Restaurar Lista Padrão", on_click=carregar_alvos_apenas)
     st.sidebar.markdown("---")
@@ -346,7 +349,7 @@ if modo == "Desktop (Completo)":
             
             progresso_texto.empty()
             st.session_state['dados_desk'] = pd.DataFrame(resultados).sort_values(by="Potencial (x)", ascending=False)
-            st.rerun() # Recarrega para esconder o feed
+            st.rerun()
 
     if 'dados_desk' in st.session_state:
         df = st.session_state['dados_desk']
@@ -360,7 +363,6 @@ if modo == "Desktop (Completo)":
                          color_discrete_map={"💎 DIAMANTE": "#00CC96", "🥇 Ouro": "#636EFA", "🔴 Saturado": "#EF553B"})
             st.plotly_chart(fig, use_container_width=True)
         with col2:
-            # --- CORREÇÃO DO ERRO (.style.hide) ---
             st.dataframe(df[["Alvo", "Status", "Potencial (x)", "Fonte Total", "Bexiga Total"]].style.hide(axis="index"), use_container_width=True, height=500)
             
             csv = df.to_csv(index=False).encode('utf-8')
@@ -386,7 +388,6 @@ if modo == "Desktop (Completo)":
 elif modo == "Mobile (Pocket)":
     st.title("📱 Lemos Pocket")
     
-    # Feed condicional Mobile
     if 'dados_mob' not in st.session_state:
         exibir_radar_cientifico() 
             
@@ -394,28 +395,22 @@ elif modo == "Mobile (Pocket)":
     with st.expander("⚙️ Configurar"):
         anos_mob = st.slider("📅 Anos:", 1990, 2025, (2010, 2025))
         
-        c1, c2 = st.columns([0.85, 0.15])
+        c1, c2 = st.columns([0.85, 0.15], vertical_alignment="bottom")
         with c1: t_fonte_mob = st.text_input("Fonte:", key="fonte_val", placeholder="Fonte...")
-        with c2: 
-            st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
-            st.button("🗑️", key="cls_f_mob", on_click=limpar_campo_fonte)
+        with c2: st.button("🗑️", key="cls_f_mob", on_click=limpar_campo_fonte)
         
-        c3, c4 = st.columns([0.85, 0.15])
+        c3, c4 = st.columns([0.85, 0.15], vertical_alignment="bottom")
         with c3: t_alvo_mob = st.text_input("Alvo:", key="alvo_val", placeholder="Alvo...")
-        with c4: 
-            st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
-            st.button("🗑️", key="cls_a_mob", on_click=limpar_campo_alvo)
+        with c4: st.button("🗑️", key="cls_a_mob", on_click=limpar_campo_alvo)
         
         st.button("🎓 Doutorado Guilherme Lemos", key="mob_lemos", on_click=carregar_setup_lemos)
         st.markdown("---")
         
         st.file_uploader("📂 Upload", type=["csv", "txt"], key="uploader_key_mob", on_change=processar_upload)
         
-        c5, c6 = st.columns([0.85, 0.15])
+        c5, c6 = st.columns([0.85, 0.15], vertical_alignment="bottom")
         with c5: alvos_mob = st.text_area("Alvos:", key="alvos_val", height=150)
-        with c6: 
-            st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
-            st.button("🗑️", key="cls_l_mob", on_click=limpar_campo_alvos)
+        with c6: st.button("🗑️", key="cls_l_mob", on_click=limpar_campo_alvos)
         
         st.button("📥 Restaurar", key="mob_alvos", on_click=carregar_alvos_apenas)
         
