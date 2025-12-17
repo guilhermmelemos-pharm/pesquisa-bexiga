@@ -21,17 +21,16 @@ import random
 # ==========================================
 def buscar_alvos_emergentes(email):
     Entrez.email = email
-    # Busca por termos de inovação no último ano (2024-2025)
-    query = '("orphan receptor" OR "neglected target" OR "novel GPCR" OR "emerging target") AND ("2024"[Date - Publication] : "2025"[Date - Publication])'
+    # Busca por termos de inovação e alvos órfãos/negligenciados recentes
+    query = '("orphan receptor" OR "neglected target" OR "novel GPCR" OR "rarely studied") AND ("2024"[Date - Publication] : "2025"[Date - Publication])'
     try:
-        handle = Entrez.esearch(db="pubmed", term=query, retmax=15)
+        handle = Entrez.esearch(db="pubmed", term=query, retmax=30)
         record = Entrez.read(handle)
         if not record["IdList"]: return []
         handle = Entrez.efetch(db="pubmed", id=record["IdList"], rettype="abstract", retmode="text")
         texto = handle.read()
-        # Captura padrões como GPR123, P2X4, TRPV1
         encontrados = re.findall(r'\b[A-Z]{2,6}[0-9]{1,4}\b', texto)
-        blacklist = ["DNA", "RNA", "USA", "NCBI", "NIH", "ATP", "AMP", "GDP", "COVID", "SARS", "FAPESP"]
+        blacklist = ["DNA", "RNA", "USA", "NCBI", "NIH", "ATP", "AMP", "GDP", "COVID", "SARS", "FAPESP", "PMC", "UI", "UK", "USA"]
         return sorted(list(set([t for t in encontrados if t not in blacklist and len(t) > 2])))
     except:
         return []
@@ -211,8 +210,8 @@ def exibir_radar_cientifico(lang_code):
                 st.caption(f"{n['bandeira']} {n['fonte']}")
                 st.link_button("Ler" if lang_code=='pt' else "Read", n['link'], use_container_width=True)
 
+# BANCO DE DADOS PADRÃO
 CANDIDATOS_MINERACAO = ["GPR37", "GPR17", "GPR55", "GPR84", "GPR35", "TAAR1", "P2Y14", "FFAR2", "FFAR3", "SUCNR1", "OXGR1", "HCAR1", "LGR4", "LGR5", "MRGPRX2", "MRGPRD", "ASIC1a", "ASIC2", "TRPML1", "TRPML2", "TRPML3", "TPC1", "TPC2", "TMEM16A", "TMEM16B", "Piezo1", "Piezo2", "TREK-1", "TREK-2", "TRAAK", "TASK-1", "TASK-3", "TWIK-1", "THIK-1", "KCa3.1", "Kv7.5", "ClC-2", "Bestrophin-1", "Pannexin-1", "S1P1", "S1P2", "S1P3", "LPA1", "LPA2", "CysLT1", "CysLT2", "FPR2", "ChemR23", "BLT1", "GYY4137", "AP39", "Drp1", "Mfn2", "Sirtuin-1", "NAMPT", "Ferroptosis", "Pyroptosis", "Necroptosis", "Gasdermin D", "TAS2R", "TAS2R10", "TAS2R14", "Olfactory Receptors", "OR51E2", "SLC7A11", "NLRP3", "Resolvin D1", "Maresin 1", "Lipoxin A4", "Itaconate", "P2X4"]
-
 SUGESTOES_ALVOS_RAW = "Piezo1, Piezo2, TREK-1, TRAAK, TASK-1, GPR35, GPR55, GPR84, GPR183, TAS2R, TAS2R10, TAS2R14, Olfactory Receptors, OR51E2, Ferroptosis, GPX4, SLC7A11, Pyroptosis, Gasdermin D, NLRP3, H2S, GYY4137, CSE enzyme, CBS enzyme, Resolvin D1, Maresin 1, Lipoxin A4, Itaconate, Pannexin-1, P2X4, TMEM16A"
 LISTA_ALVOS_PRONTA = ", ".join([x.strip() for x in SUGESTOES_ALVOS_RAW.split(',') if x.strip()])
 
@@ -306,9 +305,9 @@ def buscar_resumos_detalhados(termo_farmaco, termo_orgao, email, y_start, y_end,
 lang_opt = st.sidebar.radio("Language / Idioma:", ["🇧🇷 Português", "🇺🇸 English"])
 lang = "pt" if "Português" in lang_opt else "en"
 t = TEXTOS[lang]
-
 modo = st.sidebar.radio("📱 Mode:", ["Desktop", "Mobile (Pocket)"], index=0)
 
+# Bloco de Citação
 st.sidebar.markdown("---")
 with st.sidebar.expander(t["citar_titulo"]):
     st.code(t["citar_texto"], language="text")
@@ -320,27 +319,32 @@ if modo == "Desktop":
     st.markdown(t["subtitulo"])
     if 'dados_desk' not in st.session_state: exibir_radar_cientifico(lang)
     
+    # --- Passo 1: Credenciais ---
     st.sidebar.header(t["credenciais"])
     email_user = st.sidebar.text_input(t["email_label"], placeholder="pesquisador@unifesp.br", key="email_desk")
 
-    # Módulo de Inteligência (Desktop)
+    # --- NOVO: Módulo de Inteligência (Injeção Direta) ---
     st.sidebar.markdown("---")
     st.sidebar.subheader("💡 Inteligência Lemos Lambda")
-    st.sidebar.caption("Minere alvos promissores/órfãos da literatura recente (2024-2025).")
-    if st.sidebar.button("🔍 Descobrir Tendências", key="btn_trend_desk"):
+    if st.sidebar.button("🔍 Injetar Alvos Emergentes (2025)", key="btn_trend_desk"):
         if email_user and "@" in email_user:
-            with st.sidebar.status("Varrendo o PubMed..."):
-                novos_termos = buscar_alvos_emergentes(email_user)
-                if novos_termos:
-                    st.sidebar.success(f"Encontrei {len(novos_termos)} termos!")
-                    st.sidebar.text_area("Copie e cole na lista de alvos:", ", ".join(novos_termos), height=100)
+            with st.sidebar.status("Minerando tendências..."):
+                novos = buscar_alvos_emergentes(email_user)
+                if novos:
+                    novos_texto = ", ".join(novos)
+                    if st.session_state.alvos_val: st.session_state.alvos_val += ", " + novos_texto
+                    else: st.session_state.alvos_val = novos_texto
+                    st.sidebar.success(f"✅ {len(novos)} novos alvos injetados!")
+                    time.sleep(1)
+                    st.rerun()
                 else: st.sidebar.warning("Nada novo encontrado.")
         else: st.sidebar.error("E-mail válido obrigatório.")
     st.sidebar.markdown("---")
 
     anos = st.sidebar.slider(t["periodo"], 1990, 2025, (2010, 2025), key="anos_desk")
-    st.sidebar.header(t["config"])
     
+    # --- Passo 2: Órgãos ---
+    st.sidebar.header(t["config"])
     st.sidebar.markdown(t["label_fonte"])
     c1, c2 = st.sidebar.columns([6, 1], vertical_alignment="bottom")
     with c1: t_fonte = st.text_input("Fonte", key="fonte_val", placeholder=t["holder_fonte"], label_visibility="collapsed")
@@ -353,8 +357,9 @@ if modo == "Desktop":
     
     st.sidebar.button(t["btn_setup"], on_click=carregar_setup_lemos, args=(t,))
     st.sidebar.markdown("---")
-    st.sidebar.header(t["sec_alvos"])
     
+    # --- Passo 3: Alvos ---
+    st.sidebar.header(t["sec_alvos"])
     with st.sidebar.expander(t["expander_upload"]):
         st.file_uploader("Upload", type=["csv", "txt"], key="uploader_key", on_change=processar_upload, args=(t,))
     
@@ -370,7 +375,7 @@ if modo == "Desktop":
         if not email_user: st.error(t["erro_email"])
         elif not alvos_in: st.warning(t["aviso_lista"])
         else:
-            lst = [x.strip() for x in alvos_in.split(",") if x.strip()]
+            lst = sorted(list(set([x.strip() for x in alvos_in.split(",") if x.strip()])))
             res = []; pg = st.empty(); bar = st.progress(0)
             for i, item in enumerate(lst):
                 pg.text(t["prog_investigando"].format(atual=i+1, total=len(lst), alvo=item))
@@ -378,11 +383,12 @@ if modo == "Desktop":
                 na = consultar_pubmed_count(item, t_alvo, email_user, anos[0], anos[1]) if t_alvo else 0
                 ng = consultar_pubmed_count(item, "", email_user, anos[0], anos[1]) if not t_fonte and not t_alvo else 0
                 pot = nf/na if na > 0 and t_fonte else (na if t_alvo else ng)
-                stat = "💎 DIAMANTE" if t_fonte and t_alvo and pot > 10 and nf > 50 else "🥇 Ouro"
+                stat = "💎 DIAMANTE" if t_fonte and t_alvo and pot > 10 and nf > 50 else "🥇 Ouro" if pot > 1 else "📉 Raro"
                 res.append({"Alvo": item, "Status": stat, "Potencial": pot, "Qtd_Fonte": nf, "Qtd_Alvo": na if t_alvo else ng})
                 bar.progress((i+1)/len(lst))
             st.session_state['dados_desk'] = pd.DataFrame(res).sort_values(by="Potencial", ascending=False); st.rerun()
 
+    # --- ÁREA DE RESULTADOS (DESKTOP) ---
     if 'dados_desk' in st.session_state:
         df = st.session_state['dados_desk']
         st.success(t["analise_pronta"].format(top=df.iloc[0]['Alvo']))
@@ -392,27 +398,47 @@ if modo == "Desktop":
             ops = df['Status'].unique().tolist()
             filt = st.multiselect(t["filtro"], ops, default=ops)
         df_f = df[df['Status'].isin(filt)].head(qtd_graf)
+        
         col1, col2 = st.columns([2, 1])
-        with col1: st.plotly_chart(px.bar(df_f, x="Alvo", y="Potencial", color="Status"), use_container_width=True)
+        with col1: 
+            fig = px.bar(df_f, x="Alvo", y="Potencial", color="Status", color_discrete_map={"💎 DIAMANTE": "#00CC96", "🥇 Ouro": "#636EFA"})
+            st.plotly_chart(fig, use_container_width=True)
         with col2: 
-            st.dataframe(df_f, use_container_width=True)
+            st.dataframe(df_f, use_container_width=True, hide_index=True)
             st.download_button(t["baixar"], df.to_csv(index=False).encode('utf-8'), "lemos_analise.csv")
+        
+        st.divider()
+        st.header(t["raio_x"])
+        sel = st.selectbox("Alvo:", sorted(df['Alvo'].unique().tolist()))
+        c_l1, c_l2 = st.columns([1,4])
+        if c_l1.button(t["btn_ler"]):
+            with st.spinner(t["lendo"]):
+                arts = buscar_resumos_detalhados(sel, t_alvo if t_alvo else "", email_user, anos[0], anos[1], lang, 3)
+                if not arts: st.info(t["sem_artigos"])
+                else:
+                    for a in arts:
+                        with st.expander(f"📄 {a['Title']}"):
+                            st.write(f"**Source:** {a['Source']}")
+                            st.success(a['Resumo_IA'])
+                            st.markdown(f"[PubMed Link](https://pubmed.ncbi.nlm.nih.gov/{a['PMID']})")
+        if c_l2.button(t["btn_scholar"]):
+             st.markdown(f"👉 [Google Scholar](https://scholar.google.com.br/scholar?q={sel}+{t_alvo if t_alvo else ''})")
 
 elif modo == "Mobile (Pocket)":
     st.title(t["titulo_mob"])
     if 'dados_mob' not in st.session_state: exibir_radar_cientifico(lang)
     email_mob = st.text_input(t["email_label"], key="email_mob")
 
-    # Módulo de Inteligência (Mobile)
-    if st.button("🔍 Descobrir Tendências", key="btn_trend_mob"):
+    if st.button("🔍 Injetar Alvos Emergentes"):
         if email_mob and "@" in email_mob:
             with st.spinner("Buscando..."):
-                novos = buscar_alvos_emergentes(email_mob)
-                if novos:
-                    st.success(f"{len(novos)} encontrados!")
-                    st.text_area("Copie:", ", ".join(novos))
-                else: st.warning("Nada novo.")
-        else: st.error("E-mail primeiro.")
+                n = buscar_alvos_emergentes(email_mob)
+                if n:
+                    txt = ", ".join(n)
+                    if st.session_state.alvos_val: st.session_state.alvos_val += ", " + txt
+                    else: st.session_state.alvos_val = txt
+                    st.success(f"✅ {len(n)} injetados!"); time.sleep(1); st.rerun()
+        else: st.error("E-mail!")
 
     with st.expander("⚙️ Config"):
         anos_mob = st.slider(t["periodo"], 1990, 2025, (2010, 2025))
@@ -438,4 +464,10 @@ elif modo == "Mobile (Pocket)":
             st.session_state['dados_mob'] = pd.DataFrame(r).sort_values(by="P", ascending=False); st.rerun()
 
     if 'dados_mob' in st.session_state:
-        st.dataframe(st.session_state['dados_mob'], use_container_width=True)
+        d = st.session_state['dados_mob']
+        st.metric("🏆 Top 1", d.iloc[0]['Alvo'], f"{d.iloc[0]['P']:.1f}")
+        st.dataframe(d, use_container_width=True, hide_index=True)
+        sel_m = st.selectbox("Ler:", d['Alvo'].unique())
+        if st.button(t["btn_ler"]):
+            am = buscar_resumos_detalhados(sel_m, t_alvo_m if t_alvo_m else "", email_mob, anos_mob[0], anos_mob[1], lang, 3)
+            for a in am: st.info(f"{a['Title']}\n\n{a['Resumo_IA']}")
