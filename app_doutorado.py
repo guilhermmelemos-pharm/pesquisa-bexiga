@@ -203,7 +203,7 @@ def limpar_campo_fonte(): st.session_state.fonte_val = ""
 def limpar_campo_alvo(): st.session_state.alvo_val = ""
 def limpar_campo_alvos(): st.session_state.alvos_val = ""
 
-# --- MINERADOR DE BLUE OCEANS (COM PROGRESSO VISUAL) ---
+# --- MINERADOR DE BLUE OCEANS ---
 def minerar_blue_oceans(orgao, email):
     if not orgao or not email:
         st.toast("⚠️ Preencha o 'Alvo' e 'E-mail' para minerar!", icon="⚠️")
@@ -212,29 +212,24 @@ def minerar_blue_oceans(orgao, email):
     encontrados = []
     Entrez.email = email
     
-    # Barra de progresso para feedback visual
     prog_text = "⛏️ Procurando termos chave, após isso clique em 'Rumo ao Avanço'..."
     my_bar = st.progress(0, text=prog_text)
     
-    # Vamos testar a lista. Se for muito grande, pegamos uma amostra.
     amostra = CANDIDATOS_MINERACAO 
     total = len(amostra)
     
     for i, termo in enumerate(amostra):
         try:
-            # Busca rápida: Termo AND Orgao
             query = f"({termo}) AND ({orgao}) AND 2010:2025[DP]"
             handle = Entrez.esearch(db="pubmed", term=query, retmax=0)
             record = Entrez.read(handle)
             count = int(record["Count"])
             
-            # Critério: Entre 0 e 150 artigos (Oportunidade Rara)
             if 0 <= count < 150: 
                 encontrados.append(f"{termo}")
                 
-            # Atualiza Barra
             my_bar.progress((i + 1) / total, text=f"⛏️ Analisando: {termo} ({count} artigos)")
-            time.sleep(0.05) # Pequeno delay para a API não bloquear
+            time.sleep(0.05) 
         except: continue
     
     my_bar.empty()
@@ -290,7 +285,6 @@ def traduzir_para_pt(texto):
 
 def extrair_conclusao(abstract_text):
     if not abstract_text: return "Resumo não disponível."
-    # Tenta achar a conclusão ou pega o final
     match = re.search(r'(Conclusion|Conclusions|In conclusion|Summary|Results suggest that)(.*)', abstract_text, re.IGNORECASE | re.DOTALL)
     texto_final = match.group(2).strip()[:400] if match else abstract_text[-400:]
     return "🇧🇷 " + traduzir_para_pt(texto_final) + "..."
@@ -298,7 +292,6 @@ def extrair_conclusao(abstract_text):
 def buscar_resumos_detalhados(termo_farmaco, termo_orgao, email, y_start, y_end, limit=5):
     if not email: return []
     
-    # Constrói query
     if termo_orgao and termo_orgao.strip():
         query = f"({termo_farmaco}) AND ({termo_orgao}) AND {y_start}:{y_end}[DP]"
     else:
@@ -310,7 +303,6 @@ def buscar_resumos_detalhados(termo_farmaco, termo_orgao, email, y_start, y_end,
         id_list = record["IdList"]
         if not id_list: return []
         
-        # Pega detalhes
         handle = Entrez.efetch(db="pubmed", id=id_list, rettype="medline", retmode="text")
         records = handle.read()
         artigos = []
@@ -353,7 +345,6 @@ if modo == "Desktop (Completo)":
     st.sidebar.markdown("---")
     st.sidebar.header("2. Configuração (Órgãos)")
     
-    # --- ALINHAMENTO PIXEL PERFECT (Usando vertical_alignment) ---
     st.sidebar.markdown("**Fonte (Orgão, tecido, célula similar):**") 
     col_fonte, col_limp_f = st.sidebar.columns([6, 1], vertical_alignment="bottom")
     with col_fonte: 
@@ -386,8 +377,6 @@ if modo == "Desktop (Completo)":
 
     cb1, cb2 = st.sidebar.columns(2)
     cb1.button("📥 Restaurar Padrão", on_click=carregar_alvos_apenas)
-    
-    # Botão Minerar com Callback
     cb2.button("⛏️ Minerar 'Blue Oceans'", on_click=minerar_blue_oceans, args=(termo_alvo, email_user))
     
     st.sidebar.markdown("---")
@@ -431,7 +420,7 @@ if modo == "Desktop (Completo)":
                     else:
                         potencial_val = n_fonte
                         status = "💎 DIAMANTE"
-                    metric_label = "Potencial (Ratio)"
+                    metric_label = "Potencial"
 
                 elif termo_alvo and not termo_fonte:
                     potencial_val = n_alvo
@@ -452,9 +441,9 @@ if modo == "Desktop (Completo)":
                 resultados.append({
                     "Alvo": alvo, 
                     "Status": status, 
-                    metric_label: potencial_val, # Valor Bruto
-                    "Qtd_Fonte": n_fonte,        # Para uso interno
-                    "Qtd_Alvo": n_alvo if termo_alvo else n_global # Para uso interno
+                    metric_label: potencial_val, 
+                    "Qtd_Fonte": n_fonte, 
+                    "Qtd_Alvo": n_alvo if termo_alvo else n_global
                 })
                 bar.progress((i+1)/len(alvos_lista))
             
@@ -465,20 +454,20 @@ if modo == "Desktop (Completo)":
     if 'dados_desk' in st.session_state:
         df = st.session_state['dados_desk']
         
-        # Identifica o tipo de métrica para o gráfico
+        # Identifica nome da coluna métrica
         col_metrica = [c for c in df.columns if c not in ["Alvo", "Status", "Qtd_Fonte", "Qtd_Alvo"]][0]
         
         top = df.iloc[0]
         st.success(f"✅ Análise Pronta. Destaque: **{top['Alvo']}**.")
         
         # --- TABELA LIMPA E RENOMEADA ---
-        # Renomeia colunas para ficarem bonitas na tela (Ex: "Artigos (Rim)")
         nome_fonte = f"Artigos ({termo_fonte})" if termo_fonte else "Fonte (N/A)"
         nome_alvo = f"Artigos ({termo_alvo})" if termo_alvo else "Artigos (Global)"
-        
-        # Prepara DF de exibição (Renomeando e escondendo colunas internas)
+        nome_ratio = f"Ratio ({termo_fonte} ÷ {termo_alvo})" if termo_fonte and termo_alvo else "Total Artigos"
+
+        # Prepara DF de exibição (Renomeando)
         df_show = df.rename(columns={
-            col_metrica: "Potencial",
+            col_metrica: nome_ratio,
             "Qtd_Fonte": nome_fonte,
             "Qtd_Alvo": nome_alvo
         })
@@ -494,14 +483,14 @@ if modo == "Desktop (Completo)":
         col1, col2 = st.columns([2, 1])
         with col1:
             fig = px.bar(df_filtrado, x="Alvo", y=col_metrica, color="Status", 
-                         title=f"Top {len(df_filtrado)} - {col_metrica}", 
+                         title=f"Top {len(df_filtrado)}", 
                          color_discrete_map={"💎 DIAMANTE": "#00CC96", "🥇 Ouro": "#636EFA", "🔥 Hot Topic": "#FF4B4B", "📈 Consolidado": "#FFA15A"})
             st.plotly_chart(fig, use_container_width=True)
         with col2:
             # Exibe a tabela com formatação limpa (1 casa decimal)
             st.dataframe(
-                df_show[["Alvo", "Status", "Potencial", nome_fonte, nome_alvo]].style.format({
-                    "Potencial": "{:.1f}",
+                df_show[["Alvo", "Status", nome_ratio, nome_fonte, nome_alvo]].style.format({
+                    nome_ratio: "{:.1f}",
                     nome_fonte: "{:.0f}",
                     nome_alvo: "{:.0f}"
                 }).hide(axis="index"), 
