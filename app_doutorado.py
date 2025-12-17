@@ -38,36 +38,20 @@ import feedparser
 import random
 
 # ==========================================
-# 0. FUNÇÃO DE AUTOMAÇÃO DE TERMOS (NOVO)
+# 0. FUNÇÃO DE AUTOMAÇÃO DE TERMOS (DINÂMICA)
 # ==========================================
 def buscar_alvos_emergentes_pubmed(orgao_alvo, email):
     if not orgao_alvo or not email:
         return []
     Entrez.email = email
-    # Busca focada em orphan receptors e mecanismos de fronteira para o órgão específico
-   def buscar_alvos_emergentes_pubmed(orgao_alvo, email):
-    if not orgao_alvo or not email:
-        return []
-    Entrez.email = email
     
-    # PEGA O ANO ATUAL DINAMICAMENTE
+    # PEGA O ANO ATUAL DINAMICAMENTE PARA NÃO EXPIRAR EM 2026
     ano_fim = datetime.now().year
     ano_inicio = ano_fim - 1
     
-    # A query agora usa as variáveis ano_inicio e ano_fim
-    query = f"({orgao_alvo}) AND (receptor OR channel OR protein OR signaling) AND (\"{ano_inicio}\"[Date - Publication] : \"{ano_fim}\"[Date - Publication])"  
-    try:
-        handle = Entrez.esearch(db="pubmed", term=query, retmax=25, sort="relevance")
-        record = Entrez.read(handle)
-        ids = record["IdList"]
-        if not ids: return []
-        handle = Entrez.efetch(db="pubmed", id=ids, rettype="abstract", retmode="text")
-        texto = handle.read()
-        encontrados = re.findall(r'\b[A-Z]{2,6}[0-9]{0,4}\b', texto)
-        blacklist = ["DNA", "RNA", "USA", "NCBI", "NIH", "ATP", "AMP", "GDP", "COVID", "SARS", "PMID", "DOI", "FAPESP"]
-        return sorted(list(set([t for t in encontrados if t not in blacklist and len(t) > 2])))
-    except:
-        return []
+    # Query dinâmica focada em receptores e sinalização para o órgão específico
+    query = f"({orgao_alvo}) AND (receptor OR channel OR protein OR signaling) AND (\"{ano_inicio}\"[Date - Publication] : \"{ano_fim}\"[Date - Publication])"
+    
     try:
         handle = Entrez.esearch(db="pubmed", term=query, retmax=25, sort="relevance")
         record = Entrez.read(handle)
@@ -305,7 +289,6 @@ def minerar_blue_oceans(orgao, email, t):
     encontrados = []
     Entrez.email = email
     my_bar = st.progress(0, text=t["prog_minerar"])
-    # Usa a lista gigante como base para mineração
     amostra = CANDIDATOS_MINERACAO 
     total = len(amostra)
     for i, termo in enumerate(amostra):
@@ -417,7 +400,7 @@ if modo == "Desktop":
 
     if st.sidebar.button(t["btn_trend"], key="trend_desk"):
         if email_user and t_alvo:
-            with st.sidebar.status("Buscando..."):
+            with st.sidebar.status("Buscando tendências..."):
                 novos = buscar_alvos_emergentes_pubmed(t_alvo, email_user)
                 if novos:
                     st.session_state.alvos_val = (st.session_state.alvos_val.strip(", ") + ", " + ", ".join(novos))
@@ -439,9 +422,9 @@ if modo == "Desktop":
                 nf = consultar_pubmed_count(item, t_fonte, email_user, anos[0], anos[1])
                 na = consultar_pubmed_count(item, t_alvo, email_user, anos[0], anos[1])
                 pot = nf/na if na > 0 else nf
-                stat = "💎 DIAMANTE" if pot > 10 else "🥇 Ouro"
-                res.append({"Alvo": item, "Status": stat, "Potencial": pot, "Qtd_Fonte": nf, "Qtd_Alvo": na})
+                res.append({"Alvo": item, "Status": "💎 DIAMANTE" if pot > 10 else "🥇 Ouro", "Potencial": pot, "Qtd_Fonte": nf, "Qtd_Alvo": na})
                 bar.progress((i+1)/len(lst))
+            pg.empty()
             st.session_state['dados_desk'] = pd.DataFrame(res).sort_values(by="Potencial", ascending=False)
             st.rerun()
 
@@ -501,4 +484,3 @@ elif modo == "Mobile (Pocket)":
         d=st.session_state['dados_mob']
         st.metric("🏆 Top 1", d.iloc[0]['Alvo'], f"{d.iloc[0]['P']:.1f}")
         st.dataframe(d, use_container_width=True, hide_index=True)
-
