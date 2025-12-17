@@ -15,7 +15,7 @@ import random
 # ==========================================
 st.set_page_config(page_title="Lemos Doutorado", page_icon="🎓", layout="wide")
 
-# CSS para padronizar imagens e alinhar botões
+# CSS: Padroniza imagens e garante largura total dos botões
 st.markdown("""
     <style>
     div[data-testid="stImage"] img {
@@ -25,6 +25,10 @@ st.markdown("""
     }
     .stButton button {
         width: 100%;
+    }
+    /* Remove margem extra quando o label está oculto */
+    div[data-testid="stVerticalBlock"] > div {
+        gap: 0.5rem;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -111,6 +115,11 @@ def exibir_radar_cientifico():
 # ==========================================
 # 3. BANCO DE DADOS
 # ==========================================
+# Lista de "Blue Oceans" (Coisas muito específicas e raras)
+BLUE_OCEAN_ALVOS = """
+GPR37 (Parkin-associated endothelin-like receptor), GPR17, GPR55 (LPI receptor), GPR84 (Medium-chain FFA), GPR35 (Kynurenic acid), TAAR1 (Trace amine), P2Y14 (UDP-glucose), FFAR2 (GPR43), FFAR3 (GPR41), SUCNR1 (GPR91 Succinate), OXGR1 (Alpha-ketoglutarate), HCAR1 (GPR81 Lactate), LGR4, LGR5, MRGPRX2, MRGPRD, ASIC1a, ASIC2, TRPML1, TRPML2, TRPML3, TPC1, TPC2, TMEM16A, TMEM16B, Piezo1, Piezo2, K2P channels, TREK-1, TREK-2, TRAAK, TASK-1, TASK-3, TWIK-1, THIK-1, KCa3.1, Kv7.5, ClC-2, Bestrophin-1, Pannexin-1, S1P1 receptor, S1P2, S1P3, LPA1 receptor, LPA2, CysLT1, CysLT2, FPR2 (Lipoxin), ChemR23 (Resolvin E1), BLT1 (Leukotriene B4)
+"""
+
 SUGESTOES_ALVOS_RAW = """
 -- GASOTRANSMISSORES & SINALIZAÇÃO GASOSA (O Novo Hype) --
 Hydrogen Sulfide (H2S), CBS, CSE, GYY4137, AP39, Nitric Oxide, Riociguat, Vericiguat, Carbon Monoxide (CO), HO-1
@@ -167,6 +176,7 @@ def limpar_lista_alvos(texto_bruto):
     return ", ".join(alvos_limpos)
 
 LISTA_ALVOS_PRONTA = limpar_lista_alvos(SUGESTOES_ALVOS_RAW)
+LISTA_BLUE_OCEAN = limpar_lista_alvos(BLUE_OCEAN_ALVOS)
 
 PRESETS_ORGAOS = {
     "(Sugestão Lemos)": {
@@ -184,6 +194,10 @@ def carregar_setup_lemos():
 def carregar_alvos_apenas(): 
     st.session_state.alvos_val = LISTA_ALVOS_PRONTA
     st.toast("Lista Inovadora Restaurada!", icon="✨")
+
+def carregar_blue_ocean():
+    st.session_state.alvos_val = LISTA_BLUE_OCEAN
+    st.toast("Carregado: Receptores Órfãos e Raros!", icon="📉")
 
 def limpar_campo_fonte(): st.session_state.fonte_val = ""
 def limpar_campo_alvo(): st.session_state.alvo_val = ""
@@ -216,7 +230,6 @@ def consultar_pubmed_count(termo_farmaco, termo_orgao, email, y_start, y_end):
     if not email: return -1
     Entrez.email = email
     
-    # Busca Flexível: Se tem órgão, usa AND. Se não, busca global.
     if termo_orgao and termo_orgao.strip():
         query = f"({termo_farmaco}) AND ({termo_orgao}) AND {y_start}:{y_end}[DP]"
     else:
@@ -240,7 +253,6 @@ def extrair_conclusao(abstract_text):
 
 def buscar_resumos_detalhados(termo_farmaco, termo_orgao, email, y_start, y_end, limit=5):
     if not email: return []
-    
     if termo_orgao and termo_orgao.strip():
         query = f"({termo_farmaco}) AND ({termo_orgao}) AND {y_start}:{y_end}[DP]"
     else:
@@ -292,14 +304,23 @@ if modo == "Desktop (Completo)":
     st.sidebar.markdown("---")
     st.sidebar.header("2. Configuração (Órgãos)")
     
-    # ALINHAMENTO NATIVO (Ratio [6,1] + vertical_alignment="bottom")
-    col_fonte, col_limp_f = st.sidebar.columns([6, 1], vertical_alignment="bottom")
-    with col_fonte: termo_fonte = st.text_input("Fonte (Opcional):", key="fonte_val", placeholder="Ex: Kidney...")
-    with col_limp_f: st.button("🗑️", key="btn_cls_f_dk", on_click=limpar_campo_fonte)
+    # -----------------------------------------------
+    # ALINHAMENTO "LABEL EXTERNO" (Solução Definitiva)
+    # -----------------------------------------------
+    
+    st.sidebar.markdown("**Fonte (Opcional):**") 
+    col_fonte, col_limp_f = st.sidebar.columns([6, 1])
+    with col_fonte: 
+        termo_fonte = st.text_input("Fonte", key="fonte_val", placeholder="Ex: Kidney...", label_visibility="collapsed")
+    with col_limp_f: 
+        st.button("🗑️", key="btn_cls_f_dk", on_click=limpar_campo_fonte)
 
-    col_alvo, col_limp_a = st.sidebar.columns([6, 1], vertical_alignment="bottom")
-    with col_alvo: termo_alvo = st.text_input("Alvo (Opcional):", key="alvo_val", placeholder="Ex: Bladder...")
-    with col_limp_a: st.button("🗑️", key="btn_cls_a_dk", on_click=limpar_campo_alvo)
+    st.sidebar.markdown("**Alvo (Opcional):**")
+    col_alvo, col_limp_a = st.sidebar.columns([6, 1])
+    with col_alvo: 
+        termo_alvo = st.text_input("Alvo", key="alvo_val", placeholder="Ex: Bladder...", label_visibility="collapsed")
+    with col_limp_a: 
+        st.button("🗑️", key="btn_cls_a_dk", on_click=limpar_campo_alvo)
     
     st.sidebar.caption("👇 Setup Automático:")
     st.sidebar.button("🎓 Doutorado Guilherme Lemos", on_click=carregar_setup_lemos)
@@ -310,11 +331,18 @@ if modo == "Desktop (Completo)":
     with st.sidebar.expander("📂 Importar Biblioteca (.csv/.txt)"):
         st.file_uploader("Upload", type=["csv", "txt"], key="uploader_key", on_change=processar_upload)
     
-    col_lista, col_limp_l = st.sidebar.columns([6, 1], vertical_alignment="bottom")
-    with col_lista: alvos_input = st.text_area("Lista de Pesquisa:", key="alvos_val", height=150, placeholder="Carregue a lista...")
-    with col_limp_l: st.button("🗑️", key="btn_cls_l_dk", on_click=limpar_campo_alvos)
+    st.sidebar.markdown("**Lista de Pesquisa:**")
+    col_lista, col_limp_l = st.sidebar.columns([6, 1])
+    with col_lista: 
+        alvos_input = st.text_area("Lista", key="alvos_val", height=150, placeholder="Carregue a lista...", label_visibility="collapsed")
+    with col_limp_l: 
+        st.button("🗑️", key="btn_cls_l_dk", on_click=limpar_campo_alvos)
 
-    st.sidebar.button("📥 Restaurar Lista Padrão", on_click=carregar_alvos_apenas)
+    # Botões Lado a Lado
+    cb1, cb2 = st.sidebar.columns(2)
+    cb1.button("📥 Restaurar Padrão", on_click=carregar_alvos_apenas)
+    cb2.button("📉 'Blue Oceans' (Raros)", on_click=carregar_blue_ocean) # NOVO BOTÃO
+    
     st.sidebar.markdown("---")
 
     if st.sidebar.button("🚀 Rumo ao Avanço", type="primary"):
@@ -329,31 +357,24 @@ if modo == "Desktop (Completo)":
             for i, alvo in enumerate(alvos_lista):
                 progresso_texto.text(f"⏳ Investigando {i+1}/{len(alvos_lista)}: {alvo}")
                 
-                # --- LÓGICA DE BUSCA INTELIGENTE ---
-                
-                # 1. Busca Fonte (Se existir)
+                # BUSCA
                 n_fonte = 0
-                if termo_fonte:
-                    n_fonte = consultar_pubmed_count(alvo, termo_fonte, email_user, min_year, max_year)
+                if termo_fonte: n_fonte = consultar_pubmed_count(alvo, termo_fonte, email_user, min_year, max_year)
                 
-                # 2. Busca Alvo (Se existir)
                 n_alvo = 0
-                if termo_alvo:
-                    n_alvo = consultar_pubmed_count(alvo, termo_alvo, email_user, min_year, max_year)
+                if termo_alvo: n_alvo = consultar_pubmed_count(alvo, termo_alvo, email_user, min_year, max_year)
                 
-                # 3. Busca Global (Se nenhum órgão for informado)
                 n_global = 0
                 if not termo_fonte and not termo_alvo:
                     n_global = consultar_pubmed_count(alvo, "", email_user, min_year, max_year)
 
-                # --- LÓGICA DE MÉTRICAS & STATUS ---
+                # LÓGICA
                 potencial_val = 0
                 status = "N/A"
                 fonte_display = n_fonte if termo_fonte else "-"
                 alvo_display = n_alvo if termo_alvo else "-"
 
-                # CASO A: COMPARAÇÃO (Fonte vs Alvo)
-                if termo_fonte and termo_alvo:
+                if termo_fonte and termo_alvo: # COMPARAÇÃO
                     if n_alvo > 0:
                         ratio = n_fonte / n_alvo
                         potencial_val = ratio
@@ -363,12 +384,11 @@ if modo == "Desktop (Completo)":
                         elif ratio > 2: status = "🥈 Prata"
                         else: status = "🥚 Embrionário"
                     else:
-                        potencial_val = n_fonte # Se 0 no alvo, o potencial é o ineditismo total
-                        status = "💎 DIAMANTE (Inédito)"
+                        potencial_val = n_fonte
+                        status = "💎 DIAMANTE"
                     metric_label = "Potencial (Ratio)"
 
-                # CASO B: VOLUME ALVO (Só Alvo)
-                elif termo_alvo and not termo_fonte:
+                elif termo_alvo and not termo_fonte: # ALVO
                     potencial_val = n_alvo
                     metric_label = "Artigos (Alvo)"
                     if n_alvo > 500: status = "🔥 Hot Topic"
@@ -376,11 +396,10 @@ if modo == "Desktop (Completo)":
                     elif n_alvo > 10: status = "🔍 Exploratório"
                     else: status = "🥚 Inicial"
 
-                # CASO C: VOLUME GLOBAL (Sem Órgãos)
-                else:
+                else: # GLOBAL
                     potencial_val = n_global
                     metric_label = "Artigos (Global)"
-                    alvo_display = n_global # Mostra no lugar do alvo
+                    alvo_display = n_global
                     if n_global > 1000: status = "🔥 Hot Topic"
                     elif n_global > 200: status = "📈 Consolidado"
                     else: status = "🔍 Exploratório"
@@ -397,7 +416,6 @@ if modo == "Desktop (Completo)":
 
     if 'dados_desk' in st.session_state:
         df = st.session_state['dados_desk']
-        # Descobre qual é a coluna de métrica (Ratio, Artigos ou Global)
         col_metrica = [c for c in df.columns if c not in ["Alvo", "Status", "Fonte", "Alvo/Global"]][0]
         
         top = df.iloc[0]
@@ -428,7 +446,6 @@ if modo == "Desktop (Completo)":
         col_btn1, col_btn2 = st.columns([1,4])
         if col_btn1.button("Ler Artigos"):
             with st.spinner("Buscando..."):
-                # Busca Inteligente para Leitura: Usa Alvo se tiver, senão usa Global
                 orgao_busca = termo_alvo if termo_alvo else ""
                 arts = buscar_resumos_detalhados(sel, orgao_busca, email_user, min_year, max_year)
                 if not arts: st.info(f"Zero artigos encontrados.")
@@ -452,12 +469,14 @@ elif modo == "Mobile (Pocket)":
     with st.expander("⚙️ Configurar"):
         anos_mob = st.slider("📅 Anos:", 1990, 2025, (2010, 2025))
         
-        c1, c2 = st.columns([6, 1], vertical_alignment="bottom")
-        with c1: t_fonte_mob = st.text_input("Fonte (Opcional):", key="fonte_val", placeholder="Ex: Kidney...")
+        st.markdown("**Fonte:**")
+        c1, c2 = st.columns([6, 1])
+        with c1: t_fonte_mob = st.text_input("Fonte", key="fonte_val", placeholder="Ex: Kidney...", label_visibility="collapsed")
         with c2: st.button("🗑️", key="cls_f_mob", on_click=limpar_campo_fonte)
         
-        c3, c4 = st.columns([6, 1], vertical_alignment="bottom")
-        with c3: t_alvo_mob = st.text_input("Alvo (Opcional):", key="alvo_val", placeholder="Ex: Bladder...")
+        st.markdown("**Alvo:**")
+        c3, c4 = st.columns([6, 1])
+        with c3: t_alvo_mob = st.text_input("Alvo", key="alvo_val", placeholder="Ex: Bladder...", label_visibility="collapsed")
         with c4: st.button("🗑️", key="cls_a_mob", on_click=limpar_campo_alvo)
         
         st.button("🎓 Doutorado Guilherme Lemos", key="mob_lemos", on_click=carregar_setup_lemos)
@@ -465,11 +484,14 @@ elif modo == "Mobile (Pocket)":
         
         st.file_uploader("📂 Upload", type=["csv", "txt"], key="uploader_key_mob", on_change=processar_upload)
         
-        c5, c6 = st.columns([6, 1], vertical_alignment="bottom")
-        with c5: alvos_mob = st.text_area("Alvos:", key="alvos_val", height=150)
+        st.markdown("**Lista:**")
+        c5, c6 = st.columns([6, 1])
+        with c5: alvos_mob = st.text_area("Lista", key="alvos_val", height=150, label_visibility="collapsed")
         with c6: st.button("🗑️", key="cls_l_mob", on_click=limpar_campo_alvos)
         
-        st.button("📥 Restaurar", key="mob_alvos", on_click=carregar_alvos_apenas)
+        cb1, cb2 = st.columns(2)
+        cb1.button("📥 Restaurar", key="mob_alvos", on_click=carregar_alvos_apenas)
+        cb2.button("📉 'Blue Oceans'", key="mob_raros", on_click=carregar_blue_ocean)
         
     if st.button("🚀 Rumo ao Avanço", type="primary", use_container_width=True):
         if not email_mob: st.error("E-mail necessário")
@@ -484,11 +506,12 @@ elif modo == "Mobile (Pocket)":
                 nb = 0
                 if t_alvo_mob: nb = consultar_pubmed_count(al, t_alvo_mob, email_mob, anos_mob[0], anos_mob[1])
                 
-                # Lógica Mobile (Simplificada)
+                ng = 0
+                if not t_fonte_mob and not t_alvo_mob: ng = consultar_pubmed_count(al, "", email_mob, anos_mob[0], anos_mob[1])
+                
                 rat = 0
                 stat = "⚪"
                 
-                # Caso A: Comparação
                 if t_fonte_mob and t_alvo_mob:
                     if nb > 0:
                         rat = nf/nb
@@ -496,10 +519,9 @@ elif modo == "Mobile (Pocket)":
                         elif rat > 10: stat = "💎"
                         else: stat = "👍"
                     else: rat = nf; stat = "💎"
-                # Caso B: Só Alvo ou Só Global
                 else:
                     if t_alvo_mob: rat = nb
-                    else: rat = consultar_pubmed_count(al, "", email_mob, anos_mob[0], anos_mob[1])
+                    else: rat = ng
                     
                     if rat > 500: stat = "🔥"
                     else: stat = "🔍"
