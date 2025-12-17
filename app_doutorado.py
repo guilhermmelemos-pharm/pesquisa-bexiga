@@ -15,7 +15,7 @@ import random
 # ==========================================
 st.set_page_config(page_title="Lemos Doutorado", page_icon="🎓", layout="wide")
 
-# CSS para padronizar imagens (Cards)
+# CSS para padronizar imagens e alinhar botões
 st.markdown("""
     <style>
     div[data-testid="stImage"] img {
@@ -23,9 +23,7 @@ st.markdown("""
         object-fit: cover !important;
         border-radius: 8px !important;
     }
-    /* Ajuste fino para botões de lixeira ficarem bonitos */
-    div[data-testid="column"] button {
-        height: 100%;
+    .stButton button {
         width: 100%;
     }
     </style>
@@ -38,7 +36,7 @@ if 'alvo_val' not in st.session_state: st.session_state.alvo_val = ""
 if 'news_index' not in st.session_state: st.session_state.news_index = 0
 
 # ==========================================
-# 2. FUNÇÃO DE NOTÍCIAS (FEED CALMO - 60s)
+# 2. FUNÇÃO DE NOTÍCIAS (60s)
 # ==========================================
 @st.cache_data(ttl=3600)
 def buscar_todas_noticias():
@@ -48,7 +46,6 @@ def buscar_todas_noticias():
         {"url": "https://www.nature.com/nbt.rss", "lang": "🇬🇧"},
         {"url": "https://agencia.fapesp.br/rss/", "lang": "🇧🇷"},
     ]
-    
     noticias = []
     backups = [
         "https://images.unsplash.com/photo-1532094349884-543bc11b234d?w=400&h=250&fit=crop", 
@@ -56,7 +53,6 @@ def buscar_todas_noticias():
         "https://images.unsplash.com/photo-1581093458791-9f3c3900df4b?w=400&h=250&fit=crop", 
         "https://images.unsplash.com/photo-1530026405186-ed1f139313f8?w=400&h=250&fit=crop"
     ]
-    
     translator = GoogleTranslator(source='auto', target='pt')
 
     for fonte in feeds:
@@ -81,88 +77,76 @@ def buscar_todas_noticias():
                 except: titulo_pt = titulo_orig
 
                 noticias.append({
-                    "titulo_pt": titulo_pt,
-                    "titulo_orig": titulo_orig,
-                    "link": entry.link,
-                    "fonte": feed.feed.title.split("-")[0].strip()[:20],
-                    "img": img_url,
-                    "bandeira": fonte["lang"]
+                    "titulo_pt": titulo_pt, "titulo_orig": titulo_orig, "link": entry.link,
+                    "fonte": feed.feed.title.split("-")[0].strip()[:20], "img": img_url, "bandeira": fonte["lang"]
                 })
         except: continue
-            
     random.shuffle(noticias)
     return noticias
 
-# ATUALIZADO: run_every=60 (Mais lento/calmo)
 @st.fragment(run_every=60) 
 def exibir_radar_cientifico():
     news_list = buscar_todas_noticias()
-    if not news_list:
-        st.caption("Carregando feed...")
-        return
+    if not news_list: st.caption("Carregando feed..."); return
 
     total_news = len(news_list)
     qtd = 3
     start = st.session_state.news_index % total_news
     end = start + qtd
-    
     batch = []
-    for i in range(start, end):
-        batch.append(news_list[i % total_news])
-    
+    for i in range(start, end): batch.append(news_list[i % total_news])
     st.session_state.news_index += qtd
     
     with st.container(border=True):
-        st.caption(f"📡 **Radar Científico** (Atualiza a cada 60s)")
+        st.caption(f"📡 **Radar Científico**")
         cols = st.columns(3)
         for i, n in enumerate(batch):
             with cols[i]:
                 st.image(n['img'], use_container_width=True)
                 st.markdown(f"**{n['titulo_pt'][:75]}...**")
-                if n['titulo_pt'] != n['titulo_orig']:
-                    st.caption(f"🇬🇧 *{n['titulo_orig'][:75]}...*")
+                if n['titulo_pt'] != n['titulo_orig']: st.caption(f"🇬🇧 *{n['titulo_orig'][:75]}...*")
                 st.caption(f"{n['bandeira']} {n['fonte']}")
                 st.link_button("Ler", n['link'], use_container_width=True)
 
 # ==========================================
-# 3. BANCO DE DADOS (MEGA EXPANDIDO)
+# 3. BANCO DE DADOS
 # ==========================================
 SUGESTOES_ALVOS_RAW = """
 -- GASOTRANSMISSORES & SINALIZAÇÃO GASOSA (O Novo Hype) --
-Hydrogen Sulfide (H2S), CBS (Cystathionine beta-synthase), CSE (Cystathionine gamma-lyase), GYY4137, AP39, Nitric Oxide, sGC stimulators, Riociguat, Vericiguat, Carbon Monoxide (CO), Heme Oxygenase-1 (HO-1)
+Hydrogen Sulfide (H2S), CBS, CSE, GYY4137, AP39, Nitric Oxide, Riociguat, Vericiguat, Carbon Monoxide (CO), HO-1
 
 -- PURINÉRGICOS & ENDOCANABINÓIDES --
-P2X1 receptor, P2X3, P2X7, P2Y6, P2Y12, Adenosine A2A, FAAH (Fatty Acid Amide Hydrolase), MAGL (Monoacylglycerol lipase), Anandamide, 2-AG, GPR55
+P2X1 receptor, P2X3, P2X7, P2Y6, P2Y12, Adenosine A2A, FAAH, MAGL, Anandamide, 2-AG, GPR55
 
 -- CANAIS DE POTÁSSIO ESPECÍFICOS --
-KATP channel, Kir6.1, Kir6.2, Glibenclamide, Cromakalim, SK channels, SK3, KCa2.3, Kv7.2, Kv7.3, Kv7.4, Retigabine, BKCa (Slo1)
+KATP channel, Kir6.1, Kir6.2, Glibenclamide, Cromakalim, SK channels, SK3, Kv7.4, Retigabine, BKCa
 
 -- GENÉTICA REGULATÓRIA (lncRNAs & microRNAs) --
-MALAT1, HOTAIR, MEG3, H19, GAS5, miR-29b, miR-132, miR-199a, miR-21, miR-145, Antagomirs, siRNA therapy
+MALAT1, HOTAIR, MEG3, H19, GAS5, miR-29b, miR-132, miR-199a, miR-21, miR-145, siRNA therapy
 
--- COMUNICAÇÃO CELULAR (Exossomos & Vesículas) --
-Exosomes, CD63, CD9, CD81, TSG101, Alix, Extracellular Vesicles, Microvesicles, MVBs, Gap Junctions, Connexin 43
+-- COMUNICAÇÃO CELULAR (Exossomos) --
+Exosomes, CD63, CD9, CD81, TSG101, Alix, Extracellular Vesicles, Gap Junctions, Connexin 43
 
--- IMUNOLOGIA AVANÇADA (Checkpoints em Inflamação) --
-PD-1, PD-L1, CTLA-4, LAG-3, TIM-3, Siglec-8, Mast Cell Tryptase, Eosinophil Cationic Protein, IL-33, ST2 receptor
+-- IMUNOLOGIA AVANÇADA (Checkpoints) --
+PD-1, PD-L1, CTLA-4, LAG-3, TIM-3, Siglec-8, Mast Cell Tryptase, IL-33, ST2 receptor
 
--- SENSORS "EXÓTICOS" (Olfato & Sabor na Bexiga) --
-Olfactory Receptors, OR51E2, OR1D2, Taste Receptors, TAS2R (Bitter), TAS1R3 (Sweet), TRPM5, VN1R1
+-- SENSORS "EXÓTICOS" --
+Olfactory Receptors, OR51E2, OR1D2, Taste Receptors, TAS2R, TAS1R3, TRPM5
 
--- CRONOBIOLOGIA (Relógio da Bexiga) --
-Clock genes, BMAL1, CLOCK, PER1, PER2, CRY1, Rev-erb alpha, Melatonin Receptor MT1, MT2
+-- CRONOBIOLOGIA --
+Clock genes, BMAL1, CLOCK, PER1, PER2, CRY1, Rev-erb alpha, MT1, MT2
 
 -- MECANO-BIOLOGIA & FIBROSE --
-YAP, TAZ, Hippo pathway, Piezo1, Piezo2, Integrin beta-1, FAK, CTGF, LOX, Caveolin-1, Pirfenidone, Nintedanib
+YAP, TAZ, Hippo pathway, Piezo1, Piezo2, Integrin beta-1, FAK, CTGF, LOX, Caveolin-1, Pirfenidone
 
 -- EPIGENÉTICA --
-HDAC inhibitors, HDAC1, Valproic acid, Vorinostat, DNMT1, TET2, EZH2, Bromodomain
+HDAC inhibitors, HDAC1, Valproic acid, Vorinostat, DNMT1, TET2, EZH2
 
 -- METABOLISMO MITOCONDRIAL --
-Mitochondrial dynamics, Drp1, Mfn2, PGC-1alpha, Sirtuin-1, Sirtuin-3, NAMPT, NAD+
+Mitochondrial dynamics, Drp1, Mfn2, PGC-1alpha, Sirtuin-1, Sirtuin-3, NAMPT
 
 -- NOVAS VIAS DE MORTE --
-Ferroptosis, GPX4, SLC7A11, Pyroptosis, Gasdermin D, Necroptosis, RIPK1, RIPK3, MLKL
+Ferroptosis, GPX4, SLC7A11, Pyroptosis, Gasdermin D, Necroptosis, RIPK1, RIPK3
 
 -- TOXICOLOGIA AMBIENTAL --
 Microplastics, Nanoplastics, Bisphenol S, Phthalates, Glyphosate, Acrolein, Cadmium
@@ -221,17 +205,23 @@ def processar_upload():
             
             if string_final:
                 st.session_state.alvos_val = string_final
-                st.toast(f"Biblioteca '{uploaded_file.name}' importada!", icon="📂")
-            else: st.error("Arquivo vazio ou inválido.")
+                st.toast(f"Biblioteca importada!", icon="📂")
+            else: st.error("Arquivo vazio.")
         except Exception as e: st.error(f"Erro: {e}")
 
 # ==========================================
-# 4. FUNÇÕES PUBMED
+# 4. FUNÇÕES PUBMED (BUSCA FLEXÍVEL)
 # ==========================================
 def consultar_pubmed_count(termo_farmaco, termo_orgao, email, y_start, y_end):
     if not email: return -1
     Entrez.email = email
-    query = f"({termo_farmaco}) AND ({termo_orgao}) AND {y_start}:{y_end}[DP]"
+    
+    # Busca Flexível: Se tem órgão, usa AND. Se não, busca global.
+    if termo_orgao and termo_orgao.strip():
+        query = f"({termo_farmaco}) AND ({termo_orgao}) AND {y_start}:{y_end}[DP]"
+    else:
+        query = f"({termo_farmaco}) AND {y_start}:{y_end}[DP]"
+        
     try:
         handle = Entrez.esearch(db="pubmed", term=query, retmax=0)
         record = Entrez.read(handle)
@@ -250,7 +240,12 @@ def extrair_conclusao(abstract_text):
 
 def buscar_resumos_detalhados(termo_farmaco, termo_orgao, email, y_start, y_end, limit=5):
     if not email: return []
-    query = f"({termo_farmaco}) AND ({termo_orgao}) AND {y_start}:{y_end}[DP]"
+    
+    if termo_orgao and termo_orgao.strip():
+        query = f"({termo_farmaco}) AND ({termo_orgao}) AND {y_start}:{y_end}[DP]"
+    else:
+        query = f"({termo_farmaco}) AND {y_start}:{y_end}[DP]"
+        
     try:
         handle = Entrez.esearch(db="pubmed", term=query, retmax=limit, sort="relevance")
         record = Entrez.read(handle)
@@ -286,7 +281,6 @@ if modo == "Desktop (Completo)":
     st.title("🎓 Lemos Doutorado: Deep Science")
     st.markdown("**Ferramenta de Prospecção de Alto Impacto**")
     
-    # Feed condicional
     if 'dados_desk' not in st.session_state:
         exibir_radar_cientifico()
     
@@ -298,14 +292,14 @@ if modo == "Desktop (Completo)":
     st.sidebar.markdown("---")
     st.sidebar.header("2. Configuração (Órgãos)")
     
-    # ALINHAMENTO CORRIGIDO (Ratio [6,1] + vertical_alignment="bottom")
+    # ALINHAMENTO NATIVO (Ratio [6,1] + vertical_alignment="bottom")
     col_fonte, col_limp_f = st.sidebar.columns([6, 1], vertical_alignment="bottom")
-    with col_fonte: termo_fonte = st.text_input("Fonte (Comparação):", key="fonte_val", placeholder="Sistemas Consolidados...")
-    with col_limp_f: st.button("🗑️", key="btn_cls_f_dk", on_click=limpar_campo_fonte, help="Limpar")
+    with col_fonte: termo_fonte = st.text_input("Fonte (Opcional):", key="fonte_val", placeholder="Ex: Kidney...")
+    with col_limp_f: st.button("🗑️", key="btn_cls_f_dk", on_click=limpar_campo_fonte)
 
     col_alvo, col_limp_a = st.sidebar.columns([6, 1], vertical_alignment="bottom")
-    with col_alvo: termo_alvo = st.text_input("Alvo (Seu Foco):", key="alvo_val", placeholder="Bexiga/Urotélio...")
-    with col_limp_a: st.button("🗑️", key="btn_cls_a_dk", on_click=limpar_campo_alvo, help="Limpar")
+    with col_alvo: termo_alvo = st.text_input("Alvo (Opcional):", key="alvo_val", placeholder="Ex: Bladder...")
+    with col_limp_a: st.button("🗑️", key="btn_cls_a_dk", on_click=limpar_campo_alvo)
     
     st.sidebar.caption("👇 Setup Automático:")
     st.sidebar.button("🎓 Doutorado Guilherme Lemos", on_click=carregar_setup_lemos)
@@ -318,15 +312,14 @@ if modo == "Desktop (Completo)":
     
     col_lista, col_limp_l = st.sidebar.columns([6, 1], vertical_alignment="bottom")
     with col_lista: alvos_input = st.text_area("Lista de Pesquisa:", key="alvos_val", height=150, placeholder="Carregue a lista...")
-    with col_limp_l: st.button("🗑️", key="btn_cls_l_dk", on_click=limpar_campo_alvos, help="Limpar")
+    with col_limp_l: st.button("🗑️", key="btn_cls_l_dk", on_click=limpar_campo_alvos)
 
     st.sidebar.button("📥 Restaurar Lista Padrão", on_click=carregar_alvos_apenas)
     st.sidebar.markdown("---")
 
     if st.sidebar.button("🚀 Rumo ao Avanço", type="primary"):
         if not email_user or "@" not in email_user: st.error("E-mail obrigatório!")
-        elif not termo_fonte or not termo_alvo: st.warning("Configure os órgãos!")
-        elif not alvos_input: st.warning("Lista vazia!")
+        elif not alvos_input: st.warning("Lista de Alvos vazia!")
         else:
             alvos_lista = [x.strip() for x in alvos_input.split(",") if x.strip()]
             resultados = []
@@ -335,58 +328,99 @@ if modo == "Desktop (Completo)":
             
             for i, alvo in enumerate(alvos_lista):
                 progresso_texto.text(f"⏳ Investigando {i+1}/{len(alvos_lista)}: {alvo}")
-                n_fonte = consultar_pubmed_count(alvo, termo_fonte, email_user, min_year, max_year)
-                n_bexiga = consultar_pubmed_count(alvo, termo_alvo, email_user, min_year, max_year)
                 
-                if n_fonte != -1:
-                    ratio = n_fonte / n_bexiga if n_bexiga > 0 else n_fonte
-                    status = "N/A"
-                    if n_bexiga >= n_fonte and n_bexiga > 10: status = "🔴 Saturado"
-                    elif ratio > 10 and n_fonte > 100: status = "💎 DIAMANTE"
-                    elif ratio > 5 and n_fonte > 50: status = "🥇 Ouro"
-                    elif ratio > 2: status = "🥈 Prata"
-                    else: status = "🥚 Embrionário"
-                    
-                    resultados.append({
-                        "Alvo": alvo, "Status": status, "Potencial (x)": round(ratio, 1),
-                        "Fonte Total": n_fonte, "Bexiga Total": n_bexiga
-                    })
+                # --- LÓGICA DE BUSCA INTELIGENTE ---
+                
+                # 1. Busca Fonte (Se existir)
+                n_fonte = 0
+                if termo_fonte:
+                    n_fonte = consultar_pubmed_count(alvo, termo_fonte, email_user, min_year, max_year)
+                
+                # 2. Busca Alvo (Se existir)
+                n_alvo = 0
+                if termo_alvo:
+                    n_alvo = consultar_pubmed_count(alvo, termo_alvo, email_user, min_year, max_year)
+                
+                # 3. Busca Global (Se nenhum órgão for informado)
+                n_global = 0
+                if not termo_fonte and not termo_alvo:
+                    n_global = consultar_pubmed_count(alvo, "", email_user, min_year, max_year)
+
+                # --- LÓGICA DE MÉTRICAS & STATUS ---
+                potencial_val = 0
+                status = "N/A"
+                fonte_display = n_fonte if termo_fonte else "-"
+                alvo_display = n_alvo if termo_alvo else "-"
+
+                # CASO A: COMPARAÇÃO (Fonte vs Alvo)
+                if termo_fonte and termo_alvo:
+                    if n_alvo > 0:
+                        ratio = n_fonte / n_alvo
+                        potencial_val = ratio
+                        if n_alvo >= n_fonte and n_alvo > 10: status = "🔴 Saturado"
+                        elif ratio > 10 and n_fonte > 100: status = "💎 DIAMANTE"
+                        elif ratio > 5 and n_fonte > 50: status = "🥇 Ouro"
+                        elif ratio > 2: status = "🥈 Prata"
+                        else: status = "🥚 Embrionário"
+                    else:
+                        potencial_val = n_fonte # Se 0 no alvo, o potencial é o ineditismo total
+                        status = "💎 DIAMANTE (Inédito)"
+                    metric_label = "Potencial (Ratio)"
+
+                # CASO B: VOLUME ALVO (Só Alvo)
+                elif termo_alvo and not termo_fonte:
+                    potencial_val = n_alvo
+                    metric_label = "Artigos (Alvo)"
+                    if n_alvo > 500: status = "🔥 Hot Topic"
+                    elif n_alvo > 100: status = "📈 Consolidado"
+                    elif n_alvo > 10: status = "🔍 Exploratório"
+                    else: status = "🥚 Inicial"
+
+                # CASO C: VOLUME GLOBAL (Sem Órgãos)
+                else:
+                    potencial_val = n_global
+                    metric_label = "Artigos (Global)"
+                    alvo_display = n_global # Mostra no lugar do alvo
+                    if n_global > 1000: status = "🔥 Hot Topic"
+                    elif n_global > 200: status = "📈 Consolidado"
+                    else: status = "🔍 Exploratório"
+
+                resultados.append({
+                    "Alvo": alvo, "Status": status, metric_label: round(potencial_val, 1),
+                    "Fonte": fonte_display, "Alvo/Global": alvo_display
+                })
                 bar.progress((i+1)/len(alvos_lista))
             
             progresso_texto.empty()
-            st.session_state['dados_desk'] = pd.DataFrame(resultados).sort_values(by="Potencial (x)", ascending=False)
+            st.session_state['dados_desk'] = pd.DataFrame(resultados).sort_values(by=metric_label, ascending=False)
             st.rerun()
 
     if 'dados_desk' in st.session_state:
         df = st.session_state['dados_desk']
+        # Descobre qual é a coluna de métrica (Ratio, Artigos ou Global)
+        col_metrica = [c for c in df.columns if c not in ["Alvo", "Status", "Fonte", "Alvo/Global"]][0]
+        
         top = df.iloc[0]
-        st.success(f"✅ Análise Pronta. Maior Potencial: **{top['Alvo']}**.")
+        st.success(f"✅ Análise Pronta. Destaque: **{top['Alvo']}**.")
         
-        # --- PAINEL DE CONTROLE DO GRÁFICO (PERSONALIZAÇÃO) ---
         col_ctrl1, col_ctrl2 = st.columns(2)
-        with col_ctrl1:
-            # Filtro de Quantidade
-            qtd_grafico = st.slider("📊 Quantidade de Alvos no Gráfico:", 10, 100, 20)
-        with col_ctrl2:
-            # Filtro de Status
-            opcoes_status = df['Status'].unique().tolist()
-            filtro_status = st.multiselect("🔍 Filtrar por Status:", options=opcoes_status, default=opcoes_status)
+        with col_ctrl1: qtd_grafico = st.slider("📊 Qtd. no Gráfico:", 10, 100, 20)
+        with col_ctrl2: 
+            opcoes = df['Status'].unique().tolist()
+            filtro = st.multiselect("🔍 Filtro:", opcoes, default=opcoes)
         
-        # APLICA FILTROS
-        df_filtrado = df[df['Status'].isin(filtro_status)].head(qtd_grafico)
-        # -----------------------------------------------------
+        df_filtrado = df[df['Status'].isin(filtro)].head(qtd_grafico)
 
         col1, col2 = st.columns([2, 1])
         with col1:
-            fig = px.bar(df_filtrado, x="Alvo", y="Potencial (x)", color="Status", 
-                         title=f"Top {len(df_filtrado)} Alvos (Filtrados)", 
-                         color_discrete_map={"💎 DIAMANTE": "#00CC96", "🥇 Ouro": "#636EFA", "🥈 Prata": "#FFA15A", "🔴 Saturado": "#EF553B", "🥚 Embrionário": "#AB63FA"})
+            fig = px.bar(df_filtrado, x="Alvo", y=col_metrica, color="Status", 
+                         title=f"Top {len(df_filtrado)} - {col_metrica}", 
+                         color_discrete_map={"💎 DIAMANTE": "#00CC96", "🥇 Ouro": "#636EFA", "🔥 Hot Topic": "#FF4B4B", "📈 Consolidado": "#FFA15A"})
             st.plotly_chart(fig, use_container_width=True)
         with col2:
-            st.dataframe(df[["Alvo", "Status", "Potencial (x)", "Fonte Total", "Bexiga Total"]].style.hide(axis="index"), use_container_width=True, height=500)
-            
+            st.dataframe(df.style.hide(axis="index"), use_container_width=True, height=500)
             csv = df.to_csv(index=False).encode('utf-8')
-            st.download_button("📥 Baixar Planilha", csv, f'lemos_innov_{datetime.now().strftime("%Y%m%d")}.csv', 'text/csv', use_container_width=True)
+            st.download_button("📥 Baixar Planilha", csv, f'lemos_analise_{datetime.now().strftime("%Y%m%d")}.csv', 'text/csv', use_container_width=True)
             
         st.divider()
         st.header("🔎 Raio-X")
@@ -394,7 +428,9 @@ if modo == "Desktop (Completo)":
         col_btn1, col_btn2 = st.columns([1,4])
         if col_btn1.button("Ler Artigos"):
             with st.spinner("Buscando..."):
-                arts = buscar_resumos_detalhados(sel, termo_alvo, email_user, min_year, max_year)
+                # Busca Inteligente para Leitura: Usa Alvo se tiver, senão usa Global
+                orgao_busca = termo_alvo if termo_alvo else ""
+                arts = buscar_resumos_detalhados(sel, orgao_busca, email_user, min_year, max_year)
                 if not arts: st.info(f"Zero artigos encontrados.")
                 else:
                     for a in arts:
@@ -403,7 +439,8 @@ if modo == "Desktop (Completo)":
                             st.success(a['Resumo_IA'])
                             st.markdown(f"[Link PubMed](https://pubmed.ncbi.nlm.nih.gov/{a['PMID']})")
         if col_btn2.button("🎓 Google Scholar"):
-             st.markdown(f"👉 [Abrir Scholar](https://scholar.google.com.br/scholar?q={sel}+AND+bladder)", unsafe_allow_html=True)
+             extra = f"+AND+{termo_alvo}" if termo_alvo else ""
+             st.markdown(f"👉 [Abrir Scholar](https://scholar.google.com.br/scholar?q={sel}{extra})", unsafe_allow_html=True)
 
 elif modo == "Mobile (Pocket)":
     st.title("📱 Lemos Pocket")
@@ -416,11 +453,11 @@ elif modo == "Mobile (Pocket)":
         anos_mob = st.slider("📅 Anos:", 1990, 2025, (2010, 2025))
         
         c1, c2 = st.columns([6, 1], vertical_alignment="bottom")
-        with c1: t_fonte_mob = st.text_input("Fonte:", key="fonte_val", placeholder="Fonte...")
+        with c1: t_fonte_mob = st.text_input("Fonte (Opcional):", key="fonte_val", placeholder="Ex: Kidney...")
         with c2: st.button("🗑️", key="cls_f_mob", on_click=limpar_campo_fonte)
         
         c3, c4 = st.columns([6, 1], vertical_alignment="bottom")
-        with c3: t_alvo_mob = st.text_input("Alvo:", key="alvo_val", placeholder="Alvo...")
+        with c3: t_alvo_mob = st.text_input("Alvo (Opcional):", key="alvo_val", placeholder="Ex: Bladder...")
         with c4: st.button("🗑️", key="cls_a_mob", on_click=limpar_campo_alvo)
         
         st.button("🎓 Doutorado Guilherme Lemos", key="mob_lemos", on_click=carregar_setup_lemos)
@@ -441,15 +478,33 @@ elif modo == "Mobile (Pocket)":
             res = []
             pg = st.progress(0)
             for i, al in enumerate(lst):
-                nf = consultar_pubmed_count(al, t_fonte_mob, email_mob, anos_mob[0], anos_mob[1])
-                nb = consultar_pubmed_count(al, t_alvo_mob, email_mob, anos_mob[0], anos_mob[1])
-                if nf!=-1:
-                    rat = nf/nb if nb>0 else nf
-                    stat = "N/A"
-                    if nb >= nf: stat = "🔴"
-                    elif rat > 10: stat = "💎"
-                    else: stat = "👍"
-                    res.append({"Alvo": al, "Status": stat, "Potencial": round(rat, 1)})
+                nf = 0
+                if t_fonte_mob: nf = consultar_pubmed_count(al, t_fonte_mob, email_mob, anos_mob[0], anos_mob[1])
+                
+                nb = 0
+                if t_alvo_mob: nb = consultar_pubmed_count(al, t_alvo_mob, email_mob, anos_mob[0], anos_mob[1])
+                
+                # Lógica Mobile (Simplificada)
+                rat = 0
+                stat = "⚪"
+                
+                # Caso A: Comparação
+                if t_fonte_mob and t_alvo_mob:
+                    if nb > 0:
+                        rat = nf/nb
+                        if nb >= nf: stat = "🔴"
+                        elif rat > 10: stat = "💎"
+                        else: stat = "👍"
+                    else: rat = nf; stat = "💎"
+                # Caso B: Só Alvo ou Só Global
+                else:
+                    if t_alvo_mob: rat = nb
+                    else: rat = consultar_pubmed_count(al, "", email_mob, anos_mob[0], anos_mob[1])
+                    
+                    if rat > 500: stat = "🔥"
+                    else: stat = "🔍"
+
+                res.append({"Alvo": al, "Status": stat, "Potencial": round(rat, 1)})
                 pg.progress((i+1)/len(lst))
             st.session_state['dados_mob'] = pd.DataFrame(res).sort_values(by="Potencial", ascending=False)
             st.rerun()
@@ -458,7 +513,7 @@ elif modo == "Mobile (Pocket)":
         d = st.session_state['dados_mob']
         t = d.iloc[0]
         st.divider()
-        st.metric("🏆 Top 1", t['Alvo'], f"{t['Potencial']}x ({t['Status']})")
+        st.metric("🏆 Top 1", t['Alvo'], f"{t['Potencial']} ({t['Status']})")
         csv_mob = d.to_csv(index=False).encode('utf-8')
         st.download_button("📥 Baixar CSV", csv_mob, "mobile.csv", "text/csv", use_container_width=True)
         with st.expander("Ver Lista"): st.dataframe(d, use_container_width=True, hide_index=True)
@@ -466,7 +521,8 @@ elif modo == "Mobile (Pocket)":
         sl = st.selectbox("Ler:", sorted(d['Alvo'].unique().tolist()))
         if st.button("Ler", use_container_width=True):
             with st.spinner("Traduzindo..."):
-                as_mob = buscar_resumos_detalhados(sl, t_alvo_mob, email_mob, anos_mob[0], anos_mob[1], limit=3)
+                orgao_mob = t_alvo_mob if t_alvo_mob else ""
+                as_mob = buscar_resumos_detalhados(sl, orgao_mob, email_mob, anos_mob[0], anos_mob[1], limit=3)
                 if not as_mob: st.info("Sem artigos!")
                 else:
                     for am in as_mob:
