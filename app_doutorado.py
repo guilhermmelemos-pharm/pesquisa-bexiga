@@ -131,7 +131,7 @@ TEXTOS = {
         "toast_upload": "Biblioteca importada!",
         "label_lista": "**Palavras-chave de Pesquisa:**",
         "holder_lista": "Carregue a lista...",
-        "btn_restaurar": "📥 Termos indicados",
+        "btn_restaurar": "📥 Suggested Terms",
         "toast_restaurar": "Novos termos adicionados!",
         "btn_minerar": "⛏️ Minerar 'Blue Oceans'",
         "btn_trend": "🔍 Injetar Tendências (2025)",
@@ -495,4 +495,5 @@ elif modo == "Mobile (Pocket)":
         st.metric("🏆 Top 1", d.iloc[0]['Alvo'], f"{d.iloc[0]['P']:.1f}")
         st.dataframe(d, use_container_width=True, hide_index=True)
         st.download_button("📥 CSV", d.to_csv(index=False).encode('utf-8'), "lemos_lambda_mob.csv", "text/csv")
+
 
