@@ -1,17 +1,28 @@
 """
 Lemos Lambda: Deep Science Prospector
 Copyright (c) 2025 Guilherme Lemos
-Licenciado sob a MIT License.
+Licensed under the MIT License.
 
-Permissão concedida, gratuitamente, a qualquer pessoa que obtenha uma cópia
-deste software e arquivos de documentação associados, para lidar no Software
-sem restrição, incluindo sem limitação os direitos de usar, copiar, modificar,
-fundir, publicar, distribuir, sublicenciar e/ou vender cópias do Software,
-desde que o aviso de direitos autorais acima e este aviso de permissão sejam
-incluídos em todas as cópias ou partes substanciais do Software.
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-Autor: Guilherme Lemos (Unifesp)
-Data de Criação: Dezembro de 2025
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+Author: Guilherme Lemos (Unifesp)
+Creation Date: December 2025
 """
 
 import streamlit as st
@@ -485,3 +496,4 @@ elif modo == "Mobile (Pocket)":
         if st.button(t["btn_ler"]):
             am = buscar_resumos_detalhados(sel_m, t_alvo_m if t_alvo_m else "", email_mob, anos_mob[0], anos_mob[1], lang, 3)
             for a in am: st.info(f"{a['Title']}\n\n{a['Resumo_IA']}")
+
