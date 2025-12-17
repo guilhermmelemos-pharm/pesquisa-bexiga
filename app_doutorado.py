@@ -15,6 +15,17 @@ import random
 # ==========================================
 st.set_page_config(page_title="Lemos Doutorado", page_icon="🎓", layout="wide")
 
+# CSS para padronizar imagens
+st.markdown("""
+    <style>
+    div[data-testid="stImage"] img {
+        height: 150px !important;
+        object-fit: cover !important;
+        border-radius: 8px !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 # Inicialização do Session State
 if 'alvos_val' not in st.session_state: st.session_state.alvos_val = ""
 if 'fonte_val' not in st.session_state: st.session_state.fonte_val = ""
@@ -22,52 +33,51 @@ if 'alvo_val' not in st.session_state: st.session_state.alvo_val = ""
 if 'news_index' not in st.session_state: st.session_state.news_index = 0
 
 # ==========================================
-# 2. FUNÇÃO DE NOTÍCIAS (CARROSSEL AUTOMÁTICO)
+# 2. FUNÇÃO DE NOTÍCIAS
 # ==========================================
 @st.cache_data(ttl=3600)
 def buscar_todas_noticias():
     feeds = [
         {"url": "https://www.sciencedaily.com/rss/health_medicine/pharmacology.xml", "lang": "🇺🇸"},
-        {"url": "https://agencia.fapesp.br/rss/", "lang": "🇧🇷"},
-        {"url": "https://canaltech.com.br/rss/ciencia/", "lang": "🇧🇷"},
         {"url": "https://www.fiercebiotech.com/rss/biotech", "lang": "🇺🇸"},
-        {"url": "https://www.nature.com/nbt.rss", "lang": "🇬🇧"}
+        {"url": "https://www.nature.com/nbt.rss", "lang": "🇬🇧"},
+        {"url": "https://agencia.fapesp.br/rss/", "lang": "🇧🇷"},
     ]
     
     noticias = []
-    # Imagens de backup (Ciência) para quando não tiver foto no RSS
     backups = [
-        "https://images.unsplash.com/photo-1532094349884-543bc11b234d?auto=format&fit=crop&w=400&q=80", # Lab
-        "https://images.unsplash.com/photo-1576086213369-97a306d36557?auto=format&fit=crop&w=400&q=80", # Microscópio
-        "https://images.unsplash.com/photo-1581093458791-9f3c3900df4b?auto=format&fit=crop&w=400&q=80", # DNA
-        "https://images.unsplash.com/photo-1530026405186-ed1f139313f8?auto=format&fit=crop&w=400&q=80"  # Células
+        "https://images.unsplash.com/photo-1532094349884-543bc11b234d?w=400&h=250&fit=crop", 
+        "https://images.unsplash.com/photo-1576086213369-97a306d36557?w=400&h=250&fit=crop", 
+        "https://images.unsplash.com/photo-1581093458791-9f3c3900df4b?w=400&h=250&fit=crop", 
+        "https://images.unsplash.com/photo-1530026405186-ed1f139313f8?w=400&h=250&fit=crop"
     ]
     
+    translator = GoogleTranslator(source='auto', target='pt')
+
     for fonte in feeds:
         try:
             feed = feedparser.parse(fonte["url"])
-            for entry in feed.entries[:4]: # Pega as 4 mais recentes de cada
+            for entry in feed.entries[:3]:
                 img_url = None
-                
-                # Tenta achar imagem no RSS
-                if 'media_content' in entry:
-                    img_url = entry.media_content[0]['url']
+                if 'media_content' in entry: img_url = entry.media_content[0]['url']
                 elif 'links' in entry:
                     for link in entry.links:
-                        if link['type'].startswith('image'):
-                            img_url = link['href']
-                            break
+                        if link['type'].startswith('image'): img_url = link['href']; break
                 elif 'summary' in entry:
-                    # Tenta achar tag <img src="..."> no resumo
                     match = re.search(r'src="(http.*?)"', entry.summary)
                     if match: img_url = match.group(1)
+                
+                if not img_url: img_url = random.choice(backups)
 
-                # Se falhar, usa backup aleatório
-                if not img_url:
-                    img_url = random.choice(backups)
+                titulo_orig = entry.title
+                try:
+                    if fonte["lang"] != "🇧🇷": titulo_pt = translator.translate(titulo_orig)
+                    else: titulo_pt = titulo_orig
+                except: titulo_pt = titulo_orig
 
                 noticias.append({
-                    "titulo": entry.title,
+                    "titulo_pt": titulo_pt,
+                    "titulo_orig": titulo_orig,
                     "link": entry.link,
                     "fonte": feed.feed.title.split("-")[0].strip()[:20],
                     "img": img_url,
@@ -78,40 +88,34 @@ def buscar_todas_noticias():
     random.shuffle(noticias)
     return noticias
 
-# --- O FRAGMENTO MÁGICO (ATUALIZA SOZINHO) ---
-@st.fragment(run_every=30) # Atualiza a cada 30 segundos
+@st.fragment(run_every=30) 
 def exibir_radar_cientifico():
     news_list = buscar_todas_noticias()
-    
     if not news_list:
-        st.caption("Carregando feed de ciência...")
+        st.caption("Carregando feed...")
         return
 
-    # Lógica de Rotação (Ciclo)
     total_news = len(news_list)
-    qtd_por_vez = 3
+    qtd = 3
+    start = st.session_state.news_index % total_news
+    end = start + qtd
     
-    # Define o início e fim da fatia atual
-    start_idx = st.session_state.news_index % total_news
-    end_idx = start_idx + qtd_por_vez
-    
-    # Pega as 3 notícias da vez (com loop se chegar no fim)
     batch = []
-    for i in range(start_idx, end_idx):
+    for i in range(start, end):
         batch.append(news_list[i % total_news])
     
-    # Atualiza o índice para a próxima vez (30s depois)
-    st.session_state.news_index += qtd_por_vez
+    st.session_state.news_index += qtd
     
-    # Renderiza os Cartões
     with st.container(border=True):
-        st.caption(f"📡 **Radar Científico (Atualizando em Tempo Real...)** | Mostrando {start_idx+1}-{start_idx+3} de {total_news}")
+        st.caption(f"📡 **Radar Científico**")
         cols = st.columns(3)
         for i, n in enumerate(batch):
             with cols[i]:
-                st.image(n['img'], use_column_width=True, clamp=True)
-                st.markdown(f"**{n['bandeira']} {n['titulo'][:60]}...**")
-                st.caption(f"Fonte: {n['fonte']}")
+                st.image(n['img'], use_container_width=True)
+                st.markdown(f"**{n['titulo_pt'][:75]}...**")
+                if n['titulo_pt'] != n['titulo_orig']:
+                    st.caption(f"🇬🇧 *{n['titulo_orig'][:75]}...*")
+                st.caption(f"{n['bandeira']} {n['fonte']}")
                 st.link_button("Ler", n['link'], use_container_width=True)
 
 # ==========================================
@@ -176,11 +180,11 @@ def carregar_setup_lemos():
     st.session_state.alvos_val = LISTA_ALVOS_PRONTA
     st.session_state.fonte_val = PRESETS_ORGAOS["(Sugestão Lemos)"]["fonte"]
     st.session_state.alvo_val = PRESETS_ORGAOS["(Sugestão Lemos)"]["alvo"]
-    st.toast("Setup 'Deep Science' Carregado!", icon="🧬")
+    st.toast("Setup Carregado!", icon="🧬")
 
 def carregar_alvos_apenas(): 
     st.session_state.alvos_val = LISTA_ALVOS_PRONTA
-    st.toast("Lista Inovadora Restaurada!", icon="✨")
+    st.toast("Lista Restaurada!", icon="✨")
 
 def limpar_campo_fonte(): st.session_state.fonte_val = ""
 def limpar_campo_alvo(): st.session_state.alvo_val = ""
@@ -203,10 +207,8 @@ def processar_upload():
             if string_final:
                 st.session_state.alvos_val = string_final
                 st.toast(f"Biblioteca '{uploaded_file.name}' importada!", icon="📂")
-            else:
-                st.error("Arquivo vazio ou inválido.")
-        except Exception as e:
-            st.error(f"Erro: {e}")
+            else: st.error("Arquivo inválido.")
+        except Exception as e: st.error(f"Erro: {e}")
 
 # ==========================================
 # 4. FUNÇÕES PUBMED
@@ -269,11 +271,11 @@ if modo == "Desktop (Completo)":
     st.title("🎓 Lemos Doutorado: Deep Science")
     st.markdown("**Ferramenta de Prospecção de Alto Impacto**")
     
-    # --- CHAMADA DO FRAGMENTO (CARROSSEL) ---
-    exibir_radar_cientifico()
-    # ----------------------------------------
+    # --- FEED CONDICIONAL: Só aparece se NÃO tiver resultados ---
+    if 'dados_desk' not in st.session_state:
+        exibir_radar_cientifico()
+    # -----------------------------------------------------------
     
-    # Sidebar
     st.sidebar.header("1. Credenciais")
     email_user = st.sidebar.text_input("Seu E-mail:", placeholder="pesquisador@unifesp.br", key="email_desk")
     anos = st.sidebar.slider("📅 Período:", 1990, 2025, (2010, 2025), key="anos_desk")
@@ -282,17 +284,14 @@ if modo == "Desktop (Completo)":
     st.sidebar.markdown("---")
     st.sidebar.header("2. Configuração (Órgãos)")
     
-    # Layout colado (Lixeiras perto)
     col_fonte, col_limp_f = st.sidebar.columns([5, 1])
-    with col_fonte: 
-        termo_fonte = st.text_input("Fonte (Comparação):", key="fonte_val", placeholder="Sistemas Consolidados...")
+    with col_fonte: termo_fonte = st.text_input("Fonte (Comparação):", key="fonte_val", placeholder="Sistemas Consolidados...")
     with col_limp_f: 
         st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
         st.button("🗑️", key="btn_cls_f_dk", on_click=limpar_campo_fonte, help="Limpar")
 
     col_alvo, col_limp_a = st.sidebar.columns([5, 1])
-    with col_alvo: 
-        termo_alvo = st.text_input("Alvo (Seu Foco):", key="alvo_val", placeholder="Bexiga/Urotélio...")
+    with col_alvo: termo_alvo = st.text_input("Alvo (Seu Foco):", key="alvo_val", placeholder="Bexiga/Urotélio...")
     with col_limp_a: 
         st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
         st.button("🗑️", key="btn_cls_a_dk", on_click=limpar_campo_alvo, help="Limpar")
@@ -303,12 +302,11 @@ if modo == "Desktop (Completo)":
     st.sidebar.markdown("---")
     st.sidebar.header("3. Alvos")
     
-    with st.sidebar.expander("📂 Importar Biblioteca"):
-        st.file_uploader("Upload .csv/.txt", type=["csv", "txt"], key="uploader_key", on_change=processar_upload)
+    with st.sidebar.expander("📂 Importar Biblioteca (.csv/.txt)"):
+        st.file_uploader("Upload", type=["csv", "txt"], key="uploader_key", on_change=processar_upload)
     
     col_lista, col_limp_l = st.sidebar.columns([5, 1])
-    with col_lista: 
-        alvos_input = st.text_area("Lista de Pesquisa:", key="alvos_val", height=150, placeholder="Carregue a lista...")
+    with col_lista: alvos_input = st.text_area("Lista de Pesquisa:", key="alvos_val", height=150, placeholder="Carregue a lista...")
     with col_limp_l: 
         st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
         st.button("🗑️", key="btn_cls_l_dk", on_click=limpar_campo_alvos, help="Limpar")
@@ -335,10 +333,10 @@ if modo == "Desktop (Completo)":
                     ratio = n_fonte / n_bexiga if n_bexiga > 0 else n_fonte
                     status = "N/A"
                     if n_bexiga >= n_fonte and n_bexiga > 10: status = "🔴 Saturado"
-                    elif ratio > 10 and n_fonte > 100: status = "💎 DIAMANTE (Inédito)"
-                    elif ratio > 5 and n_fonte > 50: status = "🥇 Ouro (Promissor)"
+                    elif ratio > 10 and n_fonte > 100: status = "💎 DIAMANTE"
+                    elif ratio > 5 and n_fonte > 50: status = "🥇 Ouro"
                     elif ratio > 2: status = "🥈 Prata"
-                    else: status = "🥚 Embrionário (Risco)"
+                    else: status = "🥚 Embrionário"
                     
                     resultados.append({
                         "Alvo": alvo, "Status": status, "Potencial (x)": round(ratio, 1),
@@ -348,6 +346,7 @@ if modo == "Desktop (Completo)":
             
             progresso_texto.empty()
             st.session_state['dados_desk'] = pd.DataFrame(resultados).sort_values(by="Potencial (x)", ascending=False)
+            st.rerun() # Recarrega para esconder o feed
 
     if 'dados_desk' in st.session_state:
         df = st.session_state['dados_desk']
@@ -358,10 +357,12 @@ if modo == "Desktop (Completo)":
         with col1:
             fig = px.bar(df.head(20), x="Alvo", y="Potencial (x)", color="Status", 
                          title="Top 20 Alvos Inovadores", 
-                         color_discrete_map={"💎 DIAMANTE (Inédito)": "#00CC96", "🥇 Ouro (Promissor)": "#636EFA", "🔴 Saturado": "#EF553B"})
+                         color_discrete_map={"💎 DIAMANTE": "#00CC96", "🥇 Ouro": "#636EFA", "🔴 Saturado": "#EF553B"})
             st.plotly_chart(fig, use_container_width=True)
         with col2:
-            st.dataframe(df[["Alvo", "Status", "Potencial (x)", "Fonte Total", "Bexiga Total"]].hide(axis="index"), use_container_width=True, height=500)
+            # --- CORREÇÃO DO ERRO (.style.hide) ---
+            st.dataframe(df[["Alvo", "Status", "Potencial (x)", "Fonte Total", "Bexiga Total"]].style.hide(axis="index"), use_container_width=True, height=500)
+            
             csv = df.to_csv(index=False).encode('utf-8')
             st.download_button("📥 Baixar Planilha", csv, f'lemos_innov_{datetime.now().strftime("%Y%m%d")}.csv', 'text/csv', use_container_width=True)
             
@@ -372,7 +373,7 @@ if modo == "Desktop (Completo)":
         if col_btn1.button("Ler Artigos"):
             with st.spinner("Buscando..."):
                 arts = buscar_resumos_detalhados(sel, termo_alvo, email_user, min_year, max_year)
-                if not arts: st.info(f"Zero artigos sobre {sel} na bexiga! Você pode ser o primeiro.")
+                if not arts: st.info(f"Zero artigos encontrados.")
                 else:
                     for a in arts:
                         with st.expander(f"📄 {a['Title']}"):
@@ -380,11 +381,14 @@ if modo == "Desktop (Completo)":
                             st.success(a['Resumo_IA'])
                             st.markdown(f"[Link PubMed](https://pubmed.ncbi.nlm.nih.gov/{a['PMID']})")
         if col_btn2.button("🎓 Google Scholar"):
-             st.markdown(f"👉 [Abrir Scholar: **{sel} + Bexiga**](https://scholar.google.com.br/scholar?q={sel}+AND+bladder)", unsafe_allow_html=True)
+             st.markdown(f"👉 [Abrir Scholar](https://scholar.google.com.br/scholar?q={sel}+AND+bladder)", unsafe_allow_html=True)
 
 elif modo == "Mobile (Pocket)":
     st.title("📱 Lemos Pocket")
-    exibir_radar_cientifico() # News Mobile
+    
+    # Feed condicional Mobile
+    if 'dados_mob' not in st.session_state:
+        exibir_radar_cientifico() 
             
     email_mob = st.text_input("📧 E-mail:", placeholder="pesquisador@unifesp.br", key="email_mob")
     with st.expander("⚙️ Configurar"):
@@ -433,6 +437,7 @@ elif modo == "Mobile (Pocket)":
                     res.append({"Alvo": al, "Status": stat, "Potencial": round(rat, 1)})
                 pg.progress((i+1)/len(lst))
             st.session_state['dados_mob'] = pd.DataFrame(res).sort_values(by="Potencial", ascending=False)
+            st.rerun()
             
     if 'dados_mob' in st.session_state:
         d = st.session_state['dados_mob']
