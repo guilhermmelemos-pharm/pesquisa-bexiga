@@ -204,7 +204,7 @@ def limpar_campo_fonte(): st.session_state.fonte_val = ""
 def limpar_campo_alvo(): st.session_state.alvo_val = ""
 def limpar_campo_alvos(): st.session_state.alvos_val = ""
 
-# --- MINERADOR COM BARRA DE PROGRESSO ---
+# --- MINERADOR DE BLUE OCEANS (COM AVISOS) ---
 def minerar_blue_oceans(orgao, email):
     if not orgao or not email:
         st.toast("⚠️ Preencha o 'Alvo' e 'E-mail' para minerar!", icon="⚠️")
@@ -213,11 +213,9 @@ def minerar_blue_oceans(orgao, email):
     encontrados = []
     Entrez.email = email
     
-    # BARRA DE PROGRESSO VOLTOU!
-    prog_text = "⛏️ Iniciando mineração..."
+    prog_text = "⛏️ Procurando termos chave, após isso clique em 'Rumo ao Avanço'..."
     my_bar = st.progress(0, text=prog_text)
     
-    # Vamos testar todos da lista (são ~60), demora uns 5-10s
     amostra = CANDIDATOS_MINERACAO
     total = len(amostra)
     
@@ -229,23 +227,24 @@ def minerar_blue_oceans(orgao, email):
             record = Entrez.read(handle)
             count = int(record["Count"])
             
-            # CRITÉRIO DE OURO: Entre 0 e 150 artigos
+            # Critério: Raro mas existente (0-150)
             if 0 <= count < 150: 
                 encontrados.append(f"{termo}")
                 
             # Atualiza Barra
-            my_bar.progress((i + 1) / total, text=f"⛏️ Testando: {termo} ({count} arts)")
+            my_bar.progress((i + 1) / total, text=f"⛏️ Analisando: {termo} ({count} artigos)")
             time.sleep(0.05) 
         except: continue
     
-    my_bar.empty() # Limpa a barra quando acaba
+    my_bar.empty()
         
     if encontrados:
         nova_lista = ", ".join(encontrados)
         st.session_state.alvos_val = nova_lista
-        st.toast(f"💎 Sucesso! {len(encontrados)} alvos raros para {orgao}!", icon="✅")
+        # MENSAGEM CLARA DE PRÓXIMO PASSO
+        st.toast(f"✅ {len(encontrados)} termos encontrados! Agora clique em 'Rumo ao Avanço' 🚀", icon="💡")
     else:
-        st.toast("Nenhum alvo raro encontrado (Talvez o órgão seja muito estudado?)", icon="🤷")
+        st.toast("Nenhum alvo raro encontrado. Tente restaurar a lista padrão.", icon="🤷")
 
 def processar_upload():
     uploaded_file = st.session_state.get('uploader_key')
@@ -348,15 +347,15 @@ if modo == "Desktop (Completo)":
     st.sidebar.markdown("---")
     st.sidebar.header("2. Configuração (Órgãos)")
     
-    # ALINHAMENTO LABEL EXTERNO
-    st.sidebar.markdown("**Fonte (Opcional):**") 
+    # RÓTULOS ATUALIZADOS
+    st.sidebar.markdown("**Fonte (Orgão, tecido, célula similar):**") 
     col_fonte, col_limp_f = st.sidebar.columns([6, 1])
     with col_fonte: 
         termo_fonte = st.text_input("Fonte", key="fonte_val", placeholder="Ex: Kidney...", label_visibility="collapsed")
     with col_limp_f: 
         st.button("🗑️", key="btn_cls_f_dk", on_click=limpar_campo_fonte)
 
-    st.sidebar.markdown("**Alvo (Opcional):**")
+    st.sidebar.markdown("**Alvo (Orgão de interesse):**")
     col_alvo, col_limp_a = st.sidebar.columns([6, 1])
     with col_alvo: 
         termo_alvo = st.text_input("Alvo", key="alvo_val", placeholder="Ex: Bladder...", label_visibility="collapsed")
@@ -382,7 +381,7 @@ if modo == "Desktop (Completo)":
     cb1, cb2 = st.sidebar.columns(2)
     cb1.button("📥 Restaurar Padrão", on_click=carregar_alvos_apenas)
     
-    # BOTÃO DE MINERAÇÃO (COM PROGRESSO AGORA)
+    # Botão Minerar com Aviso no Callback
     cb2.button("⛏️ Minerar 'Blue Oceans'", on_click=minerar_blue_oceans, args=(termo_alvo, email_user))
     
     st.sidebar.markdown("---")
@@ -508,12 +507,12 @@ elif modo == "Mobile (Pocket)":
     with st.expander("⚙️ Configurar"):
         anos_mob = st.slider("📅 Anos:", 1990, 2025, (2010, 2025))
         
-        st.markdown("**Fonte:**")
+        st.markdown("**Fonte (Orgão, tecido, célula similar):**")
         c1, c2 = st.columns([6, 1])
         with c1: t_fonte_mob = st.text_input("Fonte", key="fonte_val", placeholder="Ex: Kidney...", label_visibility="collapsed")
         with c2: st.button("🗑️", key="cls_f_mob", on_click=limpar_campo_fonte)
         
-        st.markdown("**Alvo:**")
+        st.markdown("**Alvo (Orgão de interesse):**")
         c3, c4 = st.columns([6, 1])
         with c3: t_alvo_mob = st.text_input("Alvo", key="alvo_val", placeholder="Ex: Bladder...", label_visibility="collapsed")
         with c4: st.button("🗑️", key="cls_a_mob", on_click=limpar_campo_alvo)
