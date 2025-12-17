@@ -204,7 +204,7 @@ def limpar_campo_fonte(): st.session_state.fonte_val = ""
 def limpar_campo_alvo(): st.session_state.alvo_val = ""
 def limpar_campo_alvos(): st.session_state.alvos_val = ""
 
-# --- MINERADOR DE BLUE OCEANS (CALLBACK) ---
+# --- MINERADOR COM BARRA DE PROGRESSO ---
 def minerar_blue_oceans(orgao, email):
     if not orgao or not email:
         st.toast("⚠️ Preencha o 'Alvo' e 'E-mail' para minerar!", icon="⚠️")
@@ -213,12 +213,15 @@ def minerar_blue_oceans(orgao, email):
     encontrados = []
     Entrez.email = email
     
-    st.toast("⛏️ Mineração iniciada... testando alvos raros!", icon="⏳")
+    # BARRA DE PROGRESSO VOLTOU!
+    prog_text = "⛏️ Iniciando mineração..."
+    my_bar = st.progress(0, text=prog_text)
     
-    # Testa uma amostra para não estourar tempo de execução
-    amostra = CANDIDATOS_MINERACAO # Pode limitar com [:15] se ficar lento
+    # Vamos testar todos da lista (são ~60), demora uns 5-10s
+    amostra = CANDIDATOS_MINERACAO
+    total = len(amostra)
     
-    for termo in amostra:
+    for i, termo in enumerate(amostra):
         try:
             # Busca: Termo AND Orgao
             query = f"({termo}) AND ({orgao}) AND 2010:2025[DP]"
@@ -226,11 +229,16 @@ def minerar_blue_oceans(orgao, email):
             record = Entrez.read(handle)
             count = int(record["Count"])
             
-            # CRITÉRIO DE OURO: Menos de 100 artigos (Raro mas existente)
+            # CRITÉRIO DE OURO: Entre 0 e 150 artigos
             if 0 <= count < 150: 
                 encontrados.append(f"{termo}")
+                
+            # Atualiza Barra
+            my_bar.progress((i + 1) / total, text=f"⛏️ Testando: {termo} ({count} arts)")
             time.sleep(0.05) 
         except: continue
+    
+    my_bar.empty() # Limpa a barra quando acaba
         
     if encontrados:
         nova_lista = ", ".join(encontrados)
@@ -260,7 +268,7 @@ def processar_upload():
         except Exception as e: st.error(f"Erro: {e}")
 
 # ==========================================
-# 4. FUNÇÕES PUBMED
+# 4. FUNÇÕES PUBMED (BUSCA FLEXÍVEL)
 # ==========================================
 def consultar_pubmed_count(termo_farmaco, termo_orgao, email, y_start, y_end):
     if not email: return -1
@@ -340,7 +348,7 @@ if modo == "Desktop (Completo)":
     st.sidebar.markdown("---")
     st.sidebar.header("2. Configuração (Órgãos)")
     
-    # Label Externo
+    # ALINHAMENTO LABEL EXTERNO
     st.sidebar.markdown("**Fonte (Opcional):**") 
     col_fonte, col_limp_f = st.sidebar.columns([6, 1])
     with col_fonte: 
@@ -374,7 +382,7 @@ if modo == "Desktop (Completo)":
     cb1, cb2 = st.sidebar.columns(2)
     cb1.button("📥 Restaurar Padrão", on_click=carregar_alvos_apenas)
     
-    # Callback Corrigido (Passando argumentos)
+    # BOTÃO DE MINERAÇÃO (COM PROGRESSO AGORA)
     cb2.button("⛏️ Minerar 'Blue Oceans'", on_click=minerar_blue_oceans, args=(termo_alvo, email_user))
     
     st.sidebar.markdown("---")
@@ -522,8 +530,7 @@ elif modo == "Mobile (Pocket)":
         
         cb1, cb2 = st.columns(2)
         cb1.button("📥 Restaurar", key="mob_alvos", on_click=carregar_alvos_apenas)
-        if cb2.button("⛏️ Minerar", key="mob_raros"):
-             minerar_blue_oceans(t_alvo_mob, email_mob)
+        cb2.button("⛏️ Minerar", key="mob_raros", on_click=minerar_blue_oceans, args=(t_alvo_mob, email_mob))
         
     if st.button("🚀 Rumo ao Avanço", type="primary", use_container_width=True):
         if not email_mob: st.error("E-mail necessário")
