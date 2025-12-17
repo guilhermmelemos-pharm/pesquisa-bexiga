@@ -1,7 +1,7 @@
 # λ Lemos Lambda: Deep Science Prospector
 
 [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://lemosgbuscador.streamlit.app/)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXX.svg)](https://doi.org/10.5281/zenodo.XXXXXX)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17958507)](https://doi.org/10.5281/zenodo.17958507)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 **Lemos Lambda** is a scientific competitive intelligence tool designed for pharmacology and physiology researchers. It automates PubMed data mining to identify "Blue Oceans"—promising therapeutic targets that are widely studied in general physiology but neglected in specific organs (e.g., Bladder), identifying high-impact research opportunities.
@@ -46,4 +46,5 @@ Or use the `CITATION.cff` file in this repository to export directly to BibTeX o
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
+
 Developed by **Guilherme Lemos** (Federal University of São Paulo - Unifesp)
