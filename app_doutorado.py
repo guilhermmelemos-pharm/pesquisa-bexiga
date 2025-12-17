@@ -15,7 +15,7 @@ import random
 # ==========================================
 st.set_page_config(page_title="Lemos Doutorado", page_icon="🎓", layout="wide")
 
-# CSS: Padroniza imagens e garante largura total dos botões
+# CSS
 st.markdown("""
     <style>
     div[data-testid="stImage"] img {
@@ -26,7 +26,7 @@ st.markdown("""
     .stButton button {
         width: 100%;
     }
-    /* Remove margem extra quando o label está oculto */
+    /* Remove margem extra labels ocultos */
     div[data-testid="stVerticalBlock"] > div {
         gap: 0.5rem;
     }
@@ -113,12 +113,18 @@ def exibir_radar_cientifico():
                 st.link_button("Ler", n['link'], use_container_width=True)
 
 # ==========================================
-# 3. BANCO DE DADOS
+# 3. BANCO DE DADOS (CANDIDATOS À MINERAÇÃO)
 # ==========================================
-# Lista de "Blue Oceans" (Coisas muito específicas e raras)
-BLUE_OCEAN_ALVOS = """
-GPR37 (Parkin-associated endothelin-like receptor), GPR17, GPR55 (LPI receptor), GPR84 (Medium-chain FFA), GPR35 (Kynurenic acid), TAAR1 (Trace amine), P2Y14 (UDP-glucose), FFAR2 (GPR43), FFAR3 (GPR41), SUCNR1 (GPR91 Succinate), OXGR1 (Alpha-ketoglutarate), HCAR1 (GPR81 Lactate), LGR4, LGR5, MRGPRX2, MRGPRD, ASIC1a, ASIC2, TRPML1, TRPML2, TRPML3, TPC1, TPC2, TMEM16A, TMEM16B, Piezo1, Piezo2, K2P channels, TREK-1, TREK-2, TRAAK, TASK-1, TASK-3, TWIK-1, THIK-1, KCa3.1, Kv7.5, ClC-2, Bestrophin-1, Pannexin-1, S1P1 receptor, S1P2, S1P3, LPA1 receptor, LPA2, CysLT1, CysLT2, FPR2 (Lipoxin), ChemR23 (Resolvin E1), BLT1 (Leukotriene B4)
-"""
+# Esta é a lista "Secreta" que o botão de mineração vai usar para testar
+CANDIDATOS_MINERACAO = [
+    "GPR37", "GPR17", "GPR55", "GPR84", "GPR35", "TAAR1", "P2Y14", "FFAR2", "FFAR3", 
+    "SUCNR1", "OXGR1", "HCAR1", "LGR4", "LGR5", "MRGPRX2", "MRGPRD", "ASIC1a", "ASIC2", 
+    "TRPML1", "TRPML2", "TRPML3", "TPC1", "TPC2", "TMEM16A", "TMEM16B", "Piezo1", "Piezo2", 
+    "TREK-1", "TREK-2", "TRAAK", "TASK-1", "TASK-3", "TWIK-1", "THIK-1", "KCa3.1", 
+    "Kv7.5", "ClC-2", "Bestrophin-1", "Pannexin-1", "S1P1", "S1P2", "S1P3", "LPA1", "LPA2", 
+    "CysLT1", "CysLT2", "FPR2", "ChemR23", "BLT1", "GYY4137", "AP39", "Drp1", "Mfn2", 
+    "Sirtuin-1", "NAMPT", "Ferroptosis", "Pyroptosis", "Necroptosis", "Gasdermin D"
+]
 
 SUGESTOES_ALVOS_RAW = """
 -- GASOTRANSMISSORES & SINALIZAÇÃO GASOSA (O Novo Hype) --
@@ -176,7 +182,6 @@ def limpar_lista_alvos(texto_bruto):
     return ", ".join(alvos_limpos)
 
 LISTA_ALVOS_PRONTA = limpar_lista_alvos(SUGESTOES_ALVOS_RAW)
-LISTA_BLUE_OCEAN = limpar_lista_alvos(BLUE_OCEAN_ALVOS)
 
 PRESETS_ORGAOS = {
     "(Sugestão Lemos)": {
@@ -185,6 +190,7 @@ PRESETS_ORGAOS = {
     }
 }
 
+# --- FUNÇÕES DE LÓGICA ---
 def carregar_setup_lemos():
     st.session_state.alvos_val = LISTA_ALVOS_PRONTA
     st.session_state.fonte_val = PRESETS_ORGAOS["(Sugestão Lemos)"]["fonte"]
@@ -195,13 +201,48 @@ def carregar_alvos_apenas():
     st.session_state.alvos_val = LISTA_ALVOS_PRONTA
     st.toast("Lista Inovadora Restaurada!", icon="✨")
 
-def carregar_blue_ocean():
-    st.session_state.alvos_val = LISTA_BLUE_OCEAN
-    st.toast("Carregado: Receptores Órfãos e Raros!", icon="📉")
-
 def limpar_campo_fonte(): st.session_state.fonte_val = ""
 def limpar_campo_alvo(): st.session_state.alvo_val = ""
 def limpar_campo_alvos(): st.session_state.alvos_val = ""
+
+# --- MINERADOR DE BLUE OCEANS ---
+def minerar_blue_oceans(orgao, email):
+    if not orgao or not email:
+        st.error("Para minerar, preencha o campo 'Alvo' e seu 'E-mail'.")
+        return
+
+    encontrados = []
+    total = len(CANDIDATOS_MINERACAO)
+    my_bar = st.progress(0, text="⛏️ Iniciando mineração de alvos raros...")
+    
+    Entrez.email = email
+    
+    for i, termo in enumerate(CANDIDATOS_MINERACAO):
+        try:
+            # Busca: Termo AND Orgao (Últimos 15 anos para garantir relevância)
+            query = f"({termo}) AND ({orgao}) AND 2010:2025[DP]"
+            handle = Entrez.esearch(db="pubmed", term=query, retmax=0)
+            record = Entrez.read(handle)
+            count = int(record["Count"])
+            
+            # CRITÉRIO DE OURO: Menos de 100 artigos (pouco estudado), mas existe conceitualmente.
+            # Se for 0, as vezes é arriscado demais, mas incluímos para avaliar.
+            if count < 150: 
+                encontrados.append(f"{termo}")
+                
+            time.sleep(0.1) # Respeitar API
+            my_bar.progress((i + 1) / total, text=f"⛏️ Testando: {termo} ({count} artigos)")
+            
+        except: continue
+        
+    my_bar.empty()
+    
+    if encontrados:
+        nova_lista = ", ".join(encontrados)
+        st.session_state.alvos_val = nova_lista
+        st.toast(f"Sucesso! {len(encontrados)} oportunidades raras encontradas para {orgao}!", icon="💎")
+    else:
+        st.warning("Nenhum termo raro encontrado para este órgão (talvez ele seja muito estudado?).")
 
 def processar_upload():
     uploaded_file = st.session_state.get('uploader_key')
@@ -304,10 +345,7 @@ if modo == "Desktop (Completo)":
     st.sidebar.markdown("---")
     st.sidebar.header("2. Configuração (Órgãos)")
     
-    # -----------------------------------------------
-    # ALINHAMENTO "LABEL EXTERNO" (Solução Definitiva)
-    # -----------------------------------------------
-    
+    # ALINHAMENTO LABEL EXTERNO
     st.sidebar.markdown("**Fonte (Opcional):**") 
     col_fonte, col_limp_f = st.sidebar.columns([6, 1])
     with col_fonte: 
@@ -341,7 +379,10 @@ if modo == "Desktop (Completo)":
     # Botões Lado a Lado
     cb1, cb2 = st.sidebar.columns(2)
     cb1.button("📥 Restaurar Padrão", on_click=carregar_alvos_apenas)
-    cb2.button("📉 'Blue Oceans' (Raros)", on_click=carregar_blue_ocean) # NOVO BOTÃO
+    
+    # BOTÃO DE MINERAÇÃO (INTELIGENTE)
+    if cb2.button("⛏️ Minerar 'Blue Oceans'"):
+        minerar_blue_oceans(termo_alvo, email_user) # Chama a função que varre e filtra
     
     st.sidebar.markdown("---")
 
@@ -357,7 +398,6 @@ if modo == "Desktop (Completo)":
             for i, alvo in enumerate(alvos_lista):
                 progresso_texto.text(f"⏳ Investigando {i+1}/{len(alvos_lista)}: {alvo}")
                 
-                # BUSCA
                 n_fonte = 0
                 if termo_fonte: n_fonte = consultar_pubmed_count(alvo, termo_fonte, email_user, min_year, max_year)
                 
@@ -368,13 +408,12 @@ if modo == "Desktop (Completo)":
                 if not termo_fonte and not termo_alvo:
                     n_global = consultar_pubmed_count(alvo, "", email_user, min_year, max_year)
 
-                # LÓGICA
                 potencial_val = 0
                 status = "N/A"
                 fonte_display = n_fonte if termo_fonte else "-"
                 alvo_display = n_alvo if termo_alvo else "-"
 
-                if termo_fonte and termo_alvo: # COMPARAÇÃO
+                if termo_fonte and termo_alvo: 
                     if n_alvo > 0:
                         ratio = n_fonte / n_alvo
                         potencial_val = ratio
@@ -388,7 +427,7 @@ if modo == "Desktop (Completo)":
                         status = "💎 DIAMANTE"
                     metric_label = "Potencial (Ratio)"
 
-                elif termo_alvo and not termo_fonte: # ALVO
+                elif termo_alvo and not termo_fonte:
                     potencial_val = n_alvo
                     metric_label = "Artigos (Alvo)"
                     if n_alvo > 500: status = "🔥 Hot Topic"
@@ -396,7 +435,7 @@ if modo == "Desktop (Completo)":
                     elif n_alvo > 10: status = "🔍 Exploratório"
                     else: status = "🥚 Inicial"
 
-                else: # GLOBAL
+                else:
                     potencial_val = n_global
                     metric_label = "Artigos (Global)"
                     alvo_display = n_global
@@ -491,7 +530,8 @@ elif modo == "Mobile (Pocket)":
         
         cb1, cb2 = st.columns(2)
         cb1.button("📥 Restaurar", key="mob_alvos", on_click=carregar_alvos_apenas)
-        cb2.button("📉 'Blue Oceans'", key="mob_raros", on_click=carregar_blue_ocean)
+        if cb2.button("⛏️ Minerar", key="mob_raros"): # Minerador Mobile
+             minerar_blue_oceans(t_alvo_mob, email_mob)
         
     if st.button("🚀 Rumo ao Avanço", type="primary", use_container_width=True):
         if not email_mob: st.error("E-mail necessário")
