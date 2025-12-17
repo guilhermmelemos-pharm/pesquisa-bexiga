@@ -273,15 +273,10 @@ def carregar_termos_indicados_orgao(orgao, email, t):
     with st.spinner("Minerando PubMed..."):
         termos = buscar_alvos_emergentes_pubmed(orgao, email)
         if termos:
-            # LÓGICA DE NÃO REPETIR E ANEXAR SEM APAGAR:
             atuais = set([x.strip().upper() for x in st.session_state.alvos_val.split(",") if x.strip()])
             filtrados = [t for t in termos if t.upper() not in atuais]
-            
             if filtrados:
-                if st.session_state.alvos_val:
-                    novo_texto = (st.session_state.alvos_val.strip(", ") + ", " + ", ".join(filtrados)).strip(", ")
-                else:
-                    novo_texto = ", ".join(filtrados)
+                novo_texto = (st.session_state.alvos_val.strip(", ") + ", " + ", ".join(filtrados)).strip(", ")
                 st.session_state.alvos_val = novo_texto
                 st.toast(t["toast_restaurar"], icon="✨")
             else:
@@ -336,9 +331,10 @@ def extrair_conclusao(abstract_text, lang_target):
     texto_final = match.group(2).strip()[:400] if match else abstract_text[-400:]
     return ("🇧🇷 " if lang_target=='pt' else "🇺🇸 ") + GoogleTranslator(source='auto', target=lang_target).translate(texto_final) + "..."
 
-def buscar_resumos_detalhados(termo_farmaco, termo_orgao, email, y_start, y_end, lang_target, limit=5):
+def buscar_resumos_detalhados(termo_alvo_especifico, termo_orgao_interesse, email, y_start, y_end, lang_target, limit=5):
     if not email: return []
-    query = f"({termo_farmaco}) AND ({termo_orgao}) AND {y_start}:{y_end}[DP]"
+    # BUSCA RESTRITA AO ALVO SELECIONADO + ÓRGÃO DE INTERESSE
+    query = f"({termo_alvo_especifico}) AND ({termo_orgao_interesse}) AND {y_start}:{y_end}[DP]"
     try:
         handle = Entrez.esearch(db="pubmed", term=query, retmax=limit, sort="relevance")
         ids = Entrez.read(handle)["IdList"]
@@ -424,8 +420,8 @@ if modo == "Desktop":
                 pg.text(t["prog_investigando"].format(atual=i+1, total=len(lst), alvo=item))
                 nf = consultar_pubmed_count(item, t_fonte, email_user, anos[0], anos[1])
                 na = consultar_pubmed_count(item, t_alvo, email_user, anos[0], anos[1])
-                pot = nf/na if na > 0 else nf
-                res.append({"Alvo": item, "Status": "💎 DIAMANTE" if pot > 10 else "🥇 Ouro", "Ratio": pot, "Fonte": nf, "Alvo_Interest": na})
+                ratio = nf/na if na > 0 else nf
+                res.append({"Alvo": item, "Status": "💎 DIAMANTE" if ratio > 10 else "🥇 Ouro", "Ratio": ratio, "Fonte": nf, "Alvo_Interest": na})
                 bar.progress((i+1)/len(lst))
             st.session_state['dados_desk'] = pd.DataFrame(res).sort_values(by="Ratio", ascending=False)
             st.rerun()
@@ -435,11 +431,16 @@ if modo == "Desktop":
         st.plotly_chart(px.bar(df.head(20), x="Alvo", y="Ratio", color="Status"), use_container_width=True)
         st.dataframe(df, use_container_width=True, hide_index=True)
         st.divider()
-        sel = st.selectbox("Raio-X:", sorted(df['Alvo'].unique().tolist()))
+        st.header(t["raio_x"])
+        sel = st.selectbox("Selecione para ler artigos focados no alvo:", sorted(df['Alvo'].unique().tolist()))
         if st.button(t["btn_ler"]):
-            arts = buscar_resumos_detalhados(sel, t_alvo, email_user, anos[0], anos[1], lang)
-            for a in arts:
-                with st.expander(a['Title']): st.success(a['Resumo_IA'])
+            with st.spinner(t["lendo"]):
+                arts = buscar_resumos_detalhados(sel, t_alvo, email_user, anos[0], anos[1], lang)
+                if not arts: st.warning(t["sem_artigos"])
+                for a in arts:
+                    with st.expander(f"📄 {a['Title']}"): st.success(a['Resumo_IA'])
+        if st.button(t["btn_scholar"]):
+             st.markdown(f"👉 [Google Scholar](https://scholar.google.com.br/scholar?q={sel}+{t_alvo})")
 
 elif modo == "Mobile (Pocket)":
     st.title(t["titulo_mob"])
