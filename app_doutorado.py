@@ -375,7 +375,7 @@ if modo == "Desktop":
     
     st.sidebar.header(t["credenciais"])
     email_user = st.sidebar.text_input(t["email_label"], placeholder="pesquisador@unifesp.br", key="email_desk")
-    anos = st.sidebar.slider(t["periodo"], 1990, 2025, (2010, 2025), key="anos_desk")
+    anos = st.sidebar.slider(t["periodo"], 1900, datetime.now().year, (2010, datetime.now().year), key="anos_desk")
     
     st.sidebar.markdown("---")
     st.sidebar.header(t["config"])
@@ -457,7 +457,7 @@ elif modo == "Mobile (Pocket)":
     if 'dados_mob' not in st.session_state: exibir_radar_cientifico(lang)
     email_mob = st.text_input(t["email_label"], key="email_mob")
     with st.expander("⚙️ Config"):
-        anos_mob = st.slider(t["periodo"], 1990, 2025, (2010, 2025))
+        anos_mob = st.slider(t["periodo"], 1900, datetime.now().year, (2010, datetime.now().year))
         st.markdown(t["label_fonte"]); c1,c2=st.columns([6,1], vertical_alignment="bottom")
         with c1: t_fonte_m=st.text_input("F",key="fm", value=st.session_state.fonte_val, label_visibility="collapsed")
         with c2: st.button("🗑️",key="xf",on_click=limpar_campo_fonte)
@@ -495,3 +495,4 @@ elif modo == "Mobile (Pocket)":
         st.metric("🏆 Top 1", d.iloc[0]['Alvo'], f"{d.iloc[0]['P']:.1f}")
         st.dataframe(d, use_container_width=True, hide_index=True)
         st.download_button("📥 CSV", d.to_csv(index=False).encode('utf-8'), "lemos_lambda_mob.csv", "text/csv")
+
