@@ -126,11 +126,11 @@ TEXTOS = {
         "label_lista": "**Palavras-chave de Pesquisa:**",
         "holder_lista": "Carregue a lista...",
         "btn_restaurar": "📥 Termos indicados",
-        "toast_restaurar": "Termos sugeridos para o órgão!",
+        "toast_restaurar": "Novos termos adicionados!",
         "btn_minerar": "⛏️ Minerar 'Blue Oceans'",
         "btn_trend": "🔍 Injetar Tendências (2025)",
         "toast_aviso_minerar": "⚠️ Preencha o 'Alvo' e 'E-mail' para minerar!",
-        "prog_minerar": "⛏️ Procurando termos chave...",
+        "prog_minerar": "⛏️ Procurando termos chave, após isso clique em 'Rumo ao Avanço'...",
         "prog_testando": "⛏️ Analisando: {termo} ({count} artigos)",
         "toast_sucesso_minerar": "✅ {qtd} termos encontrados!",
         "btn_avanco": "🚀 Rumo ao Avanço",
@@ -173,7 +173,7 @@ TEXTOS = {
         "label_lista": "**Research Keywords:**",
         "holder_lista": "Load the list...",
         "btn_restaurar": "📥 Termos indicados",
-        "toast_restaurar": "Organ-specific terms suggested!",
+        "toast_restaurar": "New terms added!",
         "btn_minerar": "⛏️ Mine 'Blue Oceans'",
         "btn_trend": "🔍 Inject Trends (2025)",
         "toast_aviso_minerar": "⚠️ Fill in 'Target' and 'E-mail' to mine!",
@@ -273,16 +273,19 @@ def carregar_termos_indicados_orgao(orgao, email, t):
     with st.spinner("Minerando PubMed..."):
         termos = buscar_alvos_emergentes_pubmed(orgao, email)
         if termos:
-            # LÓGICA DE NÃO REPETIR:
+            # LÓGICA DE NÃO REPETIR E ANEXAR SEM APAGAR:
             atuais = set([x.strip().upper() for x in st.session_state.alvos_val.split(",") if x.strip()])
             filtrados = [t for t in termos if t.upper() not in atuais]
             
             if filtrados:
-                novo_texto = (st.session_state.alvos_val.strip(", ") + ", " + ", ".join(filtrados)).strip(", ")
+                if st.session_state.alvos_val:
+                    novo_texto = (st.session_state.alvos_val.strip(", ") + ", " + ", ".join(filtrados)).strip(", ")
+                else:
+                    novo_texto = ", ".join(filtrados)
                 st.session_state.alvos_val = novo_texto
                 st.toast(t["toast_restaurar"], icon="✨")
             else:
-                st.toast("Nenhum termo novo encontrado.", icon="ℹ️")
+                st.toast("Nenhum termo novo para adicionar.", icon="ℹ️")
 
 def limpar_campo_fonte(): st.session_state.fonte_val = ""
 def limpar_campo_alvo(): st.session_state.alvo_val = ""
@@ -349,6 +352,7 @@ def buscar_resumos_detalhados(termo_farmaco, termo_orgao, email, y_start, y_end,
                 tag, content = line[:4].strip(), line[6:]
                 if tag=="PMID": art_data["PMID"]=content
                 elif tag=="TI": art_data["Title"]=content
+                elif tag=="TA": art_data["Source"]=content
                 elif tag=="AB": art_data["Abstract"]=content
             if art_data["PMID"]!="N/A":
                 art_data["Resumo_IA"] = extrair_conclusao(art_data["Abstract"], lang_target)
@@ -412,6 +416,7 @@ if modo == "Desktop":
     st.sidebar.markdown("---")
     if st.sidebar.button(t["btn_avanco"], type="primary"):
         if not email_user: st.error(t["erro_email"])
+        elif not st.session_state.alvos_val: st.warning(t["aviso_lista"])
         else:
             lst = [x.strip() for x in st.session_state.alvos_val.split(",") if x.strip()]
             res = []; pg = st.empty(); bar = st.progress(0)
@@ -419,15 +424,15 @@ if modo == "Desktop":
                 pg.text(t["prog_investigando"].format(atual=i+1, total=len(lst), alvo=item))
                 nf = consultar_pubmed_count(item, t_fonte, email_user, anos[0], anos[1])
                 na = consultar_pubmed_count(item, t_alvo, email_user, anos[0], anos[1])
-                ratio = nf/na if na > 0 else nf
-                res.append({"Alvo": item, "Status": "💎 DIAMANTE" if ratio > 10 else "🥇 Ouro", "Ratio": ratio, "Fonte": nf, "Alvo_Interest": na})
+                pot = nf/na if na > 0 else nf
+                res.append({"Alvo": item, "Status": "💎 DIAMANTE" if pot > 10 else "🥇 Ouro", "Ratio": pot, "Fonte": nf, "Alvo_Interest": na})
                 bar.progress((i+1)/len(lst))
             st.session_state['dados_desk'] = pd.DataFrame(res).sort_values(by="Ratio", ascending=False)
             st.rerun()
 
     if 'dados_desk' in st.session_state:
         df = st.session_state['dados_desk']
-        st.plotly_chart(px.bar(df.head(20), x="Alvo", y="Ratio", color="Status", color_discrete_map={"💎 DIAMANTE": "#00CC96", "🥇 Ouro": "#636EFA"}), use_container_width=True)
+        st.plotly_chart(px.bar(df.head(20), x="Alvo", y="Ratio", color="Status"), use_container_width=True)
         st.dataframe(df, use_container_width=True, hide_index=True)
         st.divider()
         sel = st.selectbox("Raio-X:", sorted(df['Alvo'].unique().tolist()))
