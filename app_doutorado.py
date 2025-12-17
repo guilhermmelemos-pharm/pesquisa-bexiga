@@ -103,7 +103,10 @@ TEXTOS = {
         "btn_scholar": "🎓 Google Scholar",
         "sem_artigos": "Zero artigos encontrados.",
         "lendo": "Buscando e Traduzindo...",
-        "baixar": "📥 Baixar Planilha"
+        "baixar": "📥 Baixar Planilha",
+        "citar_titulo": "📄 Como Citar",
+        "citar_texto": "Lemos, G. (2025). Lemos Lambda: Deep Science Prospector [Software]. Versão 1.0.0. DOI: 10.5281/zenodo.17958507",
+        "link_doi": "🔗 Ver no Zenodo (DOI)"
     },
     "en": {
         "titulo_desk": "λ Lemos Lambda: Deep Science",
@@ -147,7 +150,10 @@ TEXTOS = {
         "btn_scholar": "🎓 Google Scholar",
         "sem_artigos": "Zero papers found.",
         "lendo": "Searching and Translating...",
-        "baixar": "📥 Download CSV"
+        "baixar": "📥 Download CSV",
+        "citar_titulo": "📄 How to Cite",
+        "citar_texto": "Lemos, G. (2025). Lemos Lambda: Deep Science Prospector [Software]. Version 1.0.0. DOI: 10.5281/zenodo.17958507",
+        "link_doi": "🔗 View on Zenodo (DOI)"
     }
 }
 
@@ -321,12 +327,17 @@ def buscar_resumos_detalhados(termo_farmaco, termo_orgao, email, y_start, y_end,
 # ==========================================
 # 4. INTERFACE (UI)
 # ==========================================
-# Seletor de Idioma Principal
 lang_opt = st.sidebar.radio("Language / Idioma:", ["🇧🇷 Português", "🇺🇸 English"])
 lang = "pt" if "Português" in lang_opt else "en"
-t = TEXTOS[lang] # Carrega os textos do idioma escolhido
+t = TEXTOS[lang]
 
 modo = st.sidebar.radio("📱 Mode:", ["Desktop", "Mobile (Pocket)"], index=0)
+
+# Bloco "Como Citar" na Sidebar
+st.sidebar.markdown("---")
+with st.sidebar.expander(t["citar_titulo"]):
+    st.code(t["citar_texto"], language="text")
+    st.link_button(t["link_doi"], "https://doi.org/10.5281/zenodo.17958507")
 st.sidebar.markdown("---")
 
 if modo == "Desktop":
@@ -496,4 +507,3 @@ elif modo == "Mobile (Pocket)":
         if st.button(t["btn_ler"]):
             am = buscar_resumos_detalhados(sel_m, t_alvo_m if t_alvo_m else "", email_mob, anos_mob[0], anos_mob[1], lang, 3)
             for a in am: st.info(f"{a['Title']}\n\n{a['Resumo_IA']}")
-
