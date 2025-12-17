@@ -49,7 +49,6 @@ def buscar_alvos_emergentes_pubmed(orgao_alvo, email):
     ano_fim = datetime.now().year
     ano_inicio = ano_fim - 1
     
-    # Query dinâmica focada em receptores e sinalização para o órgão específico
     query = f"({orgao_alvo}) AND (receptor OR channel OR protein OR signaling) AND (\"{ano_inicio}\"[Date - Publication] : \"{ano_fim}\"[Date - Publication])"
     
     try:
@@ -131,10 +130,9 @@ TEXTOS = {
         "btn_minerar": "⛏️ Minerar 'Blue Oceans'",
         "btn_trend": "🔍 Injetar Tendências (2025)",
         "toast_aviso_minerar": "⚠️ Preencha o 'Alvo' e 'E-mail' para minerar!",
-        "prog_minerar": "⛏️ Procurando termos chave, após isso clique em 'Rumo ao Avanço'...",
+        "prog_minerar": "⛏️ Procurando termos chave...",
         "prog_testando": "⛏️ Analisando: {termo} ({count} artigos)",
-        "toast_sucesso_minerar": "✅ {qtd} termos encontrados! Agora clique em 'Rumo ao Avanço' 🚀",
-        "toast_fail_minerar": "Nenhum alvo raro encontrado.",
+        "toast_sucesso_minerar": "✅ {qtd} termos encontrados!",
         "btn_avanco": "🚀 Rumo ao Avanço",
         "erro_email": "E-mail obrigatório!",
         "aviso_lista": "Lista de Palavras-chave vazia!",
@@ -211,7 +209,6 @@ TEXTOS = {
 def buscar_todas_noticias(lang_code):
     feeds = [
         {"url": "https://www.sciencedaily.com/rss/health_medicine/pharmacology.xml", "lang": "🇺🇸"},
-        {"url": "https://www.fiercebiotech.com/rss/biotech", "lang": "🇺🇸"},
         {"url": "https://www.nature.com/nbt.rss", "lang": "🇬🇧"},
         {"url": "https://agencia.fapesp.br/rss/", "lang": "🇧🇷"},
     ]
@@ -276,8 +273,16 @@ def carregar_termos_indicados_orgao(orgao, email, t):
     with st.spinner("Minerando PubMed..."):
         termos = buscar_alvos_emergentes_pubmed(orgao, email)
         if termos:
-            st.session_state.alvos_val = ", ".join(termos)
-            st.toast(t["toast_restaurar"], icon="✨")
+            # LÓGICA DE NÃO REPETIR:
+            atuais = set([x.strip().upper() for x in st.session_state.alvos_val.split(",") if x.strip()])
+            filtrados = [t for t in termos if t.upper() not in atuais]
+            
+            if filtrados:
+                novo_texto = (st.session_state.alvos_val.strip(", ") + ", " + ", ".join(filtrados)).strip(", ")
+                st.session_state.alvos_val = novo_texto
+                st.toast(t["toast_restaurar"], icon="✨")
+            else:
+                st.toast("Nenhum termo novo encontrado.", icon="ℹ️")
 
 def limpar_campo_fonte(): st.session_state.fonte_val = ""
 def limpar_campo_alvo(): st.session_state.alvo_val = ""
@@ -344,7 +349,6 @@ def buscar_resumos_detalhados(termo_farmaco, termo_orgao, email, y_start, y_end,
                 tag, content = line[:4].strip(), line[6:]
                 if tag=="PMID": art_data["PMID"]=content
                 elif tag=="TI": art_data["Title"]=content
-                elif tag=="TA": art_data["Source"]=content
                 elif tag=="AB": art_data["Abstract"]=content
             if art_data["PMID"]!="N/A":
                 art_data["Resumo_IA"] = extrair_conclusao(art_data["Abstract"], lang_target)
@@ -399,13 +403,7 @@ if modo == "Desktop":
     with c6: st.button("🗑️", key="del_l", on_click=limpar_campo_alvos)
 
     if st.sidebar.button(t["btn_trend"], key="trend_desk"):
-        if email_user and t_alvo:
-            with st.sidebar.status("Buscando tendências..."):
-                novos = buscar_alvos_emergentes_pubmed(t_alvo, email_user)
-                if novos:
-                    st.session_state.alvos_val = (st.session_state.alvos_val.strip(", ") + ", " + ", ".join(novos))
-                    st.rerun()
-        else: st.sidebar.error("E-mail e Alvo necessários!")
+        carregar_termos_indicados_orgao(t_alvo, email_user, t)
 
     b1, b2 = st.sidebar.columns(2)
     b1.button(t["btn_restaurar"], on_click=carregar_termos_indicados_orgao, args=(t_alvo, email_user, t))
@@ -421,16 +419,15 @@ if modo == "Desktop":
                 pg.text(t["prog_investigando"].format(atual=i+1, total=len(lst), alvo=item))
                 nf = consultar_pubmed_count(item, t_fonte, email_user, anos[0], anos[1])
                 na = consultar_pubmed_count(item, t_alvo, email_user, anos[0], anos[1])
-                pot = nf/na if na > 0 else nf
-                res.append({"Alvo": item, "Status": "💎 DIAMANTE" if pot > 10 else "🥇 Ouro", "Potencial": pot, "Qtd_Fonte": nf, "Qtd_Alvo": na})
+                ratio = nf/na if na > 0 else nf
+                res.append({"Alvo": item, "Status": "💎 DIAMANTE" if ratio > 10 else "🥇 Ouro", "Ratio": ratio, "Fonte": nf, "Alvo_Interest": na})
                 bar.progress((i+1)/len(lst))
-            pg.empty()
-            st.session_state['dados_desk'] = pd.DataFrame(res).sort_values(by="Potencial", ascending=False)
+            st.session_state['dados_desk'] = pd.DataFrame(res).sort_values(by="Ratio", ascending=False)
             st.rerun()
 
     if 'dados_desk' in st.session_state:
         df = st.session_state['dados_desk']
-        st.plotly_chart(px.bar(df.head(20), x="Alvo", y="Potencial", color="Status"), use_container_width=True)
+        st.plotly_chart(px.bar(df.head(20), x="Alvo", y="Ratio", color="Status", color_discrete_map={"💎 DIAMANTE": "#00CC96", "🥇 Ouro": "#636EFA"}), use_container_width=True)
         st.dataframe(df, use_container_width=True, hide_index=True)
         st.divider()
         sel = st.selectbox("Raio-X:", sorted(df['Alvo'].unique().tolist()))
@@ -438,8 +435,6 @@ if modo == "Desktop":
             arts = buscar_resumos_detalhados(sel, t_alvo, email_user, anos[0], anos[1], lang)
             for a in arts:
                 with st.expander(a['Title']): st.success(a['Resumo_IA'])
-        if st.button(t["btn_scholar"]):
-             st.markdown(f"👉 [Google Scholar](https://scholar.google.com.br/scholar?q={sel}+{t_alvo})")
 
 elif modo == "Mobile (Pocket)":
     st.title(t["titulo_mob"])
@@ -460,9 +455,7 @@ elif modo == "Mobile (Pocket)":
             st.session_state.alvos_val = alvos_m
         with c6: st.button("🗑️",key="xl",on_click=limpar_campo_alvos)
         if st.button(t["btn_trend"], key="trend_mob"):
-            n = buscar_alvos_emergentes_pubmed(t_alvo_m, email_mob)
-            st.session_state.alvos_val = (st.session_state.alvos_val.strip(", ") + ", " + ", ".join(n))
-            st.rerun()
+            carregar_termos_indicados_orgao(t_alvo_m, email_mob, t)
         b1,b2=st.columns(2)
         b1.button(t["btn_restaurar"],on_click=carregar_termos_indicados_orgao,args=(t_alvo_m,email_mob,t))
         b2.button(t["btn_minerar"],on_click=minerar_blue_oceans,args=(t_alvo_m,email_mob,t))
@@ -475,8 +468,8 @@ elif modo == "Mobile (Pocket)":
             for i, x in enumerate(l):
                 nf = consultar_pubmed_count(x, t_fonte_m, email_mob, anos_mob[0], anos_mob[1])
                 na = consultar_pubmed_count(x, t_alvo_m, email_mob, anos_mob[0], anos_mob[1])
-                pot = nf/na if na > 0 else nf
-                r.append({"Alvo":x, "P":pot})
+                ratio = nf/na if na > 0 else nf
+                r.append({"Alvo":x, "P":ratio})
                 p.progress((i+1)/len(l))
             st.session_state['dados_mob'] = pd.DataFrame(r).sort_values(by="P", ascending=False)
             st.rerun()
