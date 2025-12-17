@@ -3,24 +3,6 @@ Lemos Lambda: Deep Science Prospector
 Copyright (c) 2025 Guilherme Lemos
 Licensed under the MIT License.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
 Author: Guilherme Lemos (Unifesp)
 Creation Date: December 2025
 """
@@ -45,7 +27,6 @@ def buscar_alvos_emergentes_pubmed(orgao_alvo, email):
         return []
     Entrez.email = email
     
-    # PEGA O ANO ATUAL DINAMICAMENTE PARA NÃO EXPIRAR EM 2026
     ano_fim = datetime.now().year
     ano_inicio = ano_fim - 1
     
@@ -130,7 +111,7 @@ TEXTOS = {
         "btn_minerar": "⛏️ Minerar 'Blue Oceans'",
         "btn_trend": "🔍 Injetar Tendências (2025)",
         "toast_aviso_minerar": "⚠️ Preencha o 'Alvo' e 'E-mail' para minerar!",
-        "prog_minerar": "⛏️ Procurando termos chave, após isso clique em 'Rumo ao Avanço'...",
+        "prog_minerar": "⛏️ Procurando termos chave...",
         "prog_testando": "⛏️ Analisando: {termo} ({count} artigos)",
         "toast_sucesso_minerar": "✅ {qtd} termos encontrados!",
         "btn_avanco": "🚀 Rumo ao Avanço",
@@ -296,13 +277,14 @@ def minerar_blue_oceans(orgao, email, t):
     total = len(amostra)
     for i, termo in enumerate(amostra):
         try:
+            # ATRASO DE SEGURANÇA (MELHORIA 1)
+            time.sleep(0.3)
             query = f"({termo}) AND ({orgao}) AND 2010:2025[DP]"
             handle = Entrez.esearch(db="pubmed", term=query, retmax=0)
             record = Entrez.read(handle)
             count = int(record["Count"])
             if 0 <= count < 150: encontrados.append(f"{termo}")
             my_bar.progress((i + 1) / total, text=t["prog_testando"].format(termo=termo, count=count))
-            time.sleep(0.05) 
         except: continue
     my_bar.empty()
     if encontrados:
@@ -321,6 +303,8 @@ def processar_upload(t):
 def consultar_pubmed_count(termo_farmaco, termo_orgao, email, y_start, y_end):
     if not email: return -1
     Entrez.email = email
+    # PEQUENO ATRASO PARA ESTABILIDADE (MELHORIA 1.1)
+    time.sleep(0.1)
     query = f"({termo_farmaco}) AND ({termo_orgao}) AND {y_start}:{y_end}[DP]" if termo_orgao else f"({termo_farmaco}) AND {y_start}:{y_end}[DP]"
     try: return int(Entrez.read(Entrez.esearch(db="pubmed", term=query, retmax=0))["Count"])
     except: return -1
@@ -333,7 +317,6 @@ def extrair_conclusao(abstract_text, lang_target):
 
 def buscar_resumos_detalhados(termo_alvo_especifico, termo_orgao_interesse, email, y_start, y_end, lang_target, limit=5):
     if not email: return []
-    # BUSCA RESTRITA AO ALVO SELECIONADO + ÓRGÃO DE INTERESSE
     query = f"({termo_alvo_especifico}) AND ({termo_orgao_interesse}) AND {y_start}:{y_end}[DP]"
     try:
         handle = Entrez.esearch(db="pubmed", term=query, retmax=limit, sort="relevance")
@@ -420,16 +403,24 @@ if modo == "Desktop":
                 pg.text(t["prog_investigando"].format(atual=i+1, total=len(lst), alvo=item))
                 nf = consultar_pubmed_count(item, t_fonte, email_user, anos[0], anos[1])
                 na = consultar_pubmed_count(item, t_alvo, email_user, anos[0], anos[1])
-                ratio = nf/na if na > 0 else nf
-                res.append({"Alvo": item, "Status": "💎 DIAMANTE" if ratio > 10 else "🥇 Ouro", "Ratio": ratio, "Fonte": nf, "Alvo_Interest": na})
+                pot = nf/na if na > 0 else nf
+                # CORES DINÂMICAS (MELHORIA 3)
+                stat = "💎 DIAMANTE" if pot > 10 else "🥇 Ouro" if pot > 2 else "🔴 Saturado"
+                res.append({"Alvo": item, "Status": stat, "Ratio": pot, "Fonte": nf, "Alvo_Interest": na})
                 bar.progress((i+1)/len(lst))
             st.session_state['dados_desk'] = pd.DataFrame(res).sort_values(by="Ratio", ascending=False)
             st.rerun()
 
     if 'dados_desk' in st.session_state:
         df = st.session_state['dados_desk']
-        st.plotly_chart(px.bar(df.head(20), x="Alvo", y="Ratio", color="Status"), use_container_width=True)
+        # GRÁFICO COM CORES MELHORADAS (MELHORIA 3.1)
+        st.plotly_chart(px.bar(df.head(20), x="Alvo", y="Ratio", color="Status", 
+                               color_discrete_map={"💎 DIAMANTE": "#00CC96", "🥇 Ouro": "#636EFA", "🔴 Saturado": "#EF553B"}), use_container_width=True)
         st.dataframe(df, use_container_width=True, hide_index=True)
+        
+        # BOTÃO EXPORTAÇÃO CSV (MELHORIA 2)
+        st.download_button(t["baixar"], df.to_csv(index=False).encode('utf-8'), "lemos_lambda_prospeccao.csv", "text/csv")
+        
         st.divider()
         st.header(t["raio_x"])
         sel = st.selectbox("Selecione para ler artigos focados no alvo:", sorted(df['Alvo'].unique().tolist()))
@@ -472,6 +463,7 @@ elif modo == "Mobile (Pocket)":
             l = [x.strip() for x in st.session_state.alvos_val.split(",") if x.strip()]
             r=[]; p=st.progress(0)
             for i, x in enumerate(l):
+                time.sleep(0.1) # Segurança
                 nf = consultar_pubmed_count(x, t_fonte_m, email_mob, anos_mob[0], anos_mob[1])
                 na = consultar_pubmed_count(x, t_alvo_m, email_mob, anos_mob[0], anos_mob[1])
                 ratio = nf/na if na > 0 else nf
@@ -483,3 +475,5 @@ elif modo == "Mobile (Pocket)":
         d=st.session_state['dados_mob']
         st.metric("🏆 Top 1", d.iloc[0]['Alvo'], f"{d.iloc[0]['P']:.1f}")
         st.dataframe(d, use_container_width=True, hide_index=True)
+        # MELHORIA 2: DOWNLOAD NO MOBILE TAMBÉM
+        st.download_button("📥 CSV", d.to_csv(index=False).encode('utf-8'), "lemos_lambda_mob.csv", "text/csv")
