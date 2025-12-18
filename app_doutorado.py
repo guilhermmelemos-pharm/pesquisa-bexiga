@@ -23,7 +23,7 @@ SOFTWARE.
 
 Author: Guilherme Lemos (Unifesp)
 Creation Date: December 2025
-Version: 1.7.5 (Compatibility Fix)
+Version: 1.7.6 (Stable Back-to-Basics)
 """
 import streamlit as st
 import pandas as pd
@@ -35,7 +35,7 @@ import backend as bk
 
 st.set_page_config(page_title="Lemos Lambda", page_icon="λ", layout="wide")
 
-# --- CSS BLUE OCEAN ---
+# --- CSS BLUE OCEAN (ESTILO VISUAL) ---
 st.markdown("""
     <style>
     .stButton button { border-radius: 12px; height: 50px; font-weight: bold; }
@@ -57,7 +57,14 @@ st.markdown("""
     }
     
     div[data-testid="stMetricValue"] { font-size: 1.8rem !important; }
-    div[data-testid="stImage"] img { border-radius: 10px !important; object-fit: cover; }
+    
+    /* O CSS CUIDA DO TAMANHO DA IMAGEM AGORA - MAIS SEGURO */
+    div[data-testid="stImage"] img { 
+        height: 150px !important; 
+        object-fit: cover !important; 
+        border-radius: 10px !important; 
+        width: 100% !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -166,7 +173,7 @@ def processar_upload(textos):
 if st.session_state.pagina == 'home':
     st.title(t["titulo_desk"]); st.caption(t["subtitulo"])
     
-    # Radar de Notícias (Compatível com Versões Antigas)
+    # Radar de Notícias (SIMPLIFICADO E FUNCIONAL)
     news = bk.buscar_todas_noticias(lang)
     if news:
         with st.container(border=True):
@@ -174,18 +181,16 @@ if st.session_state.pagina == 'home':
             cols = st.columns(len(news)) if len(news) < 3 else st.columns(3)
             for i, n in enumerate(news[:3]):
                 with cols[i]:
-                    # URL Segura
-                    safe_img = "https://images.unsplash.com/photo-1532094349884-543bc11b234d?w=600&q=80"
-                    
+                    # Lógica Simples: Se tem imagem, mostra. Se não, usa placeholder.
+                    # Sem parâmetros complexos. O CSS cuida do resto.
                     img_to_show = n.get('img')
-                    if not img_to_show or not isinstance(img_to_show, str) or len(img_to_show) < 5:
-                        img_to_show = safe_img
+                    if not img_to_show:
+                        img_to_show = "https://images.unsplash.com/photo-1532094349884-543bc11b234d?w=600&q=80"
                     
                     try:
-                        # FIX FINAL: use_column_width funciona em TODAS as versões
-                        st.image(img_to_show, use_column_width=True)
+                        st.image(img_to_show) # SEM height, SEM width. O CSS resolve.
                     except:
-                        st.image(safe_img, use_column_width=True)
+                        st.write("🔬") # Se falhar muito, põe ícone.
 
                     st.markdown(f"**{n['titulo'][:60]}...**")
                     st.caption(f"{n['fonte']}")
