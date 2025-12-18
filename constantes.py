@@ -6,32 +6,73 @@ PRESET_LEMOS = {
     "fonte": "Brain OR Kidney OR Liver OR Intestine OR Lung OR Vascular OR Immune System"
 }
 
-# --- SUA LISTA ÚNICA (BASE) ---
+# --- A LISTA GIGANTE DE INOVAÇÃO (Lemos Lambda Encyclopedia) ---
 CANDIDATOS_MINERACAO = [
-    # Fronteiras Modernas
-    "Microplastics", "Nanoplastics", "Bisphenol A", "Phthalates", "PFAS", 
-    "Trimethylamine N-oxide (TMAO)", "Gut microbiota metabolites", "Indole-3-propionic acid", 
-    "Cannabidiol (CBD)", "Cannabigerol (CBG)", "GPR55", "GPR18", "FAAH enzyme", "MAGL enzyme", "Anandamide", 
-    "Senolytics", "Klotho", "Nicotinamide mononucleotide (NMN)", "Sirtuins", 
-    "Ferroptosis", "Pyroptosis", "Necroptosis", "Exosomes", "Extracellular vesicles", 
-    "GLP-1 receptor", "SGLT2 inhibitors", "Probiotics", "Prebiotics", 
+    # --- 1. FRONTEIRAS AMBIENTAIS & EXPOSSOMA ---
+    "Microplastics", "Nanoplastics", "Bisphenol A", "Phthalates", "PFAS", "Polystyrene nanoparticles",
+    "Endocrine disruptors", "Heavy metals", "Glyphosate", "Airborne particulate matter",
     
-    # Clássicos
-    "Alpha-lipoic acid", "Butyrate", "Short-chain fatty acids", "Sphingosine-1-phosphate",
-    "Hyaluronic acid", "Succinate", "Lactate", "Kynurenic acid", "Prostaglandin E2",
-    "Resolvin D1", "Lipoxin A4", "Melatonin", "Taurine", "Uric Acid",
-    "P2X3 receptor", "P2X7 receptor", "TRPV1 channel", "TRPM8", "Piezo1", "Piezo2",
-    "Cannabinoid receptor 2", "GPR119", "GPR40", "GPR84", "GPR120",
-    "Beta-3 adrenergic receptor", "Muscarinic M3", "Nicotinic alpha-7",
-    "TMEM16A", "HCN channels", "Kv7 channels",
-    "Rho-kinase (ROCK)", "mTOR pathway", "AMPK signaling", "NLRP3 inflammasome",
-    "Nitric Oxide Synthase", "Heme Oxygenase-1", "Cyclooxygenase-2", "Phosphodiesterase-5",
-    "YAP/TAZ pathway", "Hippo pathway",
-    "MALAT1 lncRNA", "miR-21", "miR-145", "SIRT1", "NRF2 pathway", "NF-kappaB"
+    # --- 2. MICROBIOMA & METABÓLITOS ---
+    "Trimethylamine N-oxide (TMAO)", "Indole-3-propionic acid", "Short-chain fatty acids", 
+    "Butyrate", "Propionate", "Acetate", "Secondary bile acids", "Urolithin A",
+    "Gut microbiota metabolites", "Lipopolysaccharide (LPS)", "Peptidoglycan",
+    "Probiotics", "Prebiotics", "Postbiotics", "Akkermansia muciniphila",
+    
+    # --- 3. SISTEMA ENDOCANABINOIDE EXPANDIDO ---
+    "Cannabidiol (CBD)", "Cannabigerol (CBG)", "Cannabinol (CBN)", "Anandamide", "2-Arachidonoylglycerol (2-AG)",
+    "Cannabinoid receptor 1", "Cannabinoid receptor 2", "GPR55", "GPR18", "GPR119", 
+    "FAAH enzyme", "MAGL enzyme", "N-acyl ethanolamines", "PPAR-alpha", "PPAR-gamma", "TRPV1 channel",
+    
+    # --- 4. LONGEVIDADE, SENESCÊNCIA & MORTE CELULAR ---
+    "Senolytics", "Senomorphics", "Klotho", "Sirtuins", "SIRT1", "SIRT3", "SIRT6",
+    "Nicotinamide mononucleotide (NMN)", "Nicotinamide riboside", "NAD+ metabolism",
+    "Ferroptosis", "Pyroptosis", "Necroptosis", "Cuproptosis", "Autophagy", "Mitophagy",
+    "mTOR pathway", "AMPK signaling", "Telomerase", "p16INK4a", "p21CIP1",
+    
+    # --- 5. RECEPTORES OLFATIVOS & GUSTATIVOS ECTÓPICOS (Inovação Pura) ---
+    "Olfactory receptor 51E2 (OR51E2)", "Olfactory receptor 2AT4 (OR2AT4)", "OR10J5", "OR1D2",
+    "Bitter taste receptors (TAS2Rs)", "Sweet taste receptors (TAS1R2/TAS1R3)", 
+    "Umami receptor", "Chemosensory receptors", "Ectopic olfactory receptors",
+    
+    # --- 6. MECANOTRANSDUÇÃO & CANAIS IÔNICOS ---
+    "Piezo1", "Piezo2", "TMEM16A", "TMEM63", "TREK-1 channel", "TRAAK channel",
+    "TRPV4", "TRPM8", "TRPA1", "P2X3 receptor", "P2X7 receptor", "ASIC channels",
+    "Mechanosensitive channels", "Stretch-activated channels", "YAP/TAZ pathway", "Hippo pathway",
+    "HCN channels", "Kv7 channels", "BK channels", "SK channels",
+    
+    # --- 7. COMUNICAÇÃO CELULAR & EXOSSOMAS ---
+    "Exosomes", "Extracellular vesicles", "Microvesicles", "Exosomal miRNA", "Gap junctions", 
+    "Connexin 43", "Pannexin 1", "Tunneling nanotubes",
+    
+    # --- 8. RECEPTORES ÓRFÃOS & GPCRs ---
+    "GPR40 (FFAR1)", "GPR41 (FFAR3)", "GPR43 (FFAR2)", "GPR84", "GPR120 (FFAR4)", 
+    "GPR35", "GPR183", "GPR17", "GPR30 (GPER)", "LGR5", "LGR6",
+    "Muscarinic M3", "Beta-3 adrenergic receptor", "Nicotinic alpha-7", "Purinergic signaling",
+    
+    # --- 9. INFLAMAÇÃO & RESOLUÇÃO ---
+    "NLRP3 inflammasome", "cGAS-STING pathway", "NF-kappaB", "HMGB1", 
+    "Resolvin D1", "Resolvin D2", "Resolvin E1", "Lipoxin A4", "Maresins", "Protectins",
+    "Specialized pro-resolving mediators (SPMs)", "Prostaglandin E2", "Cyclooxygenase-2",
+    "Nitric Oxide Synthase", "Heme Oxygenase-1", "NRF2 pathway",
+    
+    # --- 10. METABÓLITOS CLÁSSICOS & SINALIZADORES ---
+    "Kynurenic acid", "Succinate", "Lactate", "Fumarate", "Itaconate", "Alpha-lipoic acid",
+    "Sphingosine-1-phosphate", "Ceramides", "Hyaluronic acid", "Taurine", "Uric Acid",
+    "Melatonin", "Adenosine", "ATP", "Glutamate",
+    
+    # --- 11. GENÉTICA NÃO-CODIFICANTE (Dark Genome) ---
+    "MALAT1 lncRNA", "HOTAIR lncRNA", "H19 lncRNA", "NEAT1 lncRNA",
+    "miR-21", "miR-145", "miR-29", "miR-126", "Circular RNA (circRNA)", "Piwi-interacting RNA"
 ]
 
-# --- FILTRO DE RUÍDO ---
+# --- FILTRO DE RUÍDO (BLACKLIST) ---
+# Inclui termos metodológicos, autores e empresas que poluem a busca.
 BLACKLIST_GERAL = [
+    # --- TERMOS QUE VOCÊ ADICIONOU (Autores, Lugares, Empresas, Lixo) ---
+    "advancing", "afkhami-poostchi", "aggregates", "airway sciences", "airway-derived", 
+    "albani", "aldana", "alveolar", "alzheimer", "alzofon", "amato", "amgen", 
+    "amin nd", "anatomy", "angeles", "angeli", "angelica", "angiogenesis", 
+    "ann", "ann arbor", "annusver", "ansari", "application", "applied medical",
     "acupuncture", "neuromodulation", "adaptive biotechnologies", "adkison", 
     "administration", "adrenoceptors", "adults", "advanced", "adverse", "affiliated", 
     "age", "aged", "aging", "workshop", "ahmad", "ahmadzadeh", "ahn", "akamatsu", 
@@ -44,21 +85,29 @@ BLACKLIST_GERAL = [
     "accordingly", "induced", "pharma", "pharmaceuticals", "solutions", "abbvie", 
     "aveo", "accord", "abu dhabi", "abe", "abbosh", "atlab", "abyost", "aiq solutions", 
     "aikido", "akus-11", "apobec3-induced", "april", "asb3",
+
+    # --- METODOLOGIA & ESTATÍSTICA ---
     "adverse event", "adverse effect", "ae rate", "safety", "efficacy", "placebo",
     "control group", "study design", "double-blind", "randomized", "clinical trial",
     "p-value", "confidence interval", "odds ratio", "hazard ratio", "standard deviation",
     "anova", "regression", "analysis", "data", "result", "conclusion", "method",
     "significant", "statistically", "increased", "decreased", "compared to",
     "associated with", "observed in", "related to", "due to",
+    
+    # --- TERMOS BIOLÓGICOS GENÉRICOS (Que não são alvos específicos) ---
     "signaling pathway", "signal transduction", "gene expression", "protein level",
     "messenger rna", "receptor agonist", "receptor antagonist", "inhibitor",
     "mechanism of action", "therapeutic target", "potential target", "biomarker",
     "pathophysiology", "metabolism", "oxidative stress", "inflammation",
     "cell culture", "in vivo", "in vitro", "western blot", "pcr", "elisa",
     "stem cell", "progenitor cell", "expression of", "activation of", "levels of",
+    
+    # --- PALAVRAS DE LIGAÇÃO ---
     "the", "and", "with", "for", "that", "this", "were", "was", "have", "has",
     "between", "among", "during", "after", "before", "however", "therefore",
     "furthermore", "moreover", "additionally", "notably", "interestingly",
+    
+    # --- INSTITUCIONAL ---
     "department", "university", "hospital", "institute", "center", "usa", "china",
     "brazil", "europe", "funding", "grant", "review", "article", "copyright"
 ]
@@ -75,14 +124,13 @@ TEXTOS = {
         "holder_alvo": "ex: Overactive Bladder, Fibrosis...",
         "aviso_pubmed": "⚠️ **Atenção:** Escreva os termos em **INGLÊS** para garantir a mineração correta.",
         
-        # --- NOVOS BOTÕES REORGANIZADOS ---
         "btn_preset": "🎓 Guilherme Lemos Preset",
         "btn_smart_load": "🔍 Buscar com base no seu Alvo",
-        "btn_blue_ocean": "🌊 EXPLORAR BLUE OCEAN (DESCOBERTA)", # Texto em caixa alta para impacto
+        "btn_blue_ocean": "🌊 EXPLORAR BLUE OCEAN (DESCOBERTA)",
         
         "btn_lib": "📚 Minerar no Contexto (Fonte)",
         
-        "status_blue_ocean": "🌊 Mergulhando no PubMed em busca de alvos inexplorados...",
+        "status_blue_ocean": "🌊 Mergulhando no PubMed em busca de alvos inexplorados e receptores de fronteira...",
         "msg_sucesso_blue": "🌊 {qtd} novos alvos do Blue Ocean adicionados!",
         "status_minerando": "🔍 Minerando novidades para:",
         "msg_sucesso_dinamico": "✅ Lista Base + {qtd} novidades específicas preservadas!",
@@ -156,6 +204,7 @@ TEXTOS = {
         "btn_blue_ocean": "🌊 EXPLORE BLUE OCEAN (DISCOVERY)",
         
         "btn_lib": "📚 Context Mining (Source)",
+        "btn_preset": "🎓 Load Lemos PhD Preset",
         
         "status_blue_ocean": "🌊 Diving into PubMed for unexplored targets...",
         "msg_sucesso_blue": "🌊 {qtd} new Blue Ocean targets added!",
