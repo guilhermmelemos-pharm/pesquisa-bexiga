@@ -7,7 +7,6 @@ PRESET_LEMOS = {
 }
 
 # --- SUA LISTA ÚNICA (BASE) ---
-# Inclui termos clássicos e as novidades (NMN, Microplásticos, etc.)
 CANDIDATOS_MINERACAO = [
     # Fronteiras Modernas
     "Microplastics", "Nanoplastics", "Bisphenol A", "Phthalates", "PFAS", 
@@ -31,9 +30,8 @@ CANDIDATOS_MINERACAO = [
     "MALAT1 lncRNA", "miR-21", "miR-145", "SIRT1", "NRF2 pathway", "NF-kappaB"
 ]
 
-# --- FILTRO DE RUÍDO (BLACKLIST) ---
+# --- FILTRO DE RUÍDO ---
 BLACKLIST_GERAL = [
-    # Ruído detectado (Autores, Cidades, Metadados)
     "acupuncture", "neuromodulation", "adaptive biotechnologies", "adkison", 
     "administration", "adrenoceptors", "adults", "advanced", "adverse", "affiliated", 
     "age", "aged", "aging", "workshop", "ahmad", "ahmadzadeh", "ahn", "akamatsu", 
@@ -46,29 +44,21 @@ BLACKLIST_GERAL = [
     "accordingly", "induced", "pharma", "pharmaceuticals", "solutions", "abbvie", 
     "aveo", "accord", "abu dhabi", "abe", "abbosh", "atlab", "abyost", "aiq solutions", 
     "aikido", "akus-11", "apobec3-induced", "april", "asb3",
-
-    # Metodologia
     "adverse event", "adverse effect", "ae rate", "safety", "efficacy", "placebo",
     "control group", "study design", "double-blind", "randomized", "clinical trial",
     "p-value", "confidence interval", "odds ratio", "hazard ratio", "standard deviation",
     "anova", "regression", "analysis", "data", "result", "conclusion", "method",
     "significant", "statistically", "increased", "decreased", "compared to",
     "associated with", "observed in", "related to", "due to",
-    
-    # Termos genéricos
     "signaling pathway", "signal transduction", "gene expression", "protein level",
     "messenger rna", "receptor agonist", "receptor antagonist", "inhibitor",
     "mechanism of action", "therapeutic target", "potential target", "biomarker",
     "pathophysiology", "metabolism", "oxidative stress", "inflammation",
     "cell culture", "in vivo", "in vitro", "western blot", "pcr", "elisa",
     "stem cell", "progenitor cell", "expression of", "activation of", "levels of",
-    
-    # Palavras comuns
     "the", "and", "with", "for", "that", "this", "were", "was", "have", "has",
     "between", "among", "during", "after", "before", "however", "therefore",
     "furthermore", "moreover", "additionally", "notably", "interestingly",
-    
-    # Institucional
     "department", "university", "hospital", "institute", "center", "usa", "china",
     "brazil", "europe", "funding", "grant", "review", "article", "copyright"
 ]
@@ -85,10 +75,12 @@ TEXTOS = {
         "holder_alvo": "ex: Overactive Bladder, Fibrosis...",
         "aviso_pubmed": "⚠️ **Atenção:** Escreva os termos em **INGLÊS** para garantir a mineração correta.",
         
-        "btn_smart_load": "🔄 Carregar Minha Lista (+ Dinâmica)",
-        "btn_blue_ocean": "🌊 Explore o Blue Ocean (Apenas Novidades)",
+        # --- NOVOS BOTÕES REORGANIZADOS ---
+        "btn_preset": "🎓 Guilherme Lemos Preset",
+        "btn_smart_load": "🔍 Buscar com base no seu Alvo",
+        "btn_blue_ocean": "🌊 EXPLORAR BLUE OCEAN (DESCOBERTA)", # Texto em caixa alta para impacto
+        
         "btn_lib": "📚 Minerar no Contexto (Fonte)",
-        "btn_preset": "🎓 Carregar Preset Doutorado (Lemos)",
         
         "status_blue_ocean": "🌊 Mergulhando no PubMed em busca de alvos inexplorados...",
         "msg_sucesso_blue": "🌊 {qtd} novos alvos do Blue Ocean adicionados!",
@@ -143,9 +135,9 @@ TEXTOS = {
         "header_artigos_enc": "Artigos encontrados:",
         "aviso_sem_artigos": "Nenhum artigo encontrado com resumo disponível neste período.",
         
-        "footer_citar": "Lemos Lambda v1.1.0 - Uso Acadêmico",
+        "footer_citar": "Lemos Lambda v1.2.0 - Uso Acadêmico",
         "citar_titulo": "📄 Como Citar",
-        "citar_texto": "Lemos, G. (2025). Lemos Lambda: Deep Science Prospector [Software]. Versão 1.1.0. DOI: 10.5281/zenodo.17958507",
+        "citar_texto": "Lemos, G. (2025). Lemos Lambda: Deep Science Prospector [Software]. Versão 1.2.0. DOI: 10.5281/zenodo.17958507",
         "link_doi": "🔗 Ver no Zenodo (DOI)"
     },
     "en": {
@@ -159,10 +151,11 @@ TEXTOS = {
         "holder_alvo": "ex: Overactive Bladder, Fibrosis...",
         "aviso_pubmed": "⚠️ **Warning:** Please input terms in **ENGLISH**.",
         
-        "btn_smart_load": "🔄 Load My List (+ Dynamic)",
-        "btn_blue_ocean": "🌊 Explore Blue Ocean (Novelties Only)",
+        "btn_preset": "🎓 Guilherme Lemos Preset",
+        "btn_smart_load": "🔍 Search based on your Target",
+        "btn_blue_ocean": "🌊 EXPLORE BLUE OCEAN (DISCOVERY)",
+        
         "btn_lib": "📚 Context Mining (Source)",
-        "btn_preset": "🎓 Load Lemos PhD Preset",
         
         "status_blue_ocean": "🌊 Diving into PubMed for unexplored targets...",
         "msg_sucesso_blue": "🌊 {qtd} new Blue Ocean targets added!",
@@ -217,9 +210,9 @@ TEXTOS = {
         "header_artigos_enc": "Articles found:",
         "aviso_sem_artigos": "No articles found with abstract available in this period.",
         
-        "footer_citar": "Lemos Lambda v1.1.0 - Academic Use",
+        "footer_citar": "Lemos Lambda v1.2.0 - Academic Use",
         "citar_titulo": "📄 How to Cite",
-        "citar_texto": "Lemos, G. (2025). Lemos Lambda: Deep Science Prospector [Software]. Version 1.1.0. DOI: 10.5281/zenodo.17958507",
+        "citar_texto": "Lemos, G. (2025). Lemos Lambda: Deep Science Prospector [Software]. Version 1.2.0. DOI: 10.5281/zenodo.17958507",
         "link_doi": "🔗 View on Zenodo (DOI)"
     }
 }
