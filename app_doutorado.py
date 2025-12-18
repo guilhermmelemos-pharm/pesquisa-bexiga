@@ -23,6 +23,7 @@ SOFTWARE.
 
 Author: Guilherme Lemos (Unifesp)
 Creation Date: December 2025
+Version: 1.8.2 (Compatibility Mode)
 """
 import streamlit as st
 import pandas as pd
@@ -34,7 +35,7 @@ import backend as bk
 
 st.set_page_config(page_title="Lemos Lambda", page_icon="λ", layout="wide")
 
-# --- CSS INJECTION PARA FAZER O BLUE OCEAN BRILHAR ---
+# --- CSS INJECTION (VISUAL) ---
 st.markdown("""
     <style>
     /* Estilo Geral dos Botões */
@@ -63,7 +64,14 @@ st.markdown("""
     }
     
     div[data-testid="stMetricValue"] { font-size: 1.8rem !important; }
-    div[data-testid="stImage"] img { height: 160px !important; object-fit: cover !important; border-radius: 10px !important; }
+    
+    /* O CSS CUIDA DO TAMANHO DA IMAGEM - ISSO EVITA ERROS DE VERSÃO DO PYTHON */
+    div[data-testid="stImage"] img { 
+        height: 160px !important; 
+        object-fit: cover !important; 
+        border-radius: 10px !important;
+        width: 100% !important; 
+    }
     .stAlert { padding: 0.5rem; margin-bottom: 1rem; border-radius: 8px; }
     </style>
 """, unsafe_allow_html=True)
@@ -237,10 +245,16 @@ def exibir_radar_cientifico(lang_code, textos):
         cols = st.columns(3)
         for i, n in enumerate(batch):
             with cols[i]:
-                st.image(n['img'], use_container_width=True)
+                # --- CORREÇÃO DEFINITIVA ---
+                # NENHUM parâmetro extra. Apenas a imagem.
+                # O CSS no topo do arquivo (linha 57) é quem manda no tamanho.
+                st.image(n['img']) 
+                
                 st.markdown(f"**{n['titulo'][:75]}...**")
                 st.caption(f"{n['bandeira']} {n['fonte']}")
-                st.link_button(textos["btn_ler_feed"], n['link'], use_container_width=True)
+                # Link button pode falhar em versões muito antigas com use_container_width
+                # Vamos usar o padrão seguro também.
+                st.link_button(textos["btn_ler_feed"], n['link'])
 
 def processar_upload(textos):
     uploaded_file = st.session_state.get('uploader_key')
