@@ -202,21 +202,22 @@ def ir_para_analise(email_user, contexto, alvo, ano_ini, ano_fim):
         n_global = bk.consultar_pubmed_count(item, termo_contexto, email_user, ano_ini, ano_fim)
         n_especifico = bk.consultar_pubmed_count(item, alvo, email_user, ano_ini, ano_fim)
         
-        # --- ESTATÍSTICA NOVA (Ratio 2.0 - Lambda Score) ---
-        # 1. Suavização (+1) para evitar zeros e permitir log
+        # --- AQUI ESTÁ A MUDANÇA ESTATÍSTICA (Lambda Score / Log-Odds) ---
+        # 1. Suavização (+1) para evitar zeros e permitir logaritmo
         safe_global = n_global + 1
         safe_especifico = n_especifico + 1
         
-        # 2. Score Logarítmico (Magnitude)
+        # 2. Score Logarítmico (Mede a magnitude da diferença)
+        # Se Lambda > 2.0, significa que Global é 100x maior que Específico (Oportunidade)
         lambda_score = math.log10(safe_global) - math.log10(safe_especifico)
         
-        # 3. Classificação
+        # 3. Classificação Robusta (Funciona para qualquer órgão)
         tag = "⚖️ Neutro"
         score_sort = 0
         
         if n_especifico == 0:
-            # Se não tem nada no alvo, precisa ser MUITO forte fora
-            if lambda_score > 2.5: # ~300 papers fora
+            # Se não tem nada no alvo, precisa ser MUITO forte fora para ser Blue Ocean
+            if lambda_score > 2.5: # ~300 papers fora, 0 dentro
                 tag = "💎 Blue Ocean (Inexplorado)"
                 score_sort = 1000
             else:
@@ -236,7 +237,7 @@ def ir_para_analise(email_user, contexto, alvo, ano_ini, ano_fim):
                 tag = "🌱 Embrionário (Nascendo agora)"
                 score_sort = 500
 
-        # Ratio visual
+        # Ratio visual para o gráfico
         ratio = float(n_global / safe_especifico)
         
         resultados.append({
@@ -262,6 +263,7 @@ def exibir_radar_cientifico(lang_code, textos):
         cols = st.columns(3)
         for i, n in enumerate(batch):
             with cols[i]:
+                # MANTIDA A IMAGEM COMO VOCÊ PEDIU
                 st.image(n['img'], use_container_width=True)
                 st.markdown(f"**{n['titulo'][:75]}...**")
                 st.caption(f"{n['bandeira']} {n['fonte']}")
