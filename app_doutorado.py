@@ -23,7 +23,7 @@ SOFTWARE.
 
 Author: Guilherme Lemos (Unifesp)
 Creation Date: December 2025
-Version: 1.7.2 (Stable & Robust)
+Version: 1.7.3 (Final Shielded)
 """
 import streamlit as st
 import pandas as pd
@@ -191,7 +191,7 @@ def processar_upload(textos):
 if st.session_state.pagina == 'home':
     st.title(t["titulo_desk"]); st.caption(t["subtitulo"])
     
-    # Radar de Notícias (Com Proteção contra Erro de Imagem)
+    # Radar de Notícias (Com Proteção Total de Imagem)
     news = bk.buscar_todas_noticias(lang)
     if news:
         with st.container(border=True):
@@ -199,13 +199,18 @@ if st.session_state.pagina == 'home':
             cols = st.columns(len(news)) if len(news) < 3 else st.columns(3)
             for i, n in enumerate(news[:3]):
                 with cols[i]:
-                    # --- CORREÇÃO DO TYPEERROR (Fix Image) ---
-                    # Verifica se a imagem existe, senão usa placeholder
-                    img_url = n.get('img')
-                    if not img_url:
-                        img_url = "https://images.unsplash.com/photo-1532094349884-543bc11b234d?auto=format&fit=crop&w=600&q=80"
+                    # --- BLINDAGEM DO ERRO DE IMAGEM ---
+                    try:
+                        img_url = n.get('img')
+                        # Se não tiver URL ou se a URL não for string, define padrão
+                        if not img_url or not isinstance(img_url, str):
+                            img_url = "https://images.unsplash.com/photo-1532094349884-543bc11b234d?auto=format&fit=crop&w=600&q=80"
+                        
+                        st.image(img_url, height=150)
+                    except Exception:
+                        # Se falhar mesmo com URL (erro de conexão ou formato), mostra texto
+                        st.markdown("🔬 *Science Feed*")
                     
-                    st.image(img_url, height=150)
                     st.markdown(f"**{n['titulo'][:60]}...**")
                     st.caption(f"{n['fonte']}")
                     st.link_button(t["btn_ler_feed"], n['link'])
