@@ -3,9 +3,26 @@ Lemos Lambda: Deep Science Prospector
 Copyright (c) 2025 Guilherme Lemos
 Licensed under the MIT License.
 
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
 Author: Guilherme Lemos (Unifesp)
 Creation Date: December 2025
-Version: 1.9.0 (Force Fix)
 """
 import streamlit as st
 import pandas as pd
@@ -17,24 +34,22 @@ import backend as bk
 
 st.set_page_config(page_title="Lemos Lambda", page_icon="λ", layout="wide")
 
-# --- CSS INJECTION (ESTILO VISUAL) ---
+# --- CSS (ONDE A MÁGICA VISUAL ACONTECE) ---
 st.markdown("""
     <style>
-    /* Estilo Geral dos Botões */
+    /* Botões */
     .stButton button { 
         border-radius: 12px; 
         height: 50px; 
         font-weight: bold; 
     }
     
-    /* Animação de Pulso para o Blue Ocean */
+    /* Blue Ocean Pulse */
     @keyframes pulse-blue {
         0% { box-shadow: 0 0 0 0 rgba(0, 204, 150, 0.7); transform: scale(1); }
         70% { box-shadow: 0 0 0 10px rgba(0, 204, 150, 0); transform: scale(1.02); }
         100% { box-shadow: 0 0 0 0 rgba(0, 204, 150, 0); transform: scale(1); }
     }
-    
-    /* Classe específica para o container do Blue Ocean */
     .blue-ocean-btn button {
         animation: pulse-blue 2s infinite;
         background: linear-gradient(90deg, #00C9FF 0%, #92FE9D 100%) !important;
@@ -47,13 +62,14 @@ st.markdown("""
     
     div[data-testid="stMetricValue"] { font-size: 1.8rem !important; }
     
-    /* O CSS É QUEM MANDA NO TAMANHO DA IMAGEM AGORA */
+    /* --- CORREÇÃO DE IMAGEM VIA CSS (SEM QUEBRAR O PYTHON) --- */
     div[data-testid="stImage"] img { 
-        height: 150px !important; 
         width: 100% !important;
+        height: 150px !important; 
         object-fit: cover !important; 
         border-radius: 10px !important;
     }
+    
     .stAlert { padding: 0.5rem; margin-bottom: 1rem; border-radius: 8px; }
     </style>
 """, unsafe_allow_html=True)
@@ -83,12 +99,31 @@ def limpar_campo(chave_session):
 def limpar_lista_total():
     st.session_state.alvos_val = ""
 
+def adicionar_termos_seguro(novos_termos_lista, textos):
+    atuais = [x.strip() for x in st.session_state.alvos_val.split(",") if x.strip()]
+    atuais_upper = [x.upper() for x in atuais]
+    adicionados = []
+    
+    blacklist_lower = [x.lower() for x in c.BLACKLIST_GERAL]
+    
+    for termo in novos_termos_lista:
+        t_limpo = termo.strip()
+        t_lower = t_limpo.lower()
+        if any(bad in t_lower for bad in blacklist_lower): continue
+        if t_limpo and (t_limpo.upper() not in atuais_upper):
+            atuais.append(t_limpo)
+            atuais_upper.append(t_limpo.upper())
+            adicionados.append(t_limpo)
+            
+    st.session_state.alvos_val = ", ".join(atuais)
+    return len(adicionados)
+
 def carregar_lista_dinamica_smart(textos):
     email = st.session_state.input_email
     alvo = st.session_state.input_alvo
     
     if not alvo:
-        st.error("⚠️ Preencha o campo 'Alvo Principal' (ex: Liver, Kidney) antes de buscar!")
+        st.error("⚠️ Preencha o campo 'Alvo Principal'!")
         return
 
     existentes = [x.strip() for x in st.session_state.alvos_val.split(",") if x.strip()]
@@ -145,30 +180,6 @@ def aplicar_preset_lemos(textos):
     st.session_state.input_fonte = c.PRESET_LEMOS["fonte"]
     carregar_lista_dinamica_smart(textos)
 
-def adicionar_termos_seguro(novos_termos_lista, textos):
-    atuais = [x.strip() for x in st.session_state.alvos_val.split(",") if x.strip()]
-    atuais_upper = [x.upper() for x in atuais]
-    adicionados = []
-    
-    blacklist_lower = [x.lower() for x in c.BLACKLIST_GERAL]
-    
-    for termo in novos_termos_lista:
-        t_limpo = termo.strip()
-        t_lower = t_limpo.lower()
-        if any(bad in t_lower for bad in blacklist_lower): continue
-        if t_limpo and (t_limpo.upper() not in atuais_upper):
-            atuais.append(t_limpo)
-            atuais_upper.append(t_limpo.upper())
-            adicionados.append(t_limpo)
-            
-    st.session_state.alvos_val = ", ".join(atuais)
-    return len(adicionados)
-
-def resetar_pesquisa():
-    st.session_state.pagina = 'home'
-    st.session_state.resultado_df = None
-    st.session_state.artigos_detalhe = None
-
 def ir_para_analise(email_user, contexto, alvo, ano_ini, ano_fim):
     st.session_state.email_guardado = email_user
     st.session_state.alvo_guardado = alvo
@@ -189,19 +200,11 @@ def ir_para_analise(email_user, contexto, alvo, ano_ini, ano_fim):
         n_especifico = bk.consultar_pubmed_count(item, alvo, email_user, ano_ini, ano_fim)
         ratio = n_global / n_especifico if n_especifico > 0 else n_global
         
-        if n_especifico == 0:
-            if n_global > 50: tag, score_sort = "💎 Blue Ocean (Inexplorado)", 1000
-            else: tag, score_sort = "👻 Fantasma (Sem relevância)", 0
-        elif 1 <= n_especifico <= 15: tag, score_sort = "🌱 Embrionário (Nascendo agora)", 500
-        elif ratio > 20: tag, score_sort = "🚀 Tendência (Translação)", 100
-        elif ratio > 5: tag, score_sort = "🥇 Ouro", 50
-        elif ratio < 2: tag, score_sort = "🔴 Saturado", 10
-        else: tag, score_sort = "⚖️ Neutro", 20
-        
-        # FIX: Usamos chaves internas FIXAS (termo, status, ratio) para evitar KeyError
+        status_tag, score_sort = bk.classificar_oportunidade(n_alvo, n_global)
+
         resultados.append({
             "termo": item,
-            "status": tag,
+            "status": status_tag,
             "ratio": round(ratio, 1),
             "alvo_count": n_especifico,
             "fonte_count": n_global,
@@ -215,6 +218,17 @@ def ir_para_analise(email_user, contexto, alvo, ano_ini, ano_fim):
     st.session_state.pagina = 'resultados'
     st.rerun()
 
+def processar_upload(textos):
+    uploaded_file = st.session_state.get('uploader_key')
+    if uploaded_file is not None:
+        try:
+            content = uploaded_file.getvalue().decode("utf-8")
+            termos_importados = [x.strip() for x in content.replace("\n", ",").split(",") if x.strip()]
+            count = adicionar_termos_seguro(termos_importados, textos)
+            st.toast(f"{textos['toast_import']} ({count})", icon="📂")
+        except: st.error(textos["erro_ler"])
+
+# --- RADAR CIENTÍFICO (AQUI ESTAVA O ERRO) ---
 @st.fragment(run_every=60) 
 def exibir_radar_cientifico(lang_code, textos):
     news_list = bk.buscar_todas_noticias(lang_code)
@@ -227,30 +241,29 @@ def exibir_radar_cientifico(lang_code, textos):
         cols = st.columns(3)
         for i, n in enumerate(batch):
             with cols[i]:
-                # --- SOLUÇÃO DEFINITIVA (SEM PARÂMETROS QUEBRADOS) ---
-                # O comando é apenas st.image(url). 
-                # O CSS na linha 53 cuida do tamanho.
-                st.image(n['img']) 
+                # --- CORREÇÃO DEFINITIVA ---
+                img_url = n.get('img')
+                # Fallback se não tiver imagem
+                if not img_url: 
+                    img_url = "https://images.unsplash.com/photo-1532094349884-543bc11b234d?w=600&q=80"
+
+                # ⚠️ SEM height, SEM width, SEM use_container_width.
+                # O CSS lá em cima (linha 57) é quem vai formatar.
+                try:
+                    st.image(img_url) 
+                except:
+                    st.write("🔬")
                 
                 st.markdown(f"**{n['titulo'][:75]}...**")
                 st.caption(f"{n['bandeira']} {n['fonte']}")
-                # Aqui também removemos use_container_width para garantir compatibilidade
                 st.link_button(textos["btn_ler_feed"], n['link'])
 
-def processar_upload(textos):
-    uploaded_file = st.session_state.get('uploader_key')
-    if uploaded_file is not None:
-        try:
-            content = uploaded_file.getvalue().decode("utf-8")
-            termos_importados = [x.strip() for x in content.replace("\n", ",").split(",") if x.strip()]
-            count = adicionar_termos_seguro(termos_importados, textos)
-            st.toast(f"{textos['toast_import']} ({count})", icon="📂")
-        except: st.error(textos["erro_ler"])
-
-# --- UI ---
+# --- UI (INTERFACE COMPLETA DO SEU CÓDIGO ANTIGO) ---
 if st.session_state.pagina == 'home':
     st.title(t["titulo_desk"]); st.caption(t["subtitulo"])
+    
     exibir_radar_cientifico(lang, t)
+    
     st.divider()
     with st.container(border=True):
         c1, c2 = st.columns([2, 1])
@@ -315,7 +328,7 @@ elif st.session_state.pagina == 'resultados':
     
     df = st.session_state.resultado_df
     if df is not None and not df.empty:
-        # FIX: Acessa com chaves FIXAS ("termo", "status"), o que resolve o KeyError
+        # FIX: Chaves Fixas
         top = df.iloc[0]
         c1, c2, c3 = st.columns(3)
         c1.metric(t["metrica_potencial"], top["termo"], delta=top["status"])
@@ -324,7 +337,7 @@ elif st.session_state.pagina == 'resultados':
         
         st.subheader(t["titulo_mapa"])
         
-        # Renomear colunas apenas para exibição
+        # Renomear para exibição
         df_show = df.rename(columns={
             "termo": t["col_mol"],
             "status": t["col_status"],
@@ -333,7 +346,6 @@ elif st.session_state.pagina == 'resultados':
             "fonte_count": t["col_global"]
         }).drop(columns=["_sort"])
         
-        # Gráfico usa as colunas renomeadas
         fig = px.bar(df_show.head(25), x=t["col_mol"], y=t["col_ratio"], color=t["col_status"], 
                      color_discrete_map={"💎 Blue Ocean (Inexplorado)": "#00CC96", "🌱 Embrionário (Nascendo agora)": "#00FF00", "🚀 Tendência (Translação)": "#AB63FA", "🥇 Ouro": "#636EFA", "🔴 Saturado": "#EF553B", "👻 Fantasma (Sem relevância)": "#808080"})
         st.plotly_chart(fig, use_container_width=True)
@@ -341,7 +353,6 @@ elif st.session_state.pagina == 'resultados':
         st.download_button(t["btn_baixar"], df_show.to_csv(index=False).encode('utf-8'), "lemos_lambda_report.csv", "text/csv")
         
         st.divider(); st.subheader(t["titulo_leitura"]); st.info(t["info_leitura"])
-        # Selectbox usa chave fixa "termo"
         termos_disp = sorted(df["termo"].unique().tolist())
         sel_mol = st.selectbox(t["sel_leitura"], termos_disp, index=0)
         
