@@ -7,6 +7,34 @@ PRESET_LEMOS = {
     "fonte": "Brain OR Kidney OR Liver OR Intestine OR Lung OR Vascular OR Immune System"
 }
 
+# --- FILTRO DE RUÍDO (BLACKLIST) ---
+# Termos que NÃO são alvos farmacológicos e devem ser ignorados na mineração.
+BLACKLIST_GERAL = [
+    # Metodologia e Estatística
+    "Adverse events", "Adverse effect", "AE rates", "Safety", "Efficacy", "Placebo",
+    "Control group", "Study design", "Double-blind", "Randomized", "Clinical trial",
+    "P-value", "Confidence interval", "Odds ratio", "Hazard ratio", "Standard deviation",
+    "ANOVA", "Regression", "Analysis", "Data", "Results", "Conclusion", "Methods",
+    "Significant", "Statistically", "Increased", "Decreased", "Compared to",
+    
+    # Termos Genéricos de Biologia (sem especificidade)
+    "Signaling pathway", "Signal transduction", "Gene expression", "Protein levels",
+    "Messenger RNA", "Receptor agonist", "Receptor antagonist", "Inhibitor",
+    "Mechanism of action", "Therapeutic target", "Potential target", "Biomarker",
+    "Pathophysiology", "Metabolism", "Oxidative stress", "Inflammation",
+    "Cell culture", "In vivo", "In vitro", "Western blot", "PCR", "ELISA",
+    "Stem cell", "Progenitor cell", # Evita o termo genérico, queremos o tipo específico
+    
+    # Frases e Palavras de Ligação (Inglês)
+    "The", "And", "With", "For", "That", "This", "Were", "Was", "Have", "Has",
+    "Between", "Among", "During", "After", "Before", "However", "Therefore",
+    "Furthermore", "Moreover", "Additionally", "Notably", "Interestingly",
+    
+    # Institucional e Geografia
+    "Department", "University", "Hospital", "Institute", "Center", "USA", "China",
+    "Brazil", "Europe", "Funding", "Grant", "Review", "Article", "Copyright"
+]
+
 CANDIDATOS_MINERACAO = [
     # --- Ácidos e Metabólitos ---
     "Alpha-lipoic acid", "Butyrate", "Short-chain fatty acids", "Sphingosine-1-phosphate",
@@ -37,16 +65,18 @@ TEXTOS = {
         "btn_magic": "✨ Descobrir 'Blue Oceans' (Automático)",
         "prog_magic": "A IA está varrendo a literatura recente...",
         "status_minerando": "Lendo abstracts recentes...",
-        "status_filtrando": "Identificando moléculas complexas...",
+        "status_filtrando": "Aplicando Blacklist científica...",
         "status_pronto": "Bibliotecas atualizadas!",
         "analise_btn": "🚀 Calcular Potencial (Ratio)",
         "resultados": "🎯 Resultados da Prospecção",
         "tabela_vazia": "Adicione termos ou use a descoberta automática acima.",
-        "footer_citar": "Lemos Lambda v1.1 - Uso Acadêmico",
+        "footer_citar": "Lemos Lambda v2.0 - Uso Acadêmico",
         
-        # Novos campos v1.4
+        "btn_lib": "📚 Carregar Biblioteca Padrão (Sem Preset)",
         "btn_preset": "🎓 Carregar Preset Doutorado (Lemos)",
         "toast_preset": "🧬 Preset Lemos carregado com sucesso!",
+        "toast_lib": "📚 Lista padrão carregada!",
+        
         "label_periodo": "📅 Período de Análise",
         "label_manual": "🔎 Investigar Termo Específico",
         "holder_manual": "ex: Curcumina, Gene X...",
@@ -82,7 +112,7 @@ TEXTOS = {
         "erro_campos": "⚠️ Preencha E-mail e Alvo (em Inglês)!",
         
         "citar_titulo": "📄 Como Citar",
-        "citar_texto": "Lemos, G. (2025). Lemos Lambda: Deep Science Prospector [Software]. Versão 1.1.0. DOI: 10.5281/zenodo.17958507",
+        "citar_texto": "Lemos, G. (2025). Lemos Lambda: Deep Science Prospector [Software]. Versão 2.0.0. DOI: 10.5281/zenodo.17958507",
         "link_doi": "🔗 Ver no Zenodo (DOI)"
     },
     "en": {
@@ -98,16 +128,18 @@ TEXTOS = {
         "btn_magic": "✨ Discover 'Blue Oceans' (Auto)",
         "prog_magic": "AI is scanning recent literature...",
         "status_minerando": "Reading recent abstracts...",
-        "status_filtrando": "Identifying complex molecules...",
+        "status_filtrando": "Applying scientific Blacklist...",
         "status_pronto": "Libraries updated!",
         "analise_btn": "🚀 Calculate Potential (Ratio)",
         "resultados": "🎯 Prospecting Results",
         "tabela_vazia": "Add terms or use automatic discovery above.",
-        "footer_citar": "Lemos Lambda v1.4 - Academic Use",
+        "footer_citar": "Lemos Lambda v2.0 - Academic Use",
         
-        # New fields v1.4
+        "btn_lib": "📚 Load Standard Library (No Preset)",
         "btn_preset": "🎓 Load Lemos PhD Preset",
         "toast_preset": "🧬 Lemos Preset loaded successfully!",
+        "toast_lib": "📚 Standard library loaded!",
+        
         "label_periodo": "📅 Analysis Period",
         "label_manual": "🔎 Investigate Specific Term",
         "holder_manual": "ex: Curcumin, Gene X...",
@@ -142,8 +174,7 @@ TEXTOS = {
         "erro_campos": "⚠️ Fill in E-mail and Target (in English)!",
         
         "citar_titulo": "📄 How to Cite",
-        "citar_texto": "Lemos, G. (2025). Lemos Lambda: Deep Science Prospector [Software]. Version 1.4.0. DOI: 10.5281/zenodo.17958507",
+        "citar_texto": "Lemos, G. (2025). Lemos Lambda: Deep Science Prospector [Software]. Version 2.0.0. DOI: 10.5281/zenodo.17958507",
         "link_doi": "🔗 View on Zenodo (DOI)"
     }
-
 }
