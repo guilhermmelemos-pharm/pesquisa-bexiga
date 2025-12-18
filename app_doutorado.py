@@ -23,7 +23,7 @@ SOFTWARE.
 
 Author: Guilherme Lemos (Unifesp)
 Creation Date: December 2025
-Version: 1.7.0 (Robust Edition)
+Version: 1.7.2 (Stable & Robust)
 """
 import streamlit as st
 import pandas as pd
@@ -191,7 +191,7 @@ def processar_upload(textos):
 if st.session_state.pagina == 'home':
     st.title(t["titulo_desk"]); st.caption(t["subtitulo"])
     
-    # Radar de Notícias (Silencioso se falhar)
+    # Radar de Notícias (Com Proteção contra Erro de Imagem)
     news = bk.buscar_todas_noticias(lang)
     if news:
         with st.container(border=True):
@@ -199,7 +199,13 @@ if st.session_state.pagina == 'home':
             cols = st.columns(len(news)) if len(news) < 3 else st.columns(3)
             for i, n in enumerate(news[:3]):
                 with cols[i]:
-                    st.image(n['img'], height=150)
+                    # --- CORREÇÃO DO TYPEERROR (Fix Image) ---
+                    # Verifica se a imagem existe, senão usa placeholder
+                    img_url = n.get('img')
+                    if not img_url:
+                        img_url = "https://images.unsplash.com/photo-1532094349884-543bc11b234d?auto=format&fit=crop&w=600&q=80"
+                    
+                    st.image(img_url, height=150)
                     st.markdown(f"**{n['titulo'][:60]}...**")
                     st.caption(f"{n['fonte']}")
                     st.link_button(t["btn_ler_feed"], n['link'])
@@ -277,7 +283,7 @@ elif st.session_state.pagina == 'resultados':
     df = st.session_state.resultado_df
     
     if df is not None and not df.empty:
-        # Pega o Top 1 usando chaves FIXAS
+        # Pega o Top 1 usando chaves FIXAS ("term", "status") para evitar KeyError
         top = df.iloc[0]
         
         c1, c2, c3 = st.columns(3)
@@ -287,7 +293,7 @@ elif st.session_state.pagina == 'resultados':
         
         st.subheader(t["titulo_mapa"])
         
-        # Renomeia colunas para exibição amigável (Usando traduções)
+        # Renomeia colunas APENAS para exibição (View Layer)
         df_show = df.rename(columns={
             "term": t["col_mol"],
             "status": t["col_status"],
