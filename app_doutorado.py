@@ -208,7 +208,7 @@ def ir_para_analise(email_user, contexto, alvo, ano_ini, ano_fim):
         elif ratio < 2: tag, score_sort = "🔴 Saturado", 10
         else: tag, score_sort = "⚖️ Neutro", 20
         
-        # --- FIX: Chaves Fixas para evitar KeyError ---
+        # FIX: Usamos chaves internas FIXAS (termo, status, ratio) para evitar KeyError
         resultados.append({
             "termo": item,
             "status": tag,
@@ -320,7 +320,7 @@ elif st.session_state.pagina == 'resultados':
     
     df = st.session_state.resultado_df
     if df is not None and not df.empty:
-        # FIX: Acessa com chaves fixas, sem depender de tradução
+        # FIX: Acessa com chaves FIXAS ("termo", "status"), o que resolve o KeyError
         top = df.iloc[0]
         c1, c2, c3 = st.columns(3)
         c1.metric(t["metrica_potencial"], top["termo"], delta=top["status"])
@@ -329,7 +329,7 @@ elif st.session_state.pagina == 'resultados':
         
         st.subheader(t["titulo_mapa"])
         
-        # Renomear para exibição amigável (Usando 'constantes.py')
+        # Renomear colunas apenas para exibição
         df_show = df.rename(columns={
             "termo": t["col_mol"],
             "status": t["col_status"],
@@ -338,6 +338,7 @@ elif st.session_state.pagina == 'resultados':
             "fonte_count": t["col_global"]
         }).drop(columns=["_sort"])
         
+        # Gráfico usa as colunas renomeadas
         fig = px.bar(df_show.head(25), x=t["col_mol"], y=t["col_ratio"], color=t["col_status"], 
                      color_discrete_map={"💎 Blue Ocean (Inexplorado)": "#00CC96", "🌱 Embrionário (Nascendo agora)": "#00FF00", "🚀 Tendência (Translação)": "#AB63FA", "🥇 Ouro": "#636EFA", "🔴 Saturado": "#EF553B", "👻 Fantasma (Sem relevância)": "#808080"})
         st.plotly_chart(fig, use_container_width=True)
@@ -345,6 +346,7 @@ elif st.session_state.pagina == 'resultados':
         st.download_button(t["btn_baixar"], df_show.to_csv(index=False).encode('utf-8'), "lemos_lambda_report.csv", "text/csv")
         
         st.divider(); st.subheader(t["titulo_leitura"]); st.info(t["info_leitura"])
+        # Selectbox usa chave fixa "termo"
         termos_disp = sorted(df["termo"].unique().tolist())
         sel_mol = st.selectbox(t["sel_leitura"], termos_disp, index=0)
         
