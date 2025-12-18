@@ -6,8 +6,10 @@ PRESET_LEMOS = {
     "fonte": "Brain OR Kidney OR Liver OR Intestine OR Lung OR Vascular OR Immune System"
 }
 
+# --- SUA LISTA ÚNICA (BASE) ---
+# Inclui termos clássicos e as novidades (NMN, Microplásticos, etc.)
 CANDIDATOS_MINERACAO = [
-    # --- FRONTEIRAS MODERNAS (Sci-Fi to Reality) ---
+    # Fronteiras Modernas
     "Microplastics", "Nanoplastics", "Bisphenol A", "Phthalates", "PFAS", 
     "Trimethylamine N-oxide (TMAO)", "Gut microbiota metabolites", "Indole-3-propionic acid", 
     "Cannabidiol (CBD)", "Cannabigerol (CBG)", "GPR55", "GPR18", "FAAH enzyme", "MAGL enzyme", "Anandamide", 
@@ -15,29 +17,23 @@ CANDIDATOS_MINERACAO = [
     "Ferroptosis", "Pyroptosis", "Necroptosis", "Exosomes", "Extracellular vesicles", 
     "GLP-1 receptor", "SGLT2 inhibitors", "Probiotics", "Prebiotics", 
     
-    # --- Ácidos e Metabólitos Clássicos ---
+    # Clássicos
     "Alpha-lipoic acid", "Butyrate", "Short-chain fatty acids", "Sphingosine-1-phosphate",
     "Hyaluronic acid", "Succinate", "Lactate", "Kynurenic acid", "Prostaglandin E2",
     "Resolvin D1", "Lipoxin A4", "Melatonin", "Taurine", "Uric Acid",
-    
-    # --- Receptores e Canais ---
     "P2X3 receptor", "P2X7 receptor", "TRPV1 channel", "TRPM8", "Piezo1", "Piezo2",
     "Cannabinoid receptor 2", "GPR119", "GPR40", "GPR84", "GPR120",
     "Beta-3 adrenergic receptor", "Muscarinic M3", "Nicotinic alpha-7",
     "TMEM16A", "HCN channels", "Kv7 channels",
-    
-    # --- Vias e Enzimas ---
     "Rho-kinase (ROCK)", "mTOR pathway", "AMPK signaling", "NLRP3 inflammasome",
     "Nitric Oxide Synthase", "Heme Oxygenase-1", "Cyclooxygenase-2", "Phosphodiesterase-5",
     "YAP/TAZ pathway", "Hippo pathway",
-    
-    # --- Genética e RNA ---
     "MALAT1 lncRNA", "miR-21", "miR-145", "SIRT1", "NRF2 pathway", "NF-kappaB"
 ]
 
-# --- FILTRO DE RUÍDO (BLACKLIST REFOBRÇADA) ---
+# --- FILTRO DE RUÍDO (BLACKLIST) ---
 BLACKLIST_GERAL = [
-    # NOVOS TERMOS (Detectados no Log)
+    # Ruído detectado (Autores, Cidades, Metadados)
     "acupuncture", "neuromodulation", "adaptive biotechnologies", "adkison", 
     "administration", "adrenoceptors", "adults", "advanced", "adverse", "affiliated", 
     "age", "aged", "aging", "workshop", "ahmad", "ahmadzadeh", "ahn", "akamatsu", 
@@ -51,7 +47,7 @@ BLACKLIST_GERAL = [
     "aveo", "accord", "abu dhabi", "abe", "abbosh", "atlab", "abyost", "aiq solutions", 
     "aikido", "akus-11", "apobec3-induced", "april", "asb3",
 
-    # Termos de erro/metodologia
+    # Metodologia
     "adverse event", "adverse effect", "ae rate", "safety", "efficacy", "placebo",
     "control group", "study design", "double-blind", "randomized", "clinical trial",
     "p-value", "confidence interval", "odds ratio", "hazard ratio", "standard deviation",
@@ -59,7 +55,7 @@ BLACKLIST_GERAL = [
     "significant", "statistically", "increased", "decreased", "compared to",
     "associated with", "observed in", "related to", "due to",
     
-    # Termos genéricos demais
+    # Termos genéricos
     "signaling pathway", "signal transduction", "gene expression", "protein level",
     "messenger rna", "receptor agonist", "receptor antagonist", "inhibitor",
     "mechanism of action", "therapeutic target", "potential target", "biomarker",
@@ -67,7 +63,7 @@ BLACKLIST_GERAL = [
     "cell culture", "in vivo", "in vitro", "western blot", "pcr", "elisa",
     "stem cell", "progenitor cell", "expression of", "activation of", "levels of",
     
-    # Palavras de ligação/Lixo
+    # Palavras comuns
     "the", "and", "with", "for", "that", "this", "were", "was", "have", "has",
     "between", "among", "during", "after", "before", "however", "therefore",
     "furthermore", "moreover", "additionally", "notably", "interestingly",
@@ -177,4 +173,53 @@ TEXTOS = {
         "toast_preset": "🧬 Lemos Preset loaded successfully!",
         
         "analise_btn": "🚀 Run Potential Analysis",
-        "resultados": "🎯 Prospect
+        "resultados": "🎯 Prospecting Dashboard",
+        "label_periodo": "📅 Analysis Period",
+        "label_manual": "🔎 Investigate Specific Term",
+        "holder_manual": "ex: Curcumin, Gene X...",
+        "btn_add_manual": "➕ Add",
+        "toast_add": "✅ term(s) added!",
+        "toast_dup": "⚠️ Duplicates ignored.",
+        "label_fonte": "Comparative Context (Optional):",
+        "holder_fonte": "ex: Brain, Kidney, Liver...",
+        "desc_fonte": "Defines comparison universe. Also used for contextual mining.",
+        "titulo_import": "📂 Import Extra List",
+        "desc_import": "Upload (.csv/.txt)",
+        "toast_import": "✅ terms imported!",
+        "erro_ler": "Error reading file.",
+        "btn_limpar": "🗑️",
+        "btn_limpar_tudo": "🗑️ Clear List",
+        "btn_export_lista": "💾 Save List (CSV)",
+        "ver_editar": "📝 View/Edit Keywords List",
+        "qtd_termos": "Qty:",
+        "radar_titulo": "📡 Science Radar",
+        "btn_ler_feed": "Read Full",
+        "metrica_potencial": "🏆 Top Potential",
+        "metrica_score": "📊 Score (Ratio)",
+        "metrica_artigos": "📚 Papers (Target)",
+        "col_mol": "Molecule/Target",
+        "col_status": "Status",
+        "col_ratio": "Potential (Ratio)",
+        "col_art_alvo": "Papers on Target",
+        "col_global": "Global/Source",
+        "btn_baixar": "📥 Download CSV Report",
+        "erro_email": "E-mail required.",
+        "erro_campos": "⚠️ Fill in E-mail and Target (in English)!",
+        "erro_sessao": "⚠️ Session data expired. Please run search again.",
+        
+        "titulo_mapa": "Opportunity Map",
+        "titulo_leitura": "📄 Deep Reading: Paper Investigation",
+        "btn_nova_pesquisa": "⬅️ New Search",
+        "info_leitura": "Select a target below to fetch real articles from PubMed with translation.",
+        "sel_leitura": "Select target:",
+        "btn_buscar_artigos": "🔍 Load Articles on:",
+        "msg_buscando_lit": "Searching literature for",
+        "header_artigos_enc": "Articles found:",
+        "aviso_sem_artigos": "No articles found with abstract available in this period.",
+        
+        "footer_citar": "Lemos Lambda v1.1.0 - Academic Use",
+        "citar_titulo": "📄 How to Cite",
+        "citar_texto": "Lemos, G. (2025). Lemos Lambda: Deep Science Prospector [Software]. Version 1.1.0. DOI: 10.5281/zenodo.17958507",
+        "link_doi": "🔗 View on Zenodo (DOI)"
+    }
+}
