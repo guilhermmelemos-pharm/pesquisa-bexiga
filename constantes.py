@@ -6,76 +6,78 @@ PRESET_LEMOS = {
     "fonte": "Brain OR Kidney OR Liver OR Intestine OR Lung OR Vascular OR Immune System"
 }
 
-# --- A ENCICLOPÉDIA DE INOVAÇÃO (MANTIDA) ---
+# --- A ENCICLOPÉDIA DE INOVAÇÃO (LIMPA E BLINDADA v1.6) ---
 CANDIDATOS_MINERACAO = [
-    # Sci-Fi & Biofísica
+    # --- 1. ESPECÍFICOS DA TESE (Trehalose & Musculatura Lisa) ---
+    "Trehalose", "Autophagy flux", "TFEB (Transcription Factor EB)", 
+    "Smooth muscle contraction", "Calcium sensitization", "Myosin phosphatase",
+    "Rho-kinase (ROCK)", "mTOR pathway", "AMPK signaling",
+    
+    # --- 2. SCI-FI & BIOFÍSICA (Fronteira) ---
     "Liquid-liquid phase separation", "Biomolecular condensates", "Stress granules", "P-bodies",
     "Cryptochromes", "Magnetoreception", "Quantum biology", "Radical pair mechanism",
     "Bioelectricity", "Resting membrane potential (Vmem)", "Gap junctional communication",
     "Optogenetics", "Sonogenetics", "Magnetogenetics", "Thermogenetics",
-    "Tensegrity", "Nuclear mechanotransduction", "Lamin A/C",
+    "Tensegrity", "Nuclear mechanotransduction", "Lamin A/C", "Focal adhesions",
     
-    # Receptores Ectópicos
+    # --- 3. RECEPTORES ECTÓPICOS & SENSORIAIS ---
     "Opsins", "Melanopsin (OPN4)", "Encephalopsin (OPN3)", "Neuropsin (OPN5)",
     "Olfactory receptor 51E2 (OR51E2)", "Olfactory receptor 2AT4 (OR2AT4)", "OR10J5", "OR1D2",
-    "Bitter taste receptors (TAS2Rs)", "Sweet taste receptors (TAS1R2/TAS1R3)", "Umami receptor (TAS1R1)",
+    "Bitter taste receptors (TAS2Rs)", "TAS2R14", "Sweet taste receptors (TAS1R2/TAS1R3)", "Umami receptor (TAS1R1)",
     "Mrgprs", "Mas-related G-protein coupled receptors", "MrgprX2", "MrgprD",
+    "Piezo1", "Piezo2", "TMEM16A", "TMEM63", "OSCA/TMEM63 family",
     
-    # Exposoma & Microplásticos
-    "Microplastics", "Nanoplastics", "Polystyrene nanoparticles", "Polyethylene microbeads",
+    # --- 4. EXPOSSOMA & MICROPLÁSTICOS ---
+    "Microplastics", "Nanoplastics", "Polystyrene nanoparticles", "PS-MPs", "Polyethylene microbeads",
     "Bisphenol A", "Phthalates", "PFAS", "Perfluorooctanoic acid", "Teflon breakdown products",
     "Endocrine disruptors", "Obesogens", "Glyphosate", "Airborne particulate matter (PM2.5)",
     
-    # Dark Genome & Epigenética
+    # --- 5. DARK GENOME & EPIGENÉTICA ---
     "Retrotransposons", "LINE-1 elements", "Alu repeats", "Endogenous retroviruses",
     "G-quadruplexes", "R-loops", "Extrachromosomal circular DNA",
     "Circular RNA (circRNA)", "Piwi-interacting RNA (piRNA)", "Enhancer RNAs (eRNA)", "Super-enhancers",
     "MALAT1 lncRNA", "HOTAIR lncRNA", "H19 lncRNA", "NEAT1 lncRNA",
     "Histone lactylation", "Histone crotonylation", "Histone succinylation",
     
-    # Microbioma 2.0
+    # --- 6. MICROBIOMA & METABÓLITOS ---
     "Trimethylamine N-oxide (TMAO)", "Indole-3-propionic acid", "Urolithin A", "Equol",
     "Short-chain fatty acids", "Butyrate", "Propionate", "Acetate", "Valerate",
     "Secondary bile acids", "Lithocholic acid", "Deoxycholic acid",
     "Akkermansia muciniphila", "Faecalibacterium prausnitzii", "Outer membrane vesicles",
     "Peptidoglycan fragments", "Lipopolysaccharide (LPS)",
     
-    # Longevidade
-    "Senolytics", "Senomorphics", "SASPy (Senescence-associated secretory phenotype)",
-    "Klotho", "GDF11", "Growth differentiation factor 11",
+    # --- 7. LONGEVIDADE & MITOCÔNDRIA ---
+    "Senolytics", "Senomorphics", "SASPy", "Klotho", "GDF11", "GDF15",
     "Nicotinamide mononucleotide (NMN)", "Nicotinamide riboside", "NAD+ metabolism",
-    "Mitokines", "Humanin", "MOTS-c", "FGF21", "GDF15",
+    "Mitokines", "Humanin", "MOTS-c", "FGF21", 
     "Mitophagy", "Pink1/Parkin pathway", "Mitochondrial unfolded protein response",
     
-    # Morte Celular
+    # --- 8. MORTE CELULAR & IMUNIDADE NOVA ---
     "Ferroptosis", "GPX4", "Lipid peroxidation",
     "Pyroptosis", "Gasdermin D", "NLRP3 inflammasome",
     "Necroptosis", "RIPK1", "RIPK3", "MLKL",
     "Cuproptosis", "Copper metabolism", "Parthanatos",
+    "ILC3s (Innate Lymphoid Cells)", "ZG16 protein", "Galectin-1", "TREM1",
     
-    # Cannabis & Lipídios
+    # --- 9. CANNABIS & SINALIZADORES ---
     "Endocannabinoidome", "Anandamide", "2-Arachidonoylglycerol (2-AG)",
     "Oleoylethanolamide (OEA)", "Palmitoylethanolamide (PEA)",
     "Cannabidiol (CBD)", "Cannabigerol (CBG)", "Cannabinol (CBN)", "Tetrahydrocannabivarin (THCV)",
     "GPR55", "GPR18", "GPR119", "GPR110", "GPR120 (FFAR4)",
-    "Resolvins", "Protectins", "Maresins", "Lipoxins", "Specialized pro-resolving mediators",
+    "Resolvins", "Protectins", "Maresins", "Lipoxins", 
     
-    # Mecanotransdução
-    "Piezo1", "Piezo2", "TMEM16A", "TMEM63", "OSCA/TMEM63 family",
-    "TREK-1 channel", "TRAAK channel", "ASIC channels",
-    "YAP/TAZ pathway", "Hippo pathway", "Focal adhesions",
-    
-    # Clássicos
+    # --- 10. CANAIS & GPCRs CLÁSSICOS ---
     "P2X3 receptor", "P2X7 receptor", "Purinergic signaling", "ATP release",
-    "TRPV1", "TRPV4", "TRPM8", "TRPA1",
-    "Muscarinic M3", "Beta-3 adrenergic receptor", "Nicotinic alpha-7",
+    "TRPV1", "TRPV4", "TRPM8", "TRPA1", "ASIC channels",
+    "TREK-1 channel", "TRAAK channel", "HCN channels",
+    "Muscarinic M3", "Beta-3 adrenergic receptor", "Nicotinic alpha-7", "PAC1 receptor",
     "Nitric Oxide Synthase", "Heme Oxygenase-1", "Hydrogen sulfide (H2S)",
-    "Rho-kinase (ROCK)", "mTOR pathway", "AMPK signaling"
+    "YAP/TAZ pathway", "Hippo pathway", "WNT4 signaling"
 ]
 
-# --- BLACKLIST GERAL (SUPORTE AO BACKEND) ---
+# --- BLACKLIST GERAL (SUPORTE AO BACKEND V1.6) ---
 BLACKLIST_GERAL = [
-    # Termos Gerais que o NLTK pode não pegar se estiverem capitalizados
+    # Metadados e Lixo Bibliográfico
     "background", "methods", "results", "discussion", "conclusion", "abstract",
     "introduction", "references", "acknowledgements", "declaration", "conflict",
     "interest", "funding", "availability", "contributed", "author", "editor",
@@ -85,7 +87,10 @@ BLACKLIST_GERAL = [
     "beijing", "shanghai", "guangzhou", "wuhan", "chongqing", "jiangsu",
     "london", "boston", "new york", "california", "texas", "heidelberg",
     "however", "moreover", "furthermore", "additionally", "interestingly",
-    "significantly", "respectively", "associated", "observed", "indicated"
+    "significantly", "respectively", "associated", "observed", "indicated",
+    "lublin", "berlin", "sakyo-ku", "hwasun-gun", "jeonnam-do", "sun yat-sen",
+    "gustave roussy", "bristol myers squibb", "elsevier", "institut curie",
+    "j mol sci", "medical science", "pediatrics", "genetics", "covid-19"
 ]
 
 TEXTOS = {
@@ -106,7 +111,7 @@ TEXTOS = {
         
         "btn_lib": "📚 Minerar no Contexto (Fonte)",
         
-        "status_blue_ocean": "🌊 Mergulhando no PubMed em busca de alvos inexplorados e Sci-Fi...",
+        "status_blue_ocean": "🌊 Mergulhando no PubMed em busca de Sci-Fi, Genes e Alvos Ocultos...",
         "msg_sucesso_blue": "🌊 {qtd} tesouros do Blue Ocean adicionados!",
         "status_minerando": "🔍 Minerando novidades para:",
         "msg_sucesso_dinamico": "✅ Lista Base + {qtd} novidades específicas preservadas!",
@@ -154,7 +159,7 @@ TEXTOS = {
         "btn_nova_pesquisa": "⬅️ Nova Pesquisa",
         "info_leitura": "Selecione um alvo abaixo para buscar os artigos reais no PubMed com tradução.",
         "sel_leitura": "Selecione o alvo:",
-        "btn_buscar_artigos": "🔍 Carregar Artigos sobre:",
+        "btn_buscar_artigos": "🔍 Load Articles on:",
         "msg_buscando_lit": "Buscando literatura sobre",
         "header_artigos_enc": "Artigos encontrados:",
         "aviso_sem_artigos": "Nenhum artigo encontrado com resumo disponível neste período.",
