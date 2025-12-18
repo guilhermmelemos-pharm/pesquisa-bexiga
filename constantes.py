@@ -18,22 +18,32 @@ CANDIDATOS_MINERACAO = [
     "MALAT1 lncRNA", "miR-21", "miR-145", "SIRT1", "NRF2 pathway", "NF-kappaB"
 ]
 
+# --- FILTRO DE RUÍDO (BLACKLIST AGRESSIVA) ---
 BLACKLIST_GERAL = [
-    "Adverse events", "Adverse effect", "AE rates", "Safety", "Efficacy", "Placebo",
-    "Control group", "Study design", "Double-blind", "Randomized", "Clinical trial",
-    "P-value", "Confidence interval", "Odds ratio", "Hazard ratio", "Standard deviation",
-    "ANOVA", "Regression", "Analysis", "Data", "Results", "Conclusion", "Methods",
-    "Significant", "Statistically", "Increased", "Decreased", "Compared to",
-    "Signaling pathway", "Signal transduction", "Gene expression", "Protein levels",
-    "Messenger RNA", "Receptor agonist", "Receptor antagonist", "Inhibitor",
-    "Mechanism of action", "Therapeutic target", "Potential target", "Biomarker",
-    "Pathophysiology", "Metabolism", "Oxidative stress", "Inflammation",
-    "Cell culture", "In vivo", "In vitro", "Western blot", "PCR", "ELISA",
-    "Stem cell", "Progenitor cell", "The", "And", "With", "For", "That", "This", 
-    "Were", "Was", "Have", "Has", "Between", "Among", "During", "After", "Before", 
-    "However", "Therefore", "Furthermore", "Moreover", "Additionally", "Notably", 
-    "Interestingly", "Department", "University", "Hospital", "Institute", "Center", 
-    "USA", "China", "Brazil", "Europe", "Funding", "Grant", "Review", "Article", "Copyright"
+    # Termos de erro/metodologia
+    "adverse event", "adverse effect", "ae rate", "safety", "efficacy", "placebo",
+    "control group", "study design", "double-blind", "randomized", "clinical trial",
+    "p-value", "confidence interval", "odds ratio", "hazard ratio", "standard deviation",
+    "anova", "regression", "analysis", "data", "result", "conclusion", "method",
+    "significant", "statistically", "increased", "decreased", "compared to",
+    "associated with", "observed in", "related to", "due to",
+    
+    # Termos genéricos demais
+    "signaling pathway", "signal transduction", "gene expression", "protein level",
+    "messenger rna", "receptor agonist", "receptor antagonist", "inhibitor",
+    "mechanism of action", "therapeutic target", "potential target", "biomarker",
+    "pathophysiology", "metabolism", "oxidative stress", "inflammation",
+    "cell culture", "in vivo", "in vitro", "western blot", "pcr", "elisa",
+    "stem cell", "progenitor cell", "expression of", "activation of", "levels of",
+    
+    # Palavras de ligação/Lixo
+    "the", "and", "with", "for", "that", "this", "were", "was", "have", "has",
+    "between", "among", "during", "after", "before", "however", "therefore",
+    "furthermore", "moreover", "additionally", "notably", "interestingly",
+    
+    # Institucional
+    "department", "university", "hospital", "institute", "center", "usa", "china",
+    "brazil", "europe", "funding", "grant", "review", "article", "copyright"
 ]
 
 TEXTOS = {
@@ -56,7 +66,7 @@ TEXTOS = {
         "status_blue_ocean": "🌊 Mergulhando no PubMed em busca de alvos inexplorados...",
         "msg_sucesso_blue": "🌊 {qtd} novos alvos do Blue Ocean adicionados!",
         "status_minerando": "🔍 Minerando novidades para:",
-        "msg_sucesso_dinamico": "✅ Lista Base + {qtd} novidades específicas carregadas!",
+        "msg_sucesso_dinamico": "✅ Lista Base + {qtd} novidades específicas preservadas!",
         "msg_sucesso_base": "✅ Apenas Lista Base carregada (Preencha 'Alvo' para torná-la dinâmica).",
         "erro_fonte_vazia": "⚠️ Preencha o campo 'Contexto/Fonte' para buscar novidades nele.",
         "toast_preset": "🧬 Preset Lemos carregado com sucesso!",
@@ -96,7 +106,6 @@ TEXTOS = {
         "erro_campos": "⚠️ Preencha E-mail e Alvo (em Inglês)!",
         "erro_sessao": "⚠️ Dados da sessão expiraram. Por favor, faça a pesquisa novamente.",
         
-        # NOVAS TRADUÇÕES RESULTADOS
         "titulo_mapa": "Mapa de Oportunidades",
         "titulo_leitura": "📄 Leitura Profunda: Investigação de Papers",
         "btn_nova_pesquisa": "⬅️ Nova Pesquisa",
@@ -131,7 +140,7 @@ TEXTOS = {
         "status_blue_ocean": "🌊 Diving into PubMed for unexplored targets...",
         "msg_sucesso_blue": "🌊 {qtd} new Blue Ocean targets added!",
         "status_minerando": "🔍 Mining novelties for:",
-        "msg_sucesso_dinamico": "✅ Base List + {qtd} specific novelties loaded!",
+        "msg_sucesso_dinamico": "✅ Base List + {qtd} specific novelties preserved!",
         "msg_sucesso_base": "✅ Base List loaded only (Fill 'Target' to make it dynamic).",
         "erro_fonte_vazia": "⚠️ Fill in 'Context/Source' field to search novelties within it.",
         "toast_preset": "🧬 Lemos Preset loaded successfully!",
@@ -171,7 +180,6 @@ TEXTOS = {
         "erro_campos": "⚠️ Fill in E-mail and Target (in English)!",
         "erro_sessao": "⚠️ Session data expired. Please run search again.",
         
-        # NEW TRANSLATIONS RESULTS
         "titulo_mapa": "Opportunity Map",
         "titulo_leitura": "📄 Deep Reading: Paper Investigation",
         "btn_nova_pesquisa": "⬅️ New Search",
