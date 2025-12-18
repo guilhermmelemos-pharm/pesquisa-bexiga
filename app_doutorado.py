@@ -23,14 +23,9 @@ SOFTWARE.
 
 Author: Guilherme Lemos (Unifesp)
 Creation Date: December 2025
-Version: 1.7.1 (Fast Boot Fix)
+Version: 1.7.2 (Statistical Update)
 """
 import streamlit as st
-
-# --- FAST BOOT FIX: CONFIGURAÇÃO DEVE VIR ANTES DE TUDO ---
-# Isso evita que o app trave enquanto carrega bibliotecas pesadas
-st.set_page_config(page_title="Lemos Lambda", page_icon="λ", layout="wide")
-
 import pandas as pd
 import plotly.express as px
 from datetime import datetime
@@ -39,7 +34,9 @@ import math
 import constantes as c
 import backend as bk
 
-# --- CSS INJECTION PARA FAZER O BLUE OCEAN BRILHAR ---
+st.set_page_config(page_title="Lemos Lambda", page_icon="λ", layout="wide")
+
+# --- CSS INJECTION (MANTIDO INTACTO) ---
 st.markdown("""
     <style>
     /* Estilo Geral dos Botões */
@@ -74,16 +71,11 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- ESTADO GERAL ---
-if 'pagina' not in st.session_state: st.session_state.pagina = 'home'
-if 'alvos_val' not in st.session_state: st.session_state.alvos_val = ""
-if 'resultado_df' not in st.session_state: st.session_state.resultado_df = None
-if 'news_index' not in st.session_state: st.session_state.news_index = 0
-if 'input_alvo' not in st.session_state: st.session_state.input_alvo = ""
-if 'input_fonte' not in st.session_state: st.session_state.input_fonte = ""
-if 'input_email' not in st.session_state: st.session_state.input_email = ""
-if 'artigos_detalhe' not in st.session_state: st.session_state.artigos_detalhe = None
-if 'email_guardado' not in st.session_state: st.session_state.email_guardado = ""
-if 'alvo_guardado' not in st.session_state: st.session_state.alvo_guardado = ""
+state_keys = ['pagina', 'alvos_val', 'resultado_df', 'news_index', 'input_alvo', 
+              'input_fonte', 'input_email', 'artigos_detalhe', 'email_guardado', 'alvo_guardado']
+for k in state_keys:
+    if k not in st.session_state: st.session_state[k] = None if "df" in k or "artigos" in k else ""
+if st.session_state.news_index is None: st.session_state.news_index = 0
 
 lang_opt = st.sidebar.radio("🌐 Language:", ["🇧🇷 PT", "🇺🇸 EN"], horizontal=True)
 lang = "pt" if "PT" in lang_opt else "en"
@@ -102,12 +94,10 @@ def carregar_lista_dinamica_smart(textos):
     email = st.session_state.input_email
     alvo = st.session_state.input_alvo
     
-    # VALIDAÇÃO DO ALVO (OBRIGATÓRIO AGORA)
     if not alvo:
         st.error("⚠️ Preencha o campo 'Alvo Principal' (ex: Liver, Kidney) antes de buscar!")
         return
 
-    # Pega o que já está na tela para não apagar
     existentes = [x.strip() for x in st.session_state.alvos_val.split(",") if x.strip()]
     lista_mestra = list(set(existentes + c.CANDIDATOS_MINERACAO))
     
@@ -160,7 +150,6 @@ def minerar_novidades_fonte(textos):
 def aplicar_preset_lemos(textos):
     st.session_state.input_alvo = c.PRESET_LEMOS["alvo"]
     st.session_state.input_fonte = c.PRESET_LEMOS["fonte"]
-    # Aqui não exigimos validação manual pois o preset preenche sozinho
     carregar_lista_dinamica_smart(textos)
 
 def adicionar_termos_seguro(novos_termos_lista, textos):
@@ -225,39 +214,39 @@ def ir_para_analise(email_user, contexto, alvo, ano_ini, ano_fim):
         # Enrichment = Observado / Esperado (Quantas vezes mais frequente que o acaso?)
         enrichment = (n_especifico + 0.1) / expected
         
-        # Z-Score Simplificado (Log-Likelihood) para Ranking
-        lambda_score = math.log10(enrichment) + (math.log10(n_global + 1) * 0.2)
-        
         # --- CLASSIFICAÇÃO ESTATÍSTICA ---
         tag = "⚖️ Neutro"
         score_sort = 0
         
         if n_especifico == 0:
             # Blue Ocean: Alta expectativa global, zero presença local
-            if n_global > 300: 
+            if n_global > 100: 
                 tag = "💎 Blue Ocean (Inexplorado)"
                 score_sort = 1000
             else:
                 tag = "👻 Fantasma (Ruído Estatístico)"
                 score_sort = 0
+        
+        elif n_especifico <= 15:
+            # ZONA DE RESGATE: Pequenos números (1-15 papers)
+            if n_global > 50:
+                tag = "🌱 Embrionário (Emergente)"
+                score_sort = 500
+            else:
+                tag = "⚖️ Neutro (Pouco volume)"
+                score_sort = 20
+        
         else:
             # Análise de Significância
-            if enrichment > 100: # 100x mais frequente que o acaso
-                if n_especifico > 5:
-                    tag = "🥇 Ouro (Alta Significância)"
-                    score_sort = 100
-                else:
-                    tag = "🌱 Embrionário (Promissor)"
-                    score_sort = 500
-            elif enrichment > 20:
+            if enrichment > 5: 
+                tag = "🥇 Ouro (Alta Conexão)"
+                score_sort = 100
+            elif enrichment > 1.5:
                 tag = "🚀 Tendência"
                 score_sort = 200
-            elif enrichment < 1:
-                tag = "🔴 Saturado / Aleatório"
-                score_sort = 10
             else:
-                tag = "⚖️ Neutro"
-                score_sort = 20
+                tag = "🔴 Saturado / Comum"
+                score_sort = 10
 
         # Ratio visual (para o gráfico)
         ratio_visual = float(enrichment)
@@ -285,10 +274,9 @@ def exibir_radar_cientifico(lang_code, textos):
         cols = st.columns(3)
         for i, n in enumerate(batch):
             with cols[i]:
-                # MANTIDO ORIGINAL COMO SOLICITADO
                 if n.get('img'): st.image(n['img'], use_container_width=True)
                 st.markdown(f"**{n['titulo'][:75]}...**")
-                st.caption(f"{n['bandeira']} {n['fonte']}")
+                st.caption(f"{n.get('bandeira','')} {n.get('fonte','')}")
                 st.link_button(textos["btn_ler_feed"], n['link'], use_container_width=True)
 
 def processar_upload(textos):
@@ -385,16 +373,18 @@ elif st.session_state.pagina == 'resultados':
         
         st.subheader(t["titulo_mapa"])
         df_show = df.drop(columns=["_sort"])
+        
         fig = px.bar(df_show.head(25), x=t["col_mol"], y=t["col_ratio"], color=t["col_status"], 
                      color_discrete_map={
                          "💎 Blue Ocean (Inexplorado)": "#00CC96", 
-                         "🌱 Embrionário (Promissor)": "#00FF00", 
+                         "🌱 Embrionário (Emergente)": "#00FF00", 
                          "🚀 Tendência": "#AB63FA", 
-                         "🥇 Ouro (Alta Significância)": "#636EFA", 
-                         "🔴 Saturado / Aleatório": "#EF553B", 
+                         "🥇 Ouro (Alta Conexão)": "#636EFA", 
+                         "🔴 Saturado / Comum": "#EF553B", 
                          "👻 Fantasma (Ruído Estatístico)": "#808080",
                          "⚖️ Neutro": "#D3D3D3"
                      })
+        
         st.plotly_chart(fig, use_container_width=True)
         st.dataframe(df_show, use_container_width=True, hide_index=True)
         st.download_button(t["btn_baixar"], df_show.to_csv(index=False).encode('utf-8'), "lemos_lambda_report.csv", "text/csv")
