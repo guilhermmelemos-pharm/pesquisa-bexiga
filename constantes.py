@@ -7,19 +7,43 @@ PRESET_LEMOS = {
 }
 
 CANDIDATOS_MINERACAO = [
+    # --- FRONTEIRAS MODERNAS (Sci-Fi to Reality) ---
+    "Microplastics", "Nanoplastics", "Bisphenol A", "Phthalates", "PFAS", # Ambiental
+    "Trimethylamine N-oxide (TMAO)", "Gut microbiota metabolites", "Indole-3-propionic acid", # Microbioma
+    "Cannabidiol (CBD)", "Cannabigerol (CBG)", "GPR55", "GPR18", "FAAH enzyme", "MAGL enzyme", "Anandamide", # Cannabis Expandido
+    "Senolytics", "Klotho", "Nicotinamide mononucleotide (NMN)", "Sirtuins", # Longevidade
+    "Ferroptosis", "Pyroptosis", "Necroptosis", "Exosomes", "Extracellular vesicles", # Morte Celular e Comunicação
+    "GLP-1 receptor", "SGLT2 inhibitors", "Probiotics", "Prebiotics", # Metabólico Moderno
+    
+    # --- Ácidos e Metabólitos Clássicos ---
     "Alpha-lipoic acid", "Butyrate", "Short-chain fatty acids", "Sphingosine-1-phosphate",
     "Hyaluronic acid", "Succinate", "Lactate", "Kynurenic acid", "Prostaglandin E2",
     "Resolvin D1", "Lipoxin A4", "Melatonin", "Taurine", "Uric Acid",
+    
+    # --- Receptores e Canais ---
     "P2X3 receptor", "P2X7 receptor", "TRPV1 channel", "TRPM8", "Piezo1", "Piezo2",
     "Cannabinoid receptor 2", "GPR119", "GPR40", "GPR84", "GPR120",
     "Beta-3 adrenergic receptor", "Muscarinic M3", "Nicotinic alpha-7",
+    "TMEM16A", "HCN channels", "Kv7 channels",
+    
+    # --- Vias e Enzimas ---
     "Rho-kinase (ROCK)", "mTOR pathway", "AMPK signaling", "NLRP3 inflammasome",
     "Nitric Oxide Synthase", "Heme Oxygenase-1", "Cyclooxygenase-2", "Phosphodiesterase-5",
+    "YAP/TAZ pathway", "Hippo pathway",
+    
+    # --- Genética e RNA ---
     "MALAT1 lncRNA", "miR-21", "miR-145", "SIRT1", "NRF2 pathway", "NF-kappaB"
 ]
 
-# --- FILTRO DE RUÍDO (BLACKLIST AGRESSIVA) ---
+# --- FILTRO DE RUÍDO (BLACKLIST) ---
 BLACKLIST_GERAL = [
+    # Termos identificados como ruído
+    "cross-sectional", "postmarketing", "survey", "adrs", "aes", "ars", "aims",
+    "pmid", "authors", "areas covered", "accordingly", "induced",
+    "pharma", "pharmaceuticals", "solutions", "abbvie", "aveo", "accord",
+    "abu dhabi", "abe", "abbosh", "atlab", "abyost", "aiq solutions", "aikido", "akus-11",
+    "apobec3-induced", "april", "asb3",
+    
     # Termos de erro/metodologia
     "adverse event", "adverse effect", "ae rate", "safety", "efficacy", "placebo",
     "control group", "study design", "double-blind", "randomized", "clinical trial",
