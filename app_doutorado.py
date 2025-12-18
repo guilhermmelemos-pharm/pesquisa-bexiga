@@ -23,7 +23,7 @@ SOFTWARE.
 
 Author: Guilherme Lemos (Unifesp)
 Creation Date: December 2025
-Version: 1.7.4 (Visual Fix)
+Version: 1.7.5 (Compatibility Fix)
 """
 import streamlit as st
 import pandas as pd
@@ -166,7 +166,7 @@ def processar_upload(textos):
 if st.session_state.pagina == 'home':
     st.title(t["titulo_desk"]); st.caption(t["subtitulo"])
     
-    # Radar de Notícias (Agora com Fallback ROBUSTO de Imagem)
+    # Radar de Notícias (Compatível com Versões Antigas)
     news = bk.buscar_todas_noticias(lang)
     if news:
         with st.container(border=True):
@@ -174,19 +174,18 @@ if st.session_state.pagina == 'home':
             cols = st.columns(len(news)) if len(news) < 3 else st.columns(3)
             for i, n in enumerate(news[:3]):
                 with cols[i]:
-                    # URL de segurança (Ciência Genérica) caso tudo falhe
+                    # URL Segura
                     safe_img = "https://images.unsplash.com/photo-1532094349884-543bc11b234d?w=600&q=80"
                     
                     img_to_show = n.get('img')
-                    # Se não tiver imagem ou não for string válida, usa a segura
                     if not img_to_show or not isinstance(img_to_show, str) or len(img_to_show) < 5:
                         img_to_show = safe_img
                     
                     try:
-                        st.image(img_to_show, height=150, use_container_width=True)
+                        # FIX FINAL: use_column_width funciona em TODAS as versões
+                        st.image(img_to_show, use_column_width=True)
                     except:
-                        # Se mesmo assim der erro (link quebrado), força a segura
-                        st.image(safe_img, height=150, use_container_width=True)
+                        st.image(safe_img, use_column_width=True)
 
                     st.markdown(f"**{n['titulo'][:60]}...**")
                     st.caption(f"{n['fonte']}")
