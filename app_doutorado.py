@@ -25,6 +25,7 @@ Author: Guilherme Lemos (Unifesp)
 Creation Date: December 2025
 Version: 1.7.2 (Statistical Update)
 """
+
 import streamlit as st
 
 # --- 1. CONFIGURAÇÃO (PRIMEIRA LINHA OBRIGATÓRIA) ---
@@ -385,3 +386,4 @@ st.markdown("---"); st.caption(f"© 2025 Guilherme Lemos | {t['footer_citar']}")
 st.sidebar.markdown("---")
 with st.sidebar.expander(t["citar_titulo"], expanded=True):
     st.code(t["citar_texto"], language="text"); st.link_button(t["link_doi"], "https://doi.org/10.5281/zenodo.17958507")
+
