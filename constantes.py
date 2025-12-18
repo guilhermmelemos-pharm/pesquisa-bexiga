@@ -6,66 +6,66 @@ PRESET_LEMOS = {
     "fonte": "Brain OR Kidney OR Liver OR Intestine OR Lung OR Vascular OR Immune System"
 }
 
-# --- A ENCICLOPÉDIA DE INOVAÇÃO (LEMOS LAMBDA V2) ---
+# --- A ENCICLOPÉDIA DE INOVAÇÃO (MANTIDA) ---
 CANDIDATOS_MINERACAO = [
-    # --- 1. SCI-FI REALITY: BIOFÍSICA & QUANTUM BIO ---
-    "Liquid-liquid phase separation", "Biomolecular condensates", "Stress granules", "P-bodies", # A nova biologia celular
-    "Cryptochromes", "Magnetoreception", "Quantum biology", "Radical pair mechanism", # Efeitos quânticos em tecidos
-    "Bioelectricity", "Resting membrane potential (Vmem)", "Gap junctional communication", # Sinalização elétrica não-neural
-    "Optogenetics", "Sonogenetics", "Magnetogenetics", "Thermogenetics", # Controle remoto celular
-    "Tensegrity", "Nuclear mechanotransduction", "Lamin A/C", # Mecânica nuclear
+    # Sci-Fi & Biofísica
+    "Liquid-liquid phase separation", "Biomolecular condensates", "Stress granules", "P-bodies",
+    "Cryptochromes", "Magnetoreception", "Quantum biology", "Radical pair mechanism",
+    "Bioelectricity", "Resting membrane potential (Vmem)", "Gap junctional communication",
+    "Optogenetics", "Sonogenetics", "Magnetogenetics", "Thermogenetics",
+    "Tensegrity", "Nuclear mechanotransduction", "Lamin A/C",
     
-    # --- 2. RECEPTORES SENSORIAIS ECTÓPICOS (Onde não deveriam estar) ---
-    "Opsins", "Melanopsin (OPN4)", "Encephalopsin (OPN3)", "Neuropsin (OPN5)", # Olhos fora dos olhos?
-    "Olfactory receptor 51E2 (OR51E2)", "Olfactory receptor 2AT4 (OR2AT4)", "OR10J5", "OR1D2", # Nariz no rim/bexiga?
+    # Receptores Ectópicos
+    "Opsins", "Melanopsin (OPN4)", "Encephalopsin (OPN3)", "Neuropsin (OPN5)",
+    "Olfactory receptor 51E2 (OR51E2)", "Olfactory receptor 2AT4 (OR2AT4)", "OR10J5", "OR1D2",
     "Bitter taste receptors (TAS2Rs)", "Sweet taste receptors (TAS1R2/TAS1R3)", "Umami receptor (TAS1R1)",
-    "Mrgprs", "Mas-related G-protein coupled receptors", "MrgprX2", "MrgprD", # Receptores de coceira/dor órfãos
+    "Mrgprs", "Mas-related G-protein coupled receptors", "MrgprX2", "MrgprD",
     
-    # --- 3. EXPOSSOMA & MICROPLÁSTICOS (O Inimigo Invisível) ---
+    # Exposoma & Microplásticos
     "Microplastics", "Nanoplastics", "Polystyrene nanoparticles", "Polyethylene microbeads",
     "Bisphenol A", "Phthalates", "PFAS", "Perfluorooctanoic acid", "Teflon breakdown products",
     "Endocrine disruptors", "Obesogens", "Glyphosate", "Airborne particulate matter (PM2.5)",
     
-    # --- 4. DARK GENOME & EPIGENÉTICA PROFUNDA ---
-    "Retrotransposons", "LINE-1 elements", "Alu repeats", "Endogenous retroviruses", # DNA "lixo" acordando
-    "G-quadruplexes", "R-loops", "Extrachromosomal circular DNA", # Estruturas exóticas de DNA
+    # Dark Genome & Epigenética
+    "Retrotransposons", "LINE-1 elements", "Alu repeats", "Endogenous retroviruses",
+    "G-quadruplexes", "R-loops", "Extrachromosomal circular DNA",
     "Circular RNA (circRNA)", "Piwi-interacting RNA (piRNA)", "Enhancer RNAs (eRNA)", "Super-enhancers",
     "MALAT1 lncRNA", "HOTAIR lncRNA", "H19 lncRNA", "NEAT1 lncRNA",
-    "Histone lactylation", "Histone crotonylation", "Histone succinylation", # Novas marcas epigenéticas
+    "Histone lactylation", "Histone crotonylation", "Histone succinylation",
     
-    # --- 5. MICROBIOMA 2.0 & POSTBIÓTICOS ---
+    # Microbioma 2.0
     "Trimethylamine N-oxide (TMAO)", "Indole-3-propionic acid", "Urolithin A", "Equol",
     "Short-chain fatty acids", "Butyrate", "Propionate", "Acetate", "Valerate",
     "Secondary bile acids", "Lithocholic acid", "Deoxycholic acid",
     "Akkermansia muciniphila", "Faecalibacterium prausnitzii", "Outer membrane vesicles",
     "Peptidoglycan fragments", "Lipopolysaccharide (LPS)",
     
-    # --- 6. LONGEVIDADE & MITOCÔNDRIA ---
+    # Longevidade
     "Senolytics", "Senomorphics", "SASPy (Senescence-associated secretory phenotype)",
     "Klotho", "GDF11", "Growth differentiation factor 11",
     "Nicotinamide mononucleotide (NMN)", "Nicotinamide riboside", "NAD+ metabolism",
-    "Mitokines", "Humanin", "MOTS-c", "FGF21", "GDF15", # Hormônios mitocondriais
+    "Mitokines", "Humanin", "MOTS-c", "FGF21", "GDF15",
     "Mitophagy", "Pink1/Parkin pathway", "Mitochondrial unfolded protein response",
     
-    # --- 7. MORTE CELULAR NÃO-CANÔNICA ---
+    # Morte Celular
     "Ferroptosis", "GPX4", "Lipid peroxidation",
     "Pyroptosis", "Gasdermin D", "NLRP3 inflammasome",
     "Necroptosis", "RIPK1", "RIPK3", "MLKL",
     "Cuproptosis", "Copper metabolism", "Parthanatos",
     
-    # --- 8. CANNABIS & LIPÍDIOS BIOATIVOS ---
+    # Cannabis & Lipídios
     "Endocannabinoidome", "Anandamide", "2-Arachidonoylglycerol (2-AG)",
     "Oleoylethanolamide (OEA)", "Palmitoylethanolamide (PEA)",
     "Cannabidiol (CBD)", "Cannabigerol (CBG)", "Cannabinol (CBN)", "Tetrahydrocannabivarin (THCV)",
     "GPR55", "GPR18", "GPR119", "GPR110", "GPR120 (FFAR4)",
     "Resolvins", "Protectins", "Maresins", "Lipoxins", "Specialized pro-resolving mediators",
     
-    # --- 9. MECANOTRANSDUÇÃO AVANÇADA ---
+    # Mecanotransdução
     "Piezo1", "Piezo2", "TMEM16A", "TMEM63", "OSCA/TMEM63 family",
     "TREK-1 channel", "TRAAK channel", "ASIC channels",
     "YAP/TAZ pathway", "Hippo pathway", "Focal adhesions",
     
-    # --- 10. CLÁSSICOS REVISITADOS (Sempre úteis) ---
+    # Clássicos
     "P2X3 receptor", "P2X7 receptor", "Purinergic signaling", "ATP release",
     "TRPV1", "TRPV4", "TRPM8", "TRPA1",
     "Muscarinic M3", "Beta-3 adrenergic receptor", "Nicotinic alpha-7",
@@ -73,45 +73,19 @@ CANDIDATOS_MINERACAO = [
     "Rho-kinase (ROCK)", "mTOR pathway", "AMPK signaling"
 ]
 
-# --- BLACKLIST BLINDADA (Mantida e Reforçada) ---
+# --- BLACKLIST GERAL (SUPORTE AO BACKEND) ---
 BLACKLIST_GERAL = [
-    # Revistas e Termos de Publicação
-    "bjog", "bmb", "bmj", "bmn", "bph", "bps", "bt9", "biophysics", "both", "brucker",
-    "cell rep", "biotechnol", "bioeng", "biozentrum", "biologie", "biology",
-    "adv healthc mater", "adv mater", "ann", "ann arbor", "annusver", "ansari",
-    "approval no", "areas covered", "article", "author", "authors", "review",
-    "abstract", "pmid", "doi", "vol", "issue", "suppl", "fig", "table", "copyright",
-    "received", "accepted", "published", "correspondence", "editor", "letters",
-    
-    # Siglas e Códigos Inúteis
-    "cck-8", "ccnd1", "cd013571", "cd24", "cd44", "cd163", "cd4", "cd8",
-    "cdn", "cgrp", "covid-19", "cscs", "cyp", "adpkd", "aire", "ali", "ams", "asd",
-    "atii", "atmps", "adrs", "aes", "ars", "aims", "apobec3", "april", "asb3", "akus-11",
-    "aam-v8", "apcmin",
-    
-    # Autores, Lugares e Empresas (Os Vilões)
-    "chen", "cheng", "bickle", "birtele", "bolk", "bowles", "bscheider", "abid",
-    "abilez", "acharya", "adam", "adamson", "adelaide", "adiconis", "admane",
-    "ahmad", "ahmadzadeh", "ahn", "akamatsu", "akita", "akiyama", "al assaad",
-    "al-dossari", "albani", "aldana", "alzofon", "amato", "amin", "angeli", "angelica",
-    "cepheid", "biogo", "boundless bio", "cchmc", "ccun", "amgen", "allergan",
-    "astellas", "astrazeneca", "abbvie", "merck", "aveo", "accord", "anchiano",
-    "apogepha", "axonics", "atlab", "abyost", "aiq solutions", "astrin", "bvos",
-    "abu dhabi", "los angeles", "american", "americans", "asahikawa", "arbor", "arizona",
-    "albuquerque", "akademicka", "ajou", "addenbrooke", "agios", "aduro", "alkido",
-    "artara", "argen-x", "abata", "absinta", "acinetobacter",
-    
-    # Stopwords, Gerúndios e Termos Comuns
-    "after", "among", "another", "both", "activation", "additional", "alternatives",
-    "administration", "adrenoceptors", "adults", "advanced", "adverse", "affiliated",
-    "age", "aged", "aging", "all", "although", "academy", "acute", "addressing", "adolescent",
-    "medicine", "advanced bioscience", "advanced genomic", "cross-sectional", "postmarketing",
-    "survey", "accordingly", "induced", "pharma", "pharmaceuticals", "solutions",
-    "aggregates", "airway", "alveolar", "alzheimer", "anatomy", "angiogenesis",
-    "application", "applied", "medical", "research", "clinical", "trial", "study",
-    "data", "analysis", "method", "result", "conclusion", "significant", "statistics",
-    "association", "ameliorates", "severity", "underlying", "mechanisms", "agonists",
-    "rights", "experimentation", "agriculture", "anesthesiology", "andrology"
+    # Termos Gerais que o NLTK pode não pegar se estiverem capitalizados
+    "background", "methods", "results", "discussion", "conclusion", "abstract",
+    "introduction", "references", "acknowledgements", "declaration", "conflict",
+    "interest", "funding", "availability", "contributed", "author", "editor",
+    "medline", "indexed", "electronic", "epub", "print", "pmid", "doi",
+    "department", "university", "institute", "center", "hospital", "school",
+    "china", "usa", "japan", "germany", "uk", "france", "italy", "canada",
+    "beijing", "shanghai", "guangzhou", "wuhan", "chongqing", "jiangsu",
+    "london", "boston", "new york", "california", "texas", "heidelberg",
+    "however", "moreover", "furthermore", "additionally", "interestingly",
+    "significantly", "respectively", "associated", "observed", "indicated"
 ]
 
 TEXTOS = {
@@ -132,7 +106,7 @@ TEXTOS = {
         
         "btn_lib": "📚 Minerar no Contexto (Fonte)",
         
-        "status_blue_ocean": "🌊 Mergulhando no PubMed em busca de Sci-Fi, Genes e Alvos Ocultos...",
+        "status_blue_ocean": "🌊 Mergulhando no PubMed em busca de alvos inexplorados e Sci-Fi...",
         "msg_sucesso_blue": "🌊 {qtd} tesouros do Blue Ocean adicionados!",
         "status_minerando": "🔍 Minerando novidades para:",
         "msg_sucesso_dinamico": "✅ Lista Base + {qtd} novidades específicas preservadas!",
@@ -185,9 +159,9 @@ TEXTOS = {
         "header_artigos_enc": "Artigos encontrados:",
         "aviso_sem_artigos": "Nenhum artigo encontrado com resumo disponível neste período.",
         
-        "footer_citar": "Lemos Lambda v1.5.0 - Uso Acadêmico",
+        "footer_citar": "Lemos Lambda v1.6.0 - Uso Acadêmico",
         "citar_titulo": "📄 Como Citar",
-        "citar_texto": "Lemos, G. (2025). Lemos Lambda: Deep Science Prospector [Software]. Versão 1.5.0. DOI: 10.5281/zenodo.17958507",
+        "citar_texto": "Lemos, G. (2025). Lemos Lambda: Deep Science Prospector [Software]. Versão 1.6.0. DOI: 10.5281/zenodo.17958507",
         "link_doi": "🔗 Ver no Zenodo (DOI)"
     },
     "en": {
@@ -261,9 +235,9 @@ TEXTOS = {
         "header_artigos_enc": "Articles found:",
         "aviso_sem_artigos": "No articles found with abstract available in this period.",
         
-        "footer_citar": "Lemos Lambda v1.5.0 - Academic Use",
+        "footer_citar": "Lemos Lambda v1.6.0 - Academic Use",
         "citar_titulo": "📄 How to Cite",
-        "citar_texto": "Lemos, G. (2025). Lemos Lambda: Deep Science Prospector [Software]. Version 1.5.0. DOI: 10.5281/zenodo.17958507",
+        "citar_texto": "Lemos, G. (2025). Lemos Lambda: Deep Science Prospector [Software]. Version 1.6.0. DOI: 10.5281/zenodo.17958507",
         "link_doi": "🔗 View on Zenodo (DOI)"
     }
 }

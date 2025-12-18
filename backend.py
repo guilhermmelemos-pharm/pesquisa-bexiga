@@ -7,9 +7,22 @@ from deep_translator import GoogleTranslator
 from datetime import datetime
 import feedparser
 import random
+import nltk
+from nltk.corpus import words, stopwords
 import constantes as c
 
-# Regex ajustado para pegar compostos químicos e genes, evitando texto comum
+# --- CONFIGURAÇÃO NLTK (BAIXA DICIONÁRIOS APENAS UMA VEZ) ---
+try:
+    nltk.data.find('corpora/words')
+except LookupError:
+    nltk.download('words')
+    nltk.download('stopwords')
+
+# Conjuntos para verificação rápida
+ENGLISH_WORDS = set(word.lower() for word in words.words())
+STOP_WORDS = set(stopwords.words('english'))
+
+# Regex ajustado
 REGEX_COMPLEXO = r'\b([A-Z][a-zA-Z0-9\-]*(?:\s[A-Z][a-zA-Z0-9\-]+){0,3})\b'
 
 IMAGENS_SCIENCE = [
@@ -21,81 +34,113 @@ IMAGENS_SCIENCE = [
     "https://images.unsplash.com/photo-1579154204601-01588f351e67?auto=format&fit=crop&w=600&q=80",
 ]
 
-# --- LISTAS DE BLOQUEIO INTERNAS (HARDCODED PARA PERFORMANCE) ---
-BLACKLIST_SOBRENOMES = [
-    "wang", "zhang", "li", "liu", "yang", "huang", "wu", "zhou", "xu", "sun", "ma", "zhu", "hu", "guo", "he", "gao", "lin", "luo", "cheng",
-    "kim", "lee", "park", "choi", "jeong", "chung", "song", "kang", "jang", "han", "lim",
-    "singh", "kumar", "sharma", "patel", "gupta", "mishra", "yadav", "das",
-    "smith", "johnson", "williams", "brown", "jones", "garcia", "miller", "davis", "rodriguez", "martinez",
-    "chen", "zhao", "yu", "yin", "chang", "ng", "tran", "tan", "wong", "chan", "cai", "ao", "kr", "bm", "nd", "jr", "sr", "et", "al"
-]
-
-BLACKLIST_GEOGRAFIA = [
+# --- LISTA NEGRA GEOGRÁFICA & INSTITUCIONAL (Onde o lixo se esconde) ---
+BLACKLIST_LOCAIS = [
+    # Países e Regiões
     "china", "usa", "japan", "germany", "uk", "france", "italy", "canada", "australia", "spain", "korea", "india", "brazil",
-    "beijing", "shanghai", "guangzhou", "wuhan", "nanjing", "tianjin", "hangzhou",
-    "london", "cambridge", "oxford", "boston", "new york", "california", "texas", "arizona", "massachusetts", "pennsylvania", "michigan",
-    "tokyo", "osaka", "seoul", "busan", "daegu", "taipei", "hong kong", "singapore",
-    "university", "hospital", "institute", "center", "school", "college", "academy", "department", "division", "ministry", "state", "provincial",
-    "street", "road", "avenue", "district", "province", "city", "ltd", "inc", "corp", "co", "plc"
+    "united states", "america", "republic", "taiwan", "people", "bca",
+    # Cidades Chinesas/Asiáticas (MUITO COMUM EM META-DADOS)
+    "beijing", "shanghai", "guangzhou", "wuhan", "nanjing", "tianjin", "hangzhou", 
+    "chongqing", "guangdong", "jiangsu", "zhengzhou", "shijiazhuang", "lanzhou", 
+    "nanchang", "changsha", "zheng", "shenzhen", "kaohsiung", "hong kong", "singapore",
+    # Cidades Ocidentais e Estados
+    "london", "cambridge", "oxford", "boston", "new york", "california", "texas", "arizona", 
+    "massachusetts", "pennsylvania", "michigan", "pittsburgh", "heidelberg", "paris", "san francisco",
+    # Instituições e Departamentos
+    "university", "hospital", "institute", "center", "school", "college", "academy", 
+    "department", "division", "ministry", "state", "provincial", "laboratory", "faculty",
+    "key laboratory", "national institutes", "foundation", "association", "society", "board",
+    "education", "health", "engineering", "sciences", "technology", "agriculture"
 ]
 
-def validar_termo_inteligente(termo):
+BLACKLIST_ACADEMICA = [
+    # Seções do Artigo
+    "abstract", "introduction", "background", "methods", "results", "discussion", "conclusion",
+    "declarations", "declaration", "conflict", "interest", "funding", "acknowledgements",
+    "availability", "contributed", "corresponding", "author", "editor", "received", "accepted",
+    # Termos de Indexação e Publicação
+    "medline", "indexed", "electronic", "epub", "print", "pmid", "doi", "issn", "isbn",
+    "vol", "issue", "suppl", "fig", "table", "copyright", "license", "open access",
+    # Áreas Genéricas
+    "oncology", "pathology", "urology", "gastroenterology", "hepatology", "ophthalmology", 
+    "cardiology", "neurology", "cancer", "biology", "chemistry", "medicine"
+]
+
+def validar_termo_bioquimico(termo):
     """
-    Filtro Heurístico Avançado: Mata nomes, cidades e lixo bibliográfico.
+    Algoritmo v1.6: Bio-Validação com NLTK e Filtro Geográfico Agressivo.
     """
     t_limpo = termo.strip()
     t_lower = t_limpo.lower()
+    palavras = t_lower.split()
     
-    # 1. Tamanho e Estrutura
+    # 1. WHITELIST VIP (Esses passam sempre)
+    whitelist = ["tmao", "pfas", "nmn", "cbd", "cbg", "lps", "atp", "nad", "dna", "rna", "gpr", "rock", "mtor", "ampk"]
+    if t_lower in whitelist: return True # Exato
+    if any(vip in t_lower for vip in whitelist) and len(t_limpo) > 3: return True # Parcial
+
+    # 2. FILTRO DE LIXO BÁSICO
     if len(t_limpo) < 3: return False
     if t_limpo.isdigit(): return False
-    if re.match(r'^CD\d+$', t_limpo): return False # Remove CD44, CD24, etc.
-
-    # 2. Blacklist de Sobrenomes (Detecta "Chen", "Wang Y", "Li X")
-    palavras = t_lower.split()
-    if any(p in BLACKLIST_SOBRENOMES for p in palavras):
-        # Se for só o sobrenome ou sobrenome + inicial, mata.
-        # Exceção: Termos científicos que coincidem com nomes (raro em 2 palavras, mas possível)
-        if len(palavras) <= 2: return False
-
-    # 3. Blacklist Geográfica e Institucional
-    if any(p in BLACKLIST_GEOGRAFIA for p in palavras):
-        return False
-
-    # 4. Regra de Siglas Curtas (ex: BPH, BJOG) - Exceções VIPs
-    whitelist_siglas = ["PFAS", "TMAO", "NMN", "CBD", "CBG", "LPS", "ATP", "NAD", "RNA", "DNA", "ROS", "NO"]
-    if t_limpo.isupper() and len(t_limpo) <= 5 and t_limpo not in whitelist_siglas: 
-        return False
     
-    # 5. Regra de Sufixos Corporativos
-    if t_lower.endswith((" therapeutics", " bio", " pharma", " oncology", " inc", " co", " ltd", " group", " sci", " rep", " med", " biol", " chem")):
+    # 3. FILTRO DE DICIONÁRIO NLTK (Mata "However", "Moreover", "The")
+    # Se é palavra comum e não tem sufixo bio, morre.
+    sufixos_bio = ("ase", "in", "or", "ol", "ide", "ate", "one", "ics", "ome", "rna", "dna", "ab")
+    
+    # Verifica se é uma stopword (The, A, An, Our, These) - Mata direto
+    if t_lower in STOP_WORDS: return False
+    
+    # Verifica se é palavra comum (University, Electronic, Indexed)
+    if t_lower in ENGLISH_WORDS and not t_lower.endswith(sufixos_bio):
+        return False 
+
+    # 4. FILTRO GEOGRÁFICO E INSTITUCIONAL (NOVO)
+    if any(loc in t_lower for loc in BLACKLIST_LOCAIS):
         return False
+
+    # 5. FILTRO ACADÊMICO (NOVO)
+    if any(acad in t_lower for acad in BLACKLIST_ACADEMICA):
+        return False
+
+    # 6. FILTRO DE PADRÃO DE AUTOR (Sobrenome + Iniciais)
+    if re.search(r' [A-Z]{1,2}$', t_limpo): return False
+
+    # 7. FILTRO DE MESES (Jan, Feb...)
+    meses = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
+    if t_lower[:3] in meses and len(t_limpo) < 5: return False
+
+    # 8. CRITÉRIO DE ACEITAÇÃO FINAL (BIO-SCORE)
+    # Se passou por tudo isso, precisa parecer ciência.
+    tem_numero = any(char.isdigit() for char in t_limpo)
+    tem_hifen = "-" in t_limpo
+    tem_sufixo_bio = t_lower.endswith(sufixos_bio)
+    tem_grego = any(g in t_lower for g in ["alpha", "beta", "gamma", "delta", "kappa"])
+    eh_composto = len(palavras) > 1
+    
+    # Se for palavra única simples (sem numero, hifen, sufixo), provavelmente é lixo que o dicionário não pegou
+    if not eh_composto and not tem_numero and not tem_hifen and not tem_sufixo_bio and not tem_grego:
+        # Última chance: está na whitelist interna de compostos?
+        if t_lower not in ["exosomes", "ferroptosis", "pyroptosis", "autophagy", "mitophagy", "senolytics"]:
+            return False
 
     return True
 
 def buscar_alvos_emergentes_pubmed(orgao_alvo, email):
-    """
-    Busca profunda no PubMed exigindo contexto molecular para evitar lixo.
-    """
     if not orgao_alvo or not email: return []
     Entrez.email = email
     ano_fim = datetime.now().year
-    ano_inicio = ano_fim - 3 # Aumentei para 3 anos para pegar mais robustez
+    ano_inicio = ano_fim - 3
     
-    # QUERY REFINADA: Exige que o termo alvo esteja perto de palavras de ação biológica
-    # Isso evita pegar endereços, pois endereços não "ativam", "inibem" ou "regulam".
     query = (
         f"({orgao_alvo}[Title/Abstract]) AND ("
-        f"\"molecular mechanism\" OR \"signaling pathway\" OR \"therapeutic target\" OR "
-        f"\"gene expression\" OR \"upregulation\" OR \"downregulation\" OR \"activation\" OR "
-        f"\"inhibition\" OR \"novel receptor\" OR \"metabolite\" OR \"microplastics\" OR \"TMAO\")"
+        f"\"mechanism\" OR \"receptor\" OR \"pathway\" OR \"target\" OR \"expression\" OR "
+        f"\"activation\" OR \"inhibition\" OR \"microplastics\" OR \"TMAO\" OR \"metabolite\")"
         f" AND (\"{ano_inicio}\"[Date - Publication] : \"{ano_fim}\"[Date - Publication])"
         f" NOT (Review[Publication Type])" 
     )
     
     try:
-        # Busca mais IDs para poder filtrar bastante
-        handle = Entrez.esearch(db="pubmed", term=query, retmax=80, sort="relevance")
+        handle = Entrez.esearch(db="pubmed", term=query, retmax=100, sort="relevance")
         ids = Entrez.read(handle)["IdList"]
         if not ids: return []
         
@@ -107,7 +152,6 @@ def buscar_alvos_emergentes_pubmed(orgao_alvo, email):
         termos_limpos = []
         blacklist_lower = [x.lower() for x in c.BLACKLIST_GERAL]
         
-        # Contagem de frequência para priorizar termos que aparecem mais de uma vez (Sinal vs Ruído)
         frequencia = {}
         for t in candidatos:
             t = t.strip(" .,();:")
@@ -117,21 +161,23 @@ def buscar_alvos_emergentes_pubmed(orgao_alvo, email):
         for t, freq in frequencia.items():
             t_lower = t.lower()
             
-            # FILTRAGEM EM CASCATA
             if any(bad in t_lower for bad in blacklist_lower): continue
-            if not validar_termo_inteligente(t): continue
-            if any(bad in t_lower.split() for bad in ["were", "was", "rates", "group", "study", "analysis", "doi", "vol", "no", "fig"]): continue
             
-            # Regra de Ouro: Termos muito curtos que aparecem 1x só geralmente são ruído ou iniciais.
-            # Termos bons tendem a repetir ou são compostos.
-            if len(t) < 5 and freq < 2 and t not in ["TMAO", "PFAS", "NMN"]: continue
+            # CHAMA O NOVO VALIDADOR V1.6
+            if not validar_termo_bioquimico(t): continue
+            
+            termos_limpos.append(t)
 
-            if "-" in t or any(x.isupper() for x in t[1:]) or " " in t or t[0].isupper():
-                termos_limpos.append(t)
-
-        # Retorna os top 40 ordenados por frequência (os mais citados primeiro)
         termos_ordenados = sorted(termos_limpos, key=lambda x: frequencia[x], reverse=True)
-        return termos_ordenados[:40] 
+        
+        seen = set()
+        resultado_final = []
+        for item in termos_ordenados:
+            if item.lower() not in seen:
+                seen.add(item.lower())
+                resultado_final.append(item)
+                
+        return resultado_final[:30] 
     except:
         return []
 
@@ -147,7 +193,7 @@ def extrair_conclusao_real(abstract_text, translator):
     if not abstract_text: return "Resumo não disponível."
     match = re.search(r'(Conclusion|Conclusions|In conclusion|Summary|Significance|Results suggest that)(.*)', abstract_text, re.IGNORECASE | re.DOTALL)
     texto_bruto = match.group(2).strip() if match else ". ".join(abstract_text.split(". ")[-3:])
-    texto_final = texto_bruto[:600] # Aumentei um pouco
+    texto_final = texto_bruto[:600]
     try:
         return translator.translate(texto_final) + "..."
     except:
