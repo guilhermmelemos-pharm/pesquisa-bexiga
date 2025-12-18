@@ -23,7 +23,7 @@ SOFTWARE.
 
 Author: Guilherme Lemos (Unifesp)
 Creation Date: December 2025
-Version: 1.7.6 (Stable Back-to-Basics)
+Version: 1.7.7 (Universal CSS Fix)
 """
 import streamlit as st
 import pandas as pd
@@ -58,12 +58,13 @@ st.markdown("""
     
     div[data-testid="stMetricValue"] { font-size: 1.8rem !important; }
     
-    /* O CSS CUIDA DO TAMANHO DA IMAGEM AGORA - MAIS SEGURO */
+    /* O CSS CUIDA DO TAMANHO DA IMAGEM - ISSO EVITA ERROS DE VERSÃO DO PYTHON */
     div[data-testid="stImage"] img { 
         height: 150px !important; 
         object-fit: cover !important; 
         border-radius: 10px !important; 
         width: 100% !important;
+        max-width: 100% !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -173,7 +174,7 @@ def processar_upload(textos):
 if st.session_state.pagina == 'home':
     st.title(t["titulo_desk"]); st.caption(t["subtitulo"])
     
-    # Radar de Notícias (SIMPLIFICADO E FUNCIONAL)
+    # Radar de Notícias (VERSÃO UNIVERSAL - SEM PARÂMETROS DE TAMANHO)
     news = bk.buscar_todas_noticias(lang)
     if news:
         with st.container(border=True):
@@ -181,16 +182,18 @@ if st.session_state.pagina == 'home':
             cols = st.columns(len(news)) if len(news) < 3 else st.columns(3)
             for i, n in enumerate(news[:3]):
                 with cols[i]:
-                    # Lógica Simples: Se tem imagem, mostra. Se não, usa placeholder.
-                    # Sem parâmetros complexos. O CSS cuida do resto.
+                    # Recupera imagem ou usa padrão
                     img_to_show = n.get('img')
                     if not img_to_show:
                         img_to_show = "https://images.unsplash.com/photo-1532094349884-543bc11b234d?w=600&q=80"
                     
                     try:
-                        st.image(img_to_show) # SEM height, SEM width. O CSS resolve.
+                        # --- SOLUÇÃO FINAL ---
+                        # Removemos height, width e use_container_width.
+                        # Deixamos o CSS (linha 60) forçar o visual.
+                        st.image(img_to_show) 
                     except:
-                        st.write("🔬") # Se falhar muito, põe ícone.
+                        st.write("🔬")
 
                     st.markdown(f"**{n['titulo'][:60]}...**")
                     st.caption(f"{n['fonte']}")
