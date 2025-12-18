@@ -23,7 +23,6 @@ SOFTWARE.
 
 Author: Guilherme Lemos (Unifesp)
 Creation Date: December 2025
-Version: 1.8.1 (Blue Ocean Safe)
 """
 import streamlit as st
 import pandas as pd
@@ -64,14 +63,7 @@ st.markdown("""
     }
     
     div[data-testid="stMetricValue"] { font-size: 1.8rem !important; }
-    
-    /* O CSS CUIDA DO TAMANHO DA IMAGEM - ISSO EVITA ERROS DE VERSÃO DO PYTHON */
-    div[data-testid="stImage"] img { 
-        height: 160px !important; 
-        object-fit: cover !important; 
-        border-radius: 10px !important;
-        width: 100% !important; 
-    }
+    div[data-testid="stImage"] img { height: 160px !important; object-fit: cover !important; border-radius: 10px !important; }
     .stAlert { padding: 0.5rem; margin-bottom: 1rem; border-radius: 8px; }
     </style>
 """, unsafe_allow_html=True)
@@ -245,11 +237,7 @@ def exibir_radar_cientifico(lang_code, textos):
         cols = st.columns(3)
         for i, n in enumerate(batch):
             with cols[i]:
-                # --- CORREÇÃO DE SEGURANÇA ---
-                # Removemos 'use_container_width' para evitar TypeError
-                # O CSS acima (linha 57) já garante que a imagem fique perfeita.
-                st.image(n['img']) 
-                
+                st.image(n['img'], use_container_width=True)
                 st.markdown(f"**{n['titulo'][:75]}...**")
                 st.caption(f"{n['bandeira']} {n['fonte']}")
                 st.link_button(textos["btn_ler_feed"], n['link'], use_container_width=True)
