@@ -23,8 +23,14 @@ SOFTWARE.
 
 Author: Guilherme Lemos (Unifesp)
 Creation Date: December 2025
+Version: 1.7.1 (Fast Boot Fix)
 """
 import streamlit as st
+
+# --- FAST BOOT FIX: CONFIGURAÇÃO DEVE VIR ANTES DE TUDO ---
+# Isso evita que o app trave enquanto carrega bibliotecas pesadas
+st.set_page_config(page_title="Lemos Lambda", page_icon="λ", layout="wide")
+
 import pandas as pd
 import plotly.express as px
 from datetime import datetime
@@ -32,8 +38,6 @@ import time
 import math
 import constantes as c
 import backend as bk
-
-st.set_page_config(page_title="Lemos Lambda", page_icon="λ", layout="wide")
 
 # --- CSS INJECTION PARA FAZER O BLUE OCEAN BRILHAR ---
 st.markdown("""
@@ -190,57 +194,76 @@ def ir_para_analise(email_user, contexto, alvo, ano_ini, ano_fim):
     lista = [x.strip() for x in st.session_state.alvos_val.split(",") if x.strip()]
     resultados = []
     
+    # --- PREPARAÇÃO ESTATÍSTICA (Z-SCORE BASELINE) ---
+    N_PUBMED_TOTAL = 36000000
+    n_total_alvo = 0
+    
     placeholder = st.empty()
     with placeholder.container():
-        st.markdown("## 🧬 Lemos Lambda Deep Processing...")
-        st.markdown(f"Analisando **{len(lista)} moléculas** contra o alvo **'{alvo}'**...")
+        st.markdown("## 🧬 Lemos Lambda Statistical Engine...")
+        st.write("Calibrando linha de base estatística...")
+        # Busca inicial de calibração (Baseline)
+        n_total_alvo = bk.consultar_pubmed_count(alvo, "", email_user, 1900, 2030)
+        if n_total_alvo == 0: n_total_alvo = 1 # Evitar divisão por zero
+        
+        st.markdown(f"Analisando **{len(lista)} moléculas** contra o universo de **{n_total_alvo} artigos**...")
         prog = st.progress(0)
     
     for i, item in enumerate(lista):
         time.sleep(0.05)
         termo_contexto = contexto if contexto else None
+        
+        # 1. Dados Observados
         n_global = bk.consultar_pubmed_count(item, termo_contexto, email_user, ano_ini, ano_fim)
         n_especifico = bk.consultar_pubmed_count(item, alvo, email_user, ano_ini, ano_fim)
         
-        # --- ESTATÍSTICA NOVA (Ratio 2.0 - Lambda Score) ---
-        # 1. Suavização (+1) para evitar zeros e permitir log
-        safe_global = n_global + 1
-        safe_especifico = n_especifico + 1
+        # --- CÁLCULO DE ENRIQUECIMENTO (Enrichment Score) ---
+        # Expected = (Frequencia_Droga * Frequencia_Orgao) / Total_PubMed
+        expected = (n_global * n_total_alvo) / N_PUBMED_TOTAL
+        if expected == 0: expected = 0.00001
         
-        # 2. Score Logarítmico (Magnitude)
-        lambda_score = math.log10(safe_global) - math.log10(safe_especifico)
+        # Enrichment = Observado / Esperado (Quantas vezes mais frequente que o acaso?)
+        enrichment = (n_especifico + 0.1) / expected
         
-        # 3. Classificação
+        # Z-Score Simplificado (Log-Likelihood) para Ranking
+        lambda_score = math.log10(enrichment) + (math.log10(n_global + 1) * 0.2)
+        
+        # --- CLASSIFICAÇÃO ESTATÍSTICA ---
         tag = "⚖️ Neutro"
         score_sort = 0
         
         if n_especifico == 0:
-            # Se não tem nada no alvo, precisa ser MUITO forte fora
-            if lambda_score > 2.5: # ~300 papers fora
+            # Blue Ocean: Alta expectativa global, zero presença local
+            if n_global > 300: 
                 tag = "💎 Blue Ocean (Inexplorado)"
                 score_sort = 1000
             else:
-                tag = "👻 Fantasma (Sem relevância)"
+                tag = "👻 Fantasma (Ruído Estatístico)"
                 score_sort = 0
         else:
-            if lambda_score > 2.0: # 100x mais fora
-                tag = "🚀 Tendência (Translação)"
+            # Análise de Significância
+            if enrichment > 100: # 100x mais frequente que o acaso
+                if n_especifico > 5:
+                    tag = "🥇 Ouro (Alta Significância)"
+                    score_sort = 100
+                else:
+                    tag = "🌱 Embrionário (Promissor)"
+                    score_sort = 500
+            elif enrichment > 20:
+                tag = "🚀 Tendência"
                 score_sort = 200
-            elif lambda_score > 1.0: # 10x mais fora
-                tag = "🥇 Ouro"
-                score_sort = 100
-            elif lambda_score < 0.5: # Diferença pequena
-                tag = "🔴 Saturado"
+            elif enrichment < 1:
+                tag = "🔴 Saturado / Aleatório"
                 score_sort = 10
-            elif n_especifico < 10: # Pouco estudado localmente
-                tag = "🌱 Embrionário (Nascendo agora)"
-                score_sort = 500
+            else:
+                tag = "⚖️ Neutro"
+                score_sort = 20
 
-        # Ratio visual
-        ratio = float(n_global / safe_especifico)
+        # Ratio visual (para o gráfico)
+        ratio_visual = float(enrichment)
         
         resultados.append({
-            t["col_mol"]: item, t["col_status"]: tag, t["col_ratio"]: round(ratio, 1), t["col_art_alvo"]: n_especifico, t["col_global"]: n_global, "_sort": score_sort
+            t["col_mol"]: item, t["col_status"]: tag, t["col_ratio"]: round(ratio_visual, 1), t["col_art_alvo"]: n_especifico, t["col_global"]: n_global, "_sort": score_sort
         })
         prog.progress((i+1)/len(lista))
     
@@ -262,7 +285,8 @@ def exibir_radar_cientifico(lang_code, textos):
         cols = st.columns(3)
         for i, n in enumerate(batch):
             with cols[i]:
-                st.image(n['img'], use_container_width=True)
+                # MANTIDO ORIGINAL COMO SOLICITADO
+                if n.get('img'): st.image(n['img'], use_container_width=True)
                 st.markdown(f"**{n['titulo'][:75]}...**")
                 st.caption(f"{n['bandeira']} {n['fonte']}")
                 st.link_button(textos["btn_ler_feed"], n['link'], use_container_width=True)
@@ -361,7 +385,16 @@ elif st.session_state.pagina == 'resultados':
         
         st.subheader(t["titulo_mapa"])
         df_show = df.drop(columns=["_sort"])
-        fig = px.bar(df_show.head(25), x=t["col_mol"], y=t["col_ratio"], color=t["col_status"], color_discrete_map={"💎 Blue Ocean (Inexplorado)": "#00CC96", "🌱 Embrionário (Nascendo agora)": "#00FF00", "🚀 Tendência (Translação)": "#AB63FA", "🥇 Ouro": "#636EFA", "🔴 Saturado": "#EF553B", "👻 Fantasma (Sem relevância)": "#808080"})
+        fig = px.bar(df_show.head(25), x=t["col_mol"], y=t["col_ratio"], color=t["col_status"], 
+                     color_discrete_map={
+                         "💎 Blue Ocean (Inexplorado)": "#00CC96", 
+                         "🌱 Embrionário (Promissor)": "#00FF00", 
+                         "🚀 Tendência": "#AB63FA", 
+                         "🥇 Ouro (Alta Significância)": "#636EFA", 
+                         "🔴 Saturado / Aleatório": "#EF553B", 
+                         "👻 Fantasma (Ruído Estatístico)": "#808080",
+                         "⚖️ Neutro": "#D3D3D3"
+                     })
         st.plotly_chart(fig, use_container_width=True)
         st.dataframe(df_show, use_container_width=True, hide_index=True)
         st.download_button(t["btn_baixar"], df_show.to_csv(index=False).encode('utf-8'), "lemos_lambda_report.csv", "text/csv")
