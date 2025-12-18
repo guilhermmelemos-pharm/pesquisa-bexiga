@@ -3,27 +3,9 @@ Lemos Lambda: Deep Science Prospector
 Copyright (c) 2025 Guilherme Lemos
 Licensed under the MIT License.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
 Author: Guilherme Lemos (Unifesp)
 Creation Date: December 2025
-Version: 1.8.2 (Compatibility Mode)
+Version: 1.9.0 (Force Fix)
 """
 import streamlit as st
 import pandas as pd
@@ -35,7 +17,7 @@ import backend as bk
 
 st.set_page_config(page_title="Lemos Lambda", page_icon="λ", layout="wide")
 
-# --- CSS INJECTION (VISUAL) ---
+# --- CSS INJECTION (ESTILO VISUAL) ---
 st.markdown("""
     <style>
     /* Estilo Geral dos Botões */
@@ -65,12 +47,12 @@ st.markdown("""
     
     div[data-testid="stMetricValue"] { font-size: 1.8rem !important; }
     
-    /* O CSS CUIDA DO TAMANHO DA IMAGEM - ISSO EVITA ERROS DE VERSÃO DO PYTHON */
+    /* O CSS É QUEM MANDA NO TAMANHO DA IMAGEM AGORA */
     div[data-testid="stImage"] img { 
-        height: 160px !important; 
+        height: 150px !important; 
+        width: 100% !important;
         object-fit: cover !important; 
         border-radius: 10px !important;
-        width: 100% !important; 
     }
     .stAlert { padding: 0.5rem; margin-bottom: 1rem; border-radius: 8px; }
     </style>
@@ -245,15 +227,14 @@ def exibir_radar_cientifico(lang_code, textos):
         cols = st.columns(3)
         for i, n in enumerate(batch):
             with cols[i]:
-                # --- CORREÇÃO DEFINITIVA ---
-                # NENHUM parâmetro extra. Apenas a imagem.
-                # O CSS no topo do arquivo (linha 57) é quem manda no tamanho.
+                # --- SOLUÇÃO DEFINITIVA (SEM PARÂMETROS QUEBRADOS) ---
+                # O comando é apenas st.image(url). 
+                # O CSS na linha 53 cuida do tamanho.
                 st.image(n['img']) 
                 
                 st.markdown(f"**{n['titulo'][:75]}...**")
                 st.caption(f"{n['bandeira']} {n['fonte']}")
-                # Link button pode falhar em versões muito antigas com use_container_width
-                # Vamos usar o padrão seguro também.
+                # Aqui também removemos use_container_width para garantir compatibilidade
                 st.link_button(textos["btn_ler_feed"], n['link'])
 
 def processar_upload(textos):
