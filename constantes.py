@@ -8,12 +8,12 @@ PRESET_LEMOS = {
 
 CANDIDATOS_MINERACAO = [
     # --- FRONTEIRAS MODERNAS (Sci-Fi to Reality) ---
-    "Microplastics", "Nanoplastics", "Bisphenol A", "Phthalates", "PFAS", # Ambiental
-    "Trimethylamine N-oxide (TMAO)", "Gut microbiota metabolites", "Indole-3-propionic acid", # Microbioma
-    "Cannabidiol (CBD)", "Cannabigerol (CBG)", "GPR55", "GPR18", "FAAH enzyme", "MAGL enzyme", "Anandamide", # Cannabis Expandido
-    "Senolytics", "Klotho", "Nicotinamide mononucleotide (NMN)", "Sirtuins", # Longevidade
-    "Ferroptosis", "Pyroptosis", "Necroptosis", "Exosomes", "Extracellular vesicles", # Morte Celular e Comunicação
-    "GLP-1 receptor", "SGLT2 inhibitors", "Probiotics", "Prebiotics", # Metabólico Moderno
+    "Microplastics", "Nanoplastics", "Bisphenol A", "Phthalates", "PFAS", 
+    "Trimethylamine N-oxide (TMAO)", "Gut microbiota metabolites", "Indole-3-propionic acid", 
+    "Cannabidiol (CBD)", "Cannabigerol (CBG)", "GPR55", "GPR18", "FAAH enzyme", "MAGL enzyme", "Anandamide", 
+    "Senolytics", "Klotho", "Nicotinamide mononucleotide (NMN)", "Sirtuins", 
+    "Ferroptosis", "Pyroptosis", "Necroptosis", "Exosomes", "Extracellular vesicles", 
+    "GLP-1 receptor", "SGLT2 inhibitors", "Probiotics", "Prebiotics", 
     
     # --- Ácidos e Metabólitos Clássicos ---
     "Alpha-lipoic acid", "Butyrate", "Short-chain fatty acids", "Sphingosine-1-phosphate",
@@ -35,15 +35,22 @@ CANDIDATOS_MINERACAO = [
     "MALAT1 lncRNA", "miR-21", "miR-145", "SIRT1", "NRF2 pathway", "NF-kappaB"
 ]
 
-# --- FILTRO DE RUÍDO (BLACKLIST) ---
+# --- FILTRO DE RUÍDO (BLACKLIST REFOBRÇADA) ---
 BLACKLIST_GERAL = [
-    # Termos identificados como ruído
-    "cross-sectional", "postmarketing", "survey", "adrs", "aes", "ars", "aims",
-    "pmid", "authors", "areas covered", "accordingly", "induced",
-    "pharma", "pharmaceuticals", "solutions", "abbvie", "aveo", "accord",
-    "abu dhabi", "abe", "abbosh", "atlab", "abyost", "aiq solutions", "aikido", "akus-11",
-    "apobec3-induced", "april", "asb3",
-    
+    # NOVOS TERMOS (Detectados no Log)
+    "acupuncture", "neuromodulation", "adaptive biotechnologies", "adkison", 
+    "administration", "adrenoceptors", "adults", "advanced", "adverse", "affiliated", 
+    "age", "aged", "aging", "workshop", "ahmad", "ahmadzadeh", "ahn", "akamatsu", 
+    "akita", "akiyama", "al assaad", "al-dossari", "all", "allergan", "although", 
+    "adpkd", "aire", "ali", "ams", "asd", "atii", "atmps", "abid", "abilez", 
+    "academy", "acharya", "acute", "adam", "adamson", "addressing", "adelaide", 
+    "adiconis", "admane", "adolescent", "adv healthc mater", "adv mater", 
+    "advanced bioscience", "advanced genomic", "cross-sectional", "postmarketing", 
+    "survey", "adrs", "aes", "ars", "aims", "pmid", "authors", "areas covered", 
+    "accordingly", "induced", "pharma", "pharmaceuticals", "solutions", "abbvie", 
+    "aveo", "accord", "abu dhabi", "abe", "abbosh", "atlab", "abyost", "aiq solutions", 
+    "aikido", "akus-11", "apobec3-induced", "april", "asb3",
+
     # Termos de erro/metodologia
     "adverse event", "adverse effect", "ae rate", "safety", "efficacy", "placebo",
     "control group", "study design", "double-blind", "randomized", "clinical trial",
@@ -170,53 +177,4 @@ TEXTOS = {
         "toast_preset": "🧬 Lemos Preset loaded successfully!",
         
         "analise_btn": "🚀 Run Potential Analysis",
-        "resultados": "🎯 Prospecting Dashboard",
-        "label_periodo": "📅 Analysis Period",
-        "label_manual": "🔎 Investigate Specific Term",
-        "holder_manual": "ex: Curcumin, Gene X...",
-        "btn_add_manual": "➕ Add",
-        "toast_add": "✅ term(s) added!",
-        "toast_dup": "⚠️ Duplicates ignored.",
-        "label_fonte": "Comparative Context (Optional):",
-        "holder_fonte": "ex: Brain, Kidney, Liver...",
-        "desc_fonte": "Defines comparison universe. Also used for contextual mining.",
-        "titulo_import": "📂 Import Extra List",
-        "desc_import": "Upload (.csv/.txt)",
-        "toast_import": "✅ terms imported!",
-        "erro_ler": "Error reading file.",
-        "btn_limpar": "🗑️",
-        "btn_limpar_tudo": "🗑️ Clear List",
-        "btn_export_lista": "💾 Save List (CSV)",
-        "ver_editar": "📝 View/Edit Keywords List",
-        "qtd_termos": "Qty:",
-        "radar_titulo": "📡 Science Radar",
-        "btn_ler_feed": "Read Full",
-        "metrica_potencial": "🏆 Top Potential",
-        "metrica_score": "📊 Score (Ratio)",
-        "metrica_artigos": "📚 Papers (Target)",
-        "col_mol": "Molecule/Target",
-        "col_status": "Status",
-        "col_ratio": "Potential (Ratio)",
-        "col_art_alvo": "Papers on Target",
-        "col_global": "Global/Source",
-        "btn_baixar": "📥 Download CSV Report",
-        "erro_email": "E-mail required.",
-        "erro_campos": "⚠️ Fill in E-mail and Target (in English)!",
-        "erro_sessao": "⚠️ Session data expired. Please run search again.",
-        
-        "titulo_mapa": "Opportunity Map",
-        "titulo_leitura": "📄 Deep Reading: Paper Investigation",
-        "btn_nova_pesquisa": "⬅️ New Search",
-        "info_leitura": "Select a target below to fetch real articles from PubMed with translation.",
-        "sel_leitura": "Select target:",
-        "btn_buscar_artigos": "🔍 Load Articles on:",
-        "msg_buscando_lit": "Searching literature for",
-        "header_artigos_enc": "Articles found:",
-        "aviso_sem_artigos": "No articles found with abstract available in this period.",
-        
-        "footer_citar": "Lemos Lambda v1.1.0 - Academic Use",
-        "citar_titulo": "📄 How to Cite",
-        "citar_texto": "Lemos, G. (2025). Lemos Lambda: Deep Science Prospector [Software]. Version 1.1.0. DOI: 10.5281/zenodo.17958507",
-        "link_doi": "🔗 View on Zenodo (DOI)"
-    }
-}
+        "resultados": "🎯 Prospect
