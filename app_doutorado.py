@@ -29,6 +29,7 @@ import pandas as pd
 import plotly.express as px
 from datetime import datetime
 import time
+import math
 import constantes as c
 import backend as bk
 
@@ -200,16 +201,43 @@ def ir_para_analise(email_user, contexto, alvo, ano_ini, ano_fim):
         termo_contexto = contexto if contexto else None
         n_global = bk.consultar_pubmed_count(item, termo_contexto, email_user, ano_ini, ano_fim)
         n_especifico = bk.consultar_pubmed_count(item, alvo, email_user, ano_ini, ano_fim)
-        ratio = n_global / n_especifico if n_especifico > 0 else n_global
+        
+        # --- ESTATÍSTICA NOVA (Ratio 2.0 - Lambda Score) ---
+        # 1. Suavização (+1) para evitar zeros e permitir log
+        safe_global = n_global + 1
+        safe_especifico = n_especifico + 1
+        
+        # 2. Score Logarítmico (Magnitude)
+        lambda_score = math.log10(safe_global) - math.log10(safe_especifico)
+        
+        # 3. Classificação
+        tag = "⚖️ Neutro"
+        score_sort = 0
         
         if n_especifico == 0:
-            if n_global > 50: tag, score_sort = "💎 Blue Ocean (Inexplorado)", 1000
-            else: tag, score_sort = "👻 Fantasma (Sem relevância)", 0
-        elif 1 <= n_especifico <= 15: tag, score_sort = "🌱 Embrionário (Nascendo agora)", 500
-        elif ratio > 20: tag, score_sort = "🚀 Tendência (Translação)", 100
-        elif ratio > 5: tag, score_sort = "🥇 Ouro", 50
-        elif ratio < 2: tag, score_sort = "🔴 Saturado", 10
-        else: tag, score_sort = "⚖️ Neutro", 20
+            # Se não tem nada no alvo, precisa ser MUITO forte fora
+            if lambda_score > 2.5: # ~300 papers fora
+                tag = "💎 Blue Ocean (Inexplorado)"
+                score_sort = 1000
+            else:
+                tag = "👻 Fantasma (Sem relevância)"
+                score_sort = 0
+        else:
+            if lambda_score > 2.0: # 100x mais fora
+                tag = "🚀 Tendência (Translação)"
+                score_sort = 200
+            elif lambda_score > 1.0: # 10x mais fora
+                tag = "🥇 Ouro"
+                score_sort = 100
+            elif lambda_score < 0.5: # Diferença pequena
+                tag = "🔴 Saturado"
+                score_sort = 10
+            elif n_especifico < 10: # Pouco estudado localmente
+                tag = "🌱 Embrionário (Nascendo agora)"
+                score_sort = 500
+
+        # Ratio visual
+        ratio = float(n_global / safe_especifico)
         
         resultados.append({
             t["col_mol"]: item, t["col_status"]: tag, t["col_ratio"]: round(ratio, 1), t["col_art_alvo"]: n_especifico, t["col_global"]: n_global, "_sort": score_sort
@@ -236,7 +264,7 @@ def exibir_radar_cientifico(lang_code, textos):
             with cols[i]:
                 st.image(n['img'], use_container_width=True)
                 st.markdown(f"**{n['titulo'][:75]}...**")
-                st.caption(f"{n.get('bandeira','🌐')} {n.get('fonte','')}")
+                st.caption(f"{n['bandeira']} {n['fonte']}")
                 st.link_button(textos["btn_ler_feed"], n['link'], use_container_width=True)
 
 def processar_upload(textos):
@@ -322,6 +350,7 @@ elif st.session_state.pagina == 'resultados':
     c_back, c_tit = st.columns([1, 5])
     with c_back: st.button(t["btn_nova_pesquisa"], on_click=resetar_pesquisa, use_container_width=True)
     with c_tit: st.title(t["resultados"])
+    
     df = st.session_state.resultado_df
     if df is not None and not df.empty:
         top = df.iloc[0]
@@ -329,12 +358,14 @@ elif st.session_state.pagina == 'resultados':
         c1.metric(t["metrica_potencial"], top[t["col_mol"]], delta=top[t["col_status"]])
         c2.metric(t["metrica_score"], top[t["col_ratio"]])
         c3.metric(t["metrica_artigos"], top[t["col_art_alvo"]])
+        
         st.subheader(t["titulo_mapa"])
         df_show = df.drop(columns=["_sort"])
         fig = px.bar(df_show.head(25), x=t["col_mol"], y=t["col_ratio"], color=t["col_status"], color_discrete_map={"💎 Blue Ocean (Inexplorado)": "#00CC96", "🌱 Embrionário (Nascendo agora)": "#00FF00", "🚀 Tendência (Translação)": "#AB63FA", "🥇 Ouro": "#636EFA", "🔴 Saturado": "#EF553B", "👻 Fantasma (Sem relevância)": "#808080"})
         st.plotly_chart(fig, use_container_width=True)
         st.dataframe(df_show, use_container_width=True, hide_index=True)
         st.download_button(t["btn_baixar"], df_show.to_csv(index=False).encode('utf-8'), "lemos_lambda_report.csv", "text/csv")
+        
         st.divider(); st.subheader(t["titulo_leitura"]); st.info(t["info_leitura"])
         termos_disp = sorted(df[t["col_mol"]].unique().tolist())
         sel_mol = st.selectbox(t["sel_leitura"], termos_disp, index=0)
@@ -357,5 +388,4 @@ elif st.session_state.pagina == 'resultados':
 st.markdown("---"); st.caption(f"© 2025 Guilherme Lemos | {t['footer_citar']}")
 st.sidebar.markdown("---")
 with st.sidebar.expander(t["citar_titulo"], expanded=True):
-
     st.code(t["citar_texto"], language="text"); st.link_button(t["link_doi"], "https://doi.org/10.5281/zenodo.17958507")
