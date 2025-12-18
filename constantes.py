@@ -42,7 +42,7 @@ TEXTOS = {
         "analise_btn": "🚀 Calcular Potencial (Ratio)",
         "resultados": "🎯 Resultados da Prospecção",
         "tabela_vazia": "Adicione termos ou use a descoberta automática acima.",
-        "footer_citar": "Lemos Lambda v1.4 - Uso Acadêmico",
+        "footer_citar": "Lemos Lambda v1.1 - Uso Acadêmico",
         
         # Novos campos v1.4
         "btn_preset": "🎓 Carregar Preset Doutorado (Lemos)",
@@ -82,7 +82,7 @@ TEXTOS = {
         "erro_campos": "⚠️ Preencha E-mail e Alvo (em Inglês)!",
         
         "citar_titulo": "📄 Como Citar",
-        "citar_texto": "Lemos, G. (2025). Lemos Lambda: Deep Science Prospector [Software]. Versão 1.4.0. DOI: 10.5281/zenodo.17958507",
+        "citar_texto": "Lemos, G. (2025). Lemos Lambda: Deep Science Prospector [Software]. Versão 1.1.0. DOI: 10.5281/zenodo.17958507",
         "link_doi": "🔗 Ver no Zenodo (DOI)"
     },
     "en": {
@@ -145,4 +145,5 @@ TEXTOS = {
         "citar_texto": "Lemos, G. (2025). Lemos Lambda: Deep Science Prospector [Software]. Version 1.4.0. DOI: 10.5281/zenodo.17958507",
         "link_doi": "🔗 View on Zenodo (DOI)"
     }
+
 }
