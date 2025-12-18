@@ -228,7 +228,7 @@ def exibir_radar_cientifico(lang_code, textos):
                     st.write("🔬")
                 
                 st.markdown(f"**{n['titulo'][:75]}...**")
-                st.caption(f"{n['bandeira']} {n['fonte']}")
+                st.caption(f"{n.get('bandeira', '🌐')} {n.get('fonte', '')}")
                 st.link_button(textos["btn_ler_feed"], n['link'])
 
 def processar_upload(textos):
@@ -357,3 +357,4 @@ st.markdown("---"); st.caption(f"© 2025 Guilherme Lemos | {t['footer_citar']}")
 st.sidebar.markdown("---")
 with st.sidebar.expander(t["citar_titulo"], expanded=True):
     st.code(t["citar_texto"], language="text"); st.link_button(t["link_doi"], "https://doi.org/10.5281/zenodo.17958507")
+
