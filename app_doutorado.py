@@ -2,10 +2,6 @@
 Lemos Lambda: Deep Science Prospector
 Copyright (c) 2025 Guilherme Lemos
 Licensed under the MIT License.
-
-Author: Guilherme Lemos (Unifesp)
-Creation Date: December 2025
-Version: 2.4 (FINAL FIX - NO PARAMS)
 """
 import streamlit as st
 import pandas as pd
@@ -17,7 +13,7 @@ import backend as bk
 
 st.set_page_config(page_title="Lemos Lambda", page_icon="λ", layout="wide")
 
-# --- CSS INJECTION (ESTILO VISUAL) ---
+# --- CSS INJECTION PARA FAZER O BLUE OCEAN BRILHAR ---
 st.markdown("""
     <style>
     /* Estilo Geral dos Botões */
@@ -46,14 +42,7 @@ st.markdown("""
     }
     
     div[data-testid="stMetricValue"] { font-size: 1.8rem !important; }
-    
-    /* O CSS MANDA NO TAMANHO DA IMAGEM AGORA */
-    div[data-testid="stImage"] img { 
-        height: 160px !important; 
-        object-fit: cover !important; 
-        border-radius: 10px !important; 
-        width: 100% !important;
-    }
+    div[data-testid="stImage"] img { height: 160px !important; object-fit: cover !important; border-radius: 10px !important; }
     .stAlert { padding: 0.5rem; margin-bottom: 1rem; border-radius: 8px; }
     </style>
 """, unsafe_allow_html=True)
@@ -87,10 +76,12 @@ def carregar_lista_dinamica_smart(textos):
     email = st.session_state.input_email
     alvo = st.session_state.input_alvo
     
+    # VALIDAÇÃO DO ALVO (OBRIGATÓRIO AGORA)
     if not alvo:
         st.error("⚠️ Preencha o campo 'Alvo Principal' (ex: Liver, Kidney) antes de buscar!")
         return
 
+    # Pega o que já está na tela para não apagar
     existentes = [x.strip() for x in st.session_state.alvos_val.split(",") if x.strip()]
     lista_mestra = list(set(existentes + c.CANDIDATOS_MINERACAO))
     
@@ -143,6 +134,7 @@ def minerar_novidades_fonte(textos):
 def aplicar_preset_lemos(textos):
     st.session_state.input_alvo = c.PRESET_LEMOS["alvo"]
     st.session_state.input_fonte = c.PRESET_LEMOS["fonte"]
+    # Aqui não exigimos validação manual pois o preset preenche sozinho
     carregar_lista_dinamica_smart(textos)
 
 def adicionar_termos_seguro(novos_termos_lista, textos):
@@ -187,24 +179,24 @@ def ir_para_analise(email_user, contexto, alvo, ano_ini, ano_fim):
         termo_contexto = contexto if contexto else None
         n_global = bk.consultar_pubmed_count(item, termo_contexto, email_user, ano_ini, ano_fim)
         n_especifico = bk.consultar_pubmed_count(item, alvo, email_user, ano_ini, ano_fim)
-        
-        # Correção da lógica de variáveis e backend
-        status_tag, score_sort = bk.classificar_oportunidade(n_especifico, n_global)
         ratio = n_global / n_especifico if n_especifico > 0 else n_global
         
-        # CHAVES FIXAS PARA NÃO DAR KEYERROR
+        if n_especifico == 0:
+            if n_global > 50: tag, score_sort = "💎 Blue Ocean (Inexplorado)", 1000
+            else: tag, score_sort = "👻 Fantasma (Sem relevância)", 0
+        elif 1 <= n_especifico <= 15: tag, score_sort = "🌱 Embrionário (Nascendo agora)", 500
+        elif ratio > 20: tag, score_sort = "🚀 Tendência (Translação)", 100
+        elif ratio > 5: tag, score_sort = "🥇 Ouro", 50
+        elif ratio < 2: tag, score_sort = "🔴 Saturado", 10
+        else: tag, score_sort = "⚖️ Neutro", 20
+        
         resultados.append({
-            "termo": item,
-            "status": status_tag,
-            "ratio": round(ratio, 1),
-            "alvo_count": n_especifico,
-            "fonte_count": n_global,
-            "_sort": score_sort
+            t["col_mol"]: item, t["col_status"]: tag, t["col_ratio"]: round(ratio, 1), t["col_art_alvo"]: n_especifico, t["col_global"]: n_global, "_sort": score_sort
         })
         prog.progress((i+1)/len(lista))
     
     placeholder.empty()
-    df_final = pd.DataFrame(resultados).sort_values(by=["_sort", "ratio"], ascending=[False, False])
+    df_final = pd.DataFrame(resultados).sort_values(by=["_sort", t["col_ratio"]], ascending=[False, False])
     st.session_state.resultado_df = df_final
     st.session_state.pagina = 'resultados'
     st.rerun()
@@ -221,15 +213,10 @@ def exibir_radar_cientifico(lang_code, textos):
         cols = st.columns(3)
         for i, n in enumerate(batch):
             with cols[i]:
-                # --- CORREÇÃO: IMAGEM SEM PARÂMETROS ---
-                try:
-                    if n.get('img'): st.image(n['img'])
-                except:
-                    st.write("🔬")
-                
+                st.image(n['img'], use_container_width=True)
                 st.markdown(f"**{n['titulo'][:75]}...**")
-                st.caption(f"{n.get('bandeira', '🌐')} {n.get('fonte', '')}")
-                st.link_button(textos["btn_ler_feed"], n['link'])
+                st.caption(f"{n['bandeira']} {n['fonte']}")
+                st.link_button(textos["btn_ler_feed"], n['link'], use_container_width=True)
 
 def processar_upload(textos):
     uploaded_file = st.session_state.get('uploader_key')
@@ -255,7 +242,12 @@ if st.session_state.pagina == 'home':
             with ca: st.text_input(t["label_alvo"], key="input_alvo", placeholder=t["holder_alvo"])
             with cb: st.button(t["btn_limpar"], key="lixo_alvo", on_click=limpar_campo, args=("input_alvo",))
 
+            # --- BOTÕES REORGANIZADOS (PRIORIDADE AO ALVO) ---
             st.write(" ")
+            
+            # Linha 1: 
+            # Esquerda (Principal): Busca Dinâmica pelo Alvo
+            # Direita (Secundário): Preset
             b_smart, b_preset = st.columns(2)
             with b_smart:
                 st.button(t["btn_smart_load"], type="primary", on_click=carregar_lista_dinamica_smart, args=(t,), use_container_width=True)
@@ -263,12 +255,15 @@ if st.session_state.pagina == 'home':
                 st.button(t["btn_preset"], type="secondary", on_click=aplicar_preset_lemos, args=(t,), use_container_width=True)
             
             st.write(" ")
+            
+            # Linha 2: O BLUE OCEAN (BRILHANTE E COMPELIDOR)
             st.markdown('<div class="blue-ocean-btn">', unsafe_allow_html=True)
             if st.button(t["btn_blue_ocean"], on_click=explorar_blue_ocean, args=(t,), use_container_width=True):
                 pass 
             st.markdown('</div>', unsafe_allow_html=True)
             
             st.write(" ")
+            # Utilitários (Contexto + Manual)
             st.button(t["btn_lib"], on_click=minerar_novidades_fonte, args=(t,), use_container_width=True)
 
             with st.popover(t["label_manual"], use_container_width=True):
@@ -306,36 +301,21 @@ elif st.session_state.pagina == 'resultados':
     c_back, c_tit = st.columns([1, 5])
     with c_back: st.button(t["btn_nova_pesquisa"], on_click=resetar_pesquisa, use_container_width=True)
     with c_tit: st.title(t["resultados"])
-    
     df = st.session_state.resultado_df
     if df is not None and not df.empty:
-        # CORREÇÃO: USAR CHAVES FIXAS ('termo', 'status')
         top = df.iloc[0]
         c1, c2, c3 = st.columns(3)
-        c1.metric(t["metrica_potencial"], top["termo"], delta=top["status"])
-        c2.metric(t["metrica_score"], top["ratio"])
-        c3.metric(t["metrica_artigos"], top["alvo_count"])
-        
+        c1.metric(t["metrica_potencial"], top[t["col_mol"]], delta=top[t["col_status"]])
+        c2.metric(t["metrica_score"], top[t["col_ratio"]])
+        c3.metric(t["metrica_artigos"], top[t["col_art_alvo"]])
         st.subheader(t["titulo_mapa"])
-        
-        # Renomear para exibição (View Layer)
-        df_show = df.rename(columns={
-            "termo": t["col_mol"],
-            "status": t["col_status"],
-            "ratio": t["col_ratio"],
-            "alvo_count": t["col_art_alvo"],
-            "fonte_count": t["col_global"]
-        }).drop(columns=["_sort"])
-        
-        fig = px.bar(df_show.head(25), x=t["col_mol"], y=t["col_ratio"], color=t["col_status"], 
-                     color_discrete_map={"💎 Blue Ocean (Inexplorado)": "#00CC96", "🌱 Embrionário (Nascendo agora)": "#00FF00", "🚀 Tendência (Translação)": "#AB63FA", "🥇 Ouro": "#636EFA", "🔴 Saturado": "#EF553B", "👻 Fantasma (Sem relevância)": "#808080"})
+        df_show = df.drop(columns=["_sort"])
+        fig = px.bar(df_show.head(25), x=t["col_mol"], y=t["col_ratio"], color=t["col_status"], color_discrete_map={"💎 Blue Ocean (Inexplorado)": "#00CC96", "🌱 Embrionário (Nascendo agora)": "#00FF00", "🚀 Tendência (Translação)": "#AB63FA", "🥇 Ouro": "#636EFA", "🔴 Saturado": "#EF553B", "👻 Fantasma (Sem relevância)": "#808080"})
         st.plotly_chart(fig, use_container_width=True)
         st.dataframe(df_show, use_container_width=True, hide_index=True)
         st.download_button(t["btn_baixar"], df_show.to_csv(index=False).encode('utf-8'), "lemos_lambda_report.csv", "text/csv")
-        
         st.divider(); st.subheader(t["titulo_leitura"]); st.info(t["info_leitura"])
-        # Selectbox usa chave fixa "termo"
-        termos_disp = sorted(df["termo"].unique().tolist())
+        termos_disp = sorted(df[t["col_mol"]].unique().tolist())
         sel_mol = st.selectbox(t["sel_leitura"], termos_disp, index=0)
         
         if st.button(f"{t['btn_buscar_artigos']} {sel_mol}", type="secondary"):
@@ -357,4 +337,3 @@ st.markdown("---"); st.caption(f"© 2025 Guilherme Lemos | {t['footer_citar']}")
 st.sidebar.markdown("---")
 with st.sidebar.expander(t["citar_titulo"], expanded=True):
     st.code(t["citar_texto"], language="text"); st.link_button(t["link_doi"], "https://doi.org/10.5281/zenodo.17958507")
-
