@@ -23,6 +23,7 @@ SOFTWARE.
 
 Author: Guilherme Lemos (Unifesp)
 Creation Date: December 2025
+Version: 2.2 (Technical Fixes Applied)
 """
 import streamlit as st
 import pandas as pd
@@ -34,22 +35,21 @@ import backend as bk
 
 st.set_page_config(page_title="Lemos Lambda", page_icon="λ", layout="wide")
 
-# --- CSS (ONDE A MÁGICA VISUAL ACONTECE) ---
+# --- CSS (CONTROLE DE LAYOUT EXCLUSIVO) ---
 st.markdown("""
     <style>
-    /* Botões */
     .stButton button { 
         border-radius: 12px; 
         height: 50px; 
         font-weight: bold; 
     }
     
-    /* Blue Ocean Pulse */
     @keyframes pulse-blue {
         0% { box-shadow: 0 0 0 0 rgba(0, 204, 150, 0.7); transform: scale(1); }
         70% { box-shadow: 0 0 0 10px rgba(0, 204, 150, 0); transform: scale(1.02); }
         100% { box-shadow: 0 0 0 0 rgba(0, 204, 150, 0); transform: scale(1); }
     }
+    
     .blue-ocean-btn button {
         animation: pulse-blue 2s infinite;
         background: linear-gradient(90deg, #00C9FF 0%, #92FE9D 100%) !important;
@@ -62,7 +62,7 @@ st.markdown("""
     
     div[data-testid="stMetricValue"] { font-size: 1.8rem !important; }
     
-    /* --- CORREÇÃO DE IMAGEM VIA CSS (SEM QUEBRAR O PYTHON) --- */
+    /* CORREÇÃO TÉCNICA 1: CSS controla a imagem, Python não envia parâmetros */
     div[data-testid="stImage"] img { 
         width: 100% !important;
         height: 150px !important; 
@@ -74,25 +74,40 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- ESTADO GERAL ---
-if 'pagina' not in st.session_state: st.session_state.pagina = 'home'
-if 'alvos_val' not in st.session_state: st.session_state.alvos_val = ""
-if 'resultado_df' not in st.session_state: st.session_state.resultado_df = None
-if 'news_index' not in st.session_state: st.session_state.news_index = 0
-if 'input_alvo' not in st.session_state: st.session_state.input_alvo = ""
-if 'input_fonte' not in st.session_state: st.session_state.input_fonte = ""
-if 'input_email' not in st.session_state: st.session_state.input_email = ""
-if 'artigos_detalhe' not in st.session_state: st.session_state.artigos_detalhe = None
-if 'email_guardado' not in st.session_state: st.session_state.email_guardado = ""
-if 'alvo_guardado' not in st.session_state: st.session_state.alvo_guardado = ""
+# --- INICIALIZAÇÃO DEFENSIVA DE ESTADO ---
+state_keys = {
+    'pagina': 'home',
+    'alvos_val': "",
+    'resultado_df': None,
+    'news_index': 0,
+    'input_alvo': "",
+    'input_fonte': "",
+    'input_email': "",
+    'artigos_detalhe': None,
+    'email_guardado': "",
+    'alvo_guardado': ""
+}
+
+for key, default in state_keys.items():
+    if key not in st.session_state:
+        st.session_state[key] = default
 
 lang_opt = st.sidebar.radio("🌐 Language:", ["🇧🇷 PT", "🇺🇸 EN"], horizontal=True)
 lang = "pt" if "PT" in lang_opt else "en"
 t = c.TEXTOS[lang]
 
 # ==========================================
-# LÓGICA DE NEGÓCIO
+# FUNÇÕES DE LÓGICA E CALLBACKS
 # ==========================================
+
+# CORREÇÃO TÉCNICA 3: Callback Resetar Pesquisa Implementado
+def resetar_pesquisa():
+    st.session_state.pagina = 'home'
+    st.session_state.resultado_df = None
+    st.session_state.artigos_detalhe = None
+    # Não limpamos o e-mail para conveniência, mas limpamos a lista processada
+    # st.rerun() não é necessário se chamado via on_click, o Streamlit roda auto
+
 def limpar_campo(chave_session):
     st.session_state[chave_session] = ""
 
@@ -108,8 +123,7 @@ def adicionar_termos_seguro(novos_termos_lista, textos):
     
     for termo in novos_termos_lista:
         t_limpo = termo.strip()
-        t_lower = t_limpo.lower()
-        if any(bad in t_lower for bad in blacklist_lower): continue
+        if any(bad in t_limpo.lower() for bad in blacklist_lower): continue
         if t_limpo and (t_limpo.upper() not in atuais_upper):
             atuais.append(t_limpo)
             atuais_upper.append(t_limpo.upper())
@@ -130,15 +144,13 @@ def carregar_lista_dinamica_smart(textos):
     lista_mestra = list(set(existentes + c.CANDIDATOS_MINERACAO))
     
     msg_final = textos["msg_sucesso_base"]
-    novos_encontrados = 0
     
     if alvo and email:
         with st.spinner(f"{textos['status_minerando']} {alvo}..."):
             novos = bk.buscar_alvos_emergentes_pubmed(alvo, email)
             if novos:
                 lista_mestra.extend(novos)
-                novos_encontrados = len(novos)
-                msg_final = textos["msg_sucesso_dinamico"].format(qtd=novos_encontrados)
+                msg_final = textos["msg_sucesso_dinamico"].format(qtd=len(novos))
     
     adicionar_termos_seguro(lista_mestra, textos)
     st.toast(msg_final, icon="🧬")
@@ -195,15 +207,17 @@ def ir_para_analise(email_user, contexto, alvo, ano_ini, ano_fim):
     
     for i, item in enumerate(lista):
         time.sleep(0.05)
-        termo_contexto = contexto if contexto else None
-        n_global = bk.consultar_pubmed_count(item, termo_contexto, email_user, ano_ini, ano_fim)
+        # Busca
+        n_global = bk.consultar_pubmed_count(item, contexto if contexto else None, email_user, ano_ini, ano_fim)
         n_especifico = bk.consultar_pubmed_count(item, alvo, email_user, ano_ini, ano_fim)
+        
+        # CORREÇÃO TÉCNICA 2: Substituir n_alvo por n_especifico na lógica
+        status_tag, score_sort = bk.classificar_oportunidade(n_especifico, n_global)
+        
         ratio = n_global / n_especifico if n_especifico > 0 else n_global
         
-        status_tag, score_sort = bk.classificar_oportunidade(n_alvo, n_global)
-
         resultados.append({
-            "termo": item,
+            "term": item,
             "status": status_tag,
             "ratio": round(ratio, 1),
             "alvo_count": n_especifico,
@@ -228,27 +242,30 @@ def processar_upload(textos):
             st.toast(f"{textos['toast_import']} ({count})", icon="📂")
         except: st.error(textos["erro_ler"])
 
-# --- RADAR CIENTÍFICO (AQUI ESTAVA O ERRO) ---
-@st.fragment(run_every=60) 
+# --- RADAR CIENTÍFICO (SEM ST.FRAGMENT) ---
+# CORREÇÃO TÉCNICA 4: st.fragment removido. Usamos cache_data no backend (assumindo que bk tem cache).
+# Se não, apenas rodamos normal. Para o frontend, removemos o decorador instável.
 def exibir_radar_cientifico(lang_code, textos):
+    # Fallback robusto já no backend
     news_list = bk.buscar_todas_noticias(lang_code)
+    
     if not news_list: return
+    
+    # Lógica de paginação simples
     idx = st.session_state.news_index % len(news_list)
     batch = news_list[idx:idx+3]
     st.session_state.news_index += 3
+    
     with st.container(border=True):
         st.caption(textos["radar_titulo"])
         cols = st.columns(3)
         for i, n in enumerate(batch):
             with cols[i]:
-                # --- CORREÇÃO DEFINITIVA ---
+                # CORREÇÃO TÉCNICA 1: st.image SEM parâmetros de tamanho
+                # Fallback de imagem
                 img_url = n.get('img')
-                # Fallback se não tiver imagem
-                if not img_url: 
-                    img_url = "https://images.unsplash.com/photo-1532094349884-543bc11b234d?w=600&q=80"
-
-                # ⚠️ SEM height, SEM width, SEM use_container_width.
-                # O CSS lá em cima (linha 57) é quem vai formatar.
+                if not img_url: img_url = "https://images.unsplash.com/photo-1532094349884-543bc11b234d?w=600&q=80"
+                
                 try:
                     st.image(img_url) 
                 except:
@@ -258,7 +275,7 @@ def exibir_radar_cientifico(lang_code, textos):
                 st.caption(f"{n['bandeira']} {n['fonte']}")
                 st.link_button(textos["btn_ler_feed"], n['link'])
 
-# --- UI (INTERFACE COMPLETA DO SEU CÓDIGO ANTIGO) ---
+# --- UI (INTERFACE PRINCIPAL) ---
 if st.session_state.pagina == 'home':
     st.title(t["titulo_desk"]); st.caption(t["subtitulo"])
     
@@ -323,12 +340,12 @@ if st.session_state.pagina == 'home':
 
 elif st.session_state.pagina == 'resultados':
     c_back, c_tit = st.columns([1, 5])
+    # CORREÇÃO TÉCNICA 3: Callback resetar_pesquisa agora existe
     with c_back: st.button(t["btn_nova_pesquisa"], on_click=resetar_pesquisa, use_container_width=True)
     with c_tit: st.title(t["resultados"])
     
     df = st.session_state.resultado_df
     if df is not None and not df.empty:
-        # FIX: Chaves Fixas
         top = df.iloc[0]
         c1, c2, c3 = st.columns(3)
         c1.metric(t["metrica_potencial"], top["termo"], delta=top["status"])
@@ -337,7 +354,6 @@ elif st.session_state.pagina == 'resultados':
         
         st.subheader(t["titulo_mapa"])
         
-        # Renomear para exibição
         df_show = df.rename(columns={
             "termo": t["col_mol"],
             "status": t["col_status"],
