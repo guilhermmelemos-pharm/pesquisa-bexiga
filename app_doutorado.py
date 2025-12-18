@@ -23,7 +23,6 @@ SOFTWARE.
 
 Author: Guilherme Lemos (Unifesp)
 Creation Date: December 2025
-Version: 1.7 (Statistical Enrichment Engine)
 """
 import streamlit as st
 import pandas as pd
@@ -36,7 +35,7 @@ import backend as bk
 
 st.set_page_config(page_title="Lemos Lambda", page_icon="λ", layout="wide")
 
-# --- CSS INJECTION (MANTIDO INTACTO) ---
+# --- CSS INJECTION PARA FAZER O BLUE OCEAN BRILHAR ---
 st.markdown("""
     <style>
     /* Estilo Geral dos Botões */
@@ -71,11 +70,16 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- ESTADO GERAL ---
-state_keys = ['pagina', 'alvos_val', 'resultado_df', 'news_index', 'input_alvo', 
-              'input_fonte', 'input_email', 'artigos_detalhe', 'email_guardado', 'alvo_guardado']
-for k in state_keys:
-    if k not in st.session_state: st.session_state[k] = None if "df" in k or "artigos" in k else ""
-if st.session_state.news_index is None: st.session_state.news_index = 0
+if 'pagina' not in st.session_state: st.session_state.pagina = 'home'
+if 'alvos_val' not in st.session_state: st.session_state.alvos_val = ""
+if 'resultado_df' not in st.session_state: st.session_state.resultado_df = None
+if 'news_index' not in st.session_state: st.session_state.news_index = 0
+if 'input_alvo' not in st.session_state: st.session_state.input_alvo = ""
+if 'input_fonte' not in st.session_state: st.session_state.input_fonte = ""
+if 'input_email' not in st.session_state: st.session_state.input_email = ""
+if 'artigos_detalhe' not in st.session_state: st.session_state.artigos_detalhe = None
+if 'email_guardado' not in st.session_state: st.session_state.email_guardado = ""
+if 'alvo_guardado' not in st.session_state: st.session_state.alvo_guardado = ""
 
 lang_opt = st.sidebar.radio("🌐 Language:", ["🇧🇷 PT", "🇺🇸 EN"], horizontal=True)
 lang = "pt" if "PT" in lang_opt else "en"
@@ -93,14 +97,19 @@ def limpar_lista_total():
 def carregar_lista_dinamica_smart(textos):
     email = st.session_state.input_email
     alvo = st.session_state.input_alvo
+    
+    # VALIDAÇÃO DO ALVO (OBRIGATÓRIO AGORA)
     if not alvo:
         st.error("⚠️ Preencha o campo 'Alvo Principal' (ex: Liver, Kidney) antes de buscar!")
         return
+
+    # Pega o que já está na tela para não apagar
     existentes = [x.strip() for x in st.session_state.alvos_val.split(",") if x.strip()]
     lista_mestra = list(set(existentes + c.CANDIDATOS_MINERACAO))
     
     msg_final = textos["msg_sucesso_base"]
     novos_encontrados = 0
+    
     if alvo and email:
         with st.spinner(f"{textos['status_minerando']} {alvo}..."):
             novos = bk.buscar_alvos_emergentes_pubmed(alvo, email)
@@ -108,15 +117,18 @@ def carregar_lista_dinamica_smart(textos):
                 lista_mestra.extend(novos)
                 novos_encontrados = len(novos)
                 msg_final = textos["msg_sucesso_dinamico"].format(qtd=novos_encontrados)
+    
     adicionar_termos_seguro(lista_mestra, textos)
     st.toast(msg_final, icon="🧬")
 
 def explorar_blue_ocean(textos):
     email = st.session_state.input_email
     alvo = st.session_state.input_alvo
+
     if not email or not alvo:
         st.error(textos["erro_campos"])
         return
+
     with st.spinner(textos["status_blue_ocean"]):
         novos = bk.buscar_alvos_emergentes_pubmed(alvo, email)
         if novos:
@@ -128,8 +140,13 @@ def explorar_blue_ocean(textos):
 def minerar_novidades_fonte(textos):
     fonte = st.session_state.input_fonte
     email = st.session_state.input_email
-    if not fonte: st.error(textos["erro_fonte_vazia"]); return
-    if not email: st.error(textos["erro_email"]); return
+    if not fonte:
+        st.error(textos["erro_fonte_vazia"])
+        return
+    if not email:
+        st.error(textos["erro_email"])
+        return
+
     with st.spinner(f"Minerando: {fonte}..."):
         novos_termos = bk.buscar_alvos_emergentes_pubmed(fonte, email)
         if novos_termos:
@@ -139,13 +156,16 @@ def minerar_novidades_fonte(textos):
 def aplicar_preset_lemos(textos):
     st.session_state.input_alvo = c.PRESET_LEMOS["alvo"]
     st.session_state.input_fonte = c.PRESET_LEMOS["fonte"]
+    # Aqui não exigimos validação manual pois o preset preenche sozinho
     carregar_lista_dinamica_smart(textos)
 
 def adicionar_termos_seguro(novos_termos_lista, textos):
     atuais = [x.strip() for x in st.session_state.alvos_val.split(",") if x.strip()]
     atuais_upper = [x.upper() for x in atuais]
     adicionados = []
+    
     blacklist_lower = [x.lower() for x in c.BLACKLIST_GERAL]
+    
     for termo in novos_termos_lista:
         t_limpo = termo.strip()
         t_lower = t_limpo.lower()
@@ -154,6 +174,7 @@ def adicionar_termos_seguro(novos_termos_lista, textos):
             atuais.append(t_limpo)
             atuais_upper.append(t_limpo.upper())
             adicionados.append(t_limpo)
+            
     st.session_state.alvos_val = ", ".join(atuais)
     return len(adicionados)
 
@@ -169,70 +190,57 @@ def ir_para_analise(email_user, contexto, alvo, ano_ini, ano_fim):
     lista = [x.strip() for x in st.session_state.alvos_val.split(",") if x.strip()]
     resultados = []
     
-    # --- PREPARAÇÃO ESTATÍSTICA (Z-SCORE BASELINE) ---
-    N_PUBMED_TOTAL = 36000000
-    n_total_alvo = 0
-    
     placeholder = st.empty()
     with placeholder.container():
-        st.markdown("## 🧬 Lemos Lambda Statistical Engine...")
-        st.write("Calibrando linha de base estatística...")
-        n_total_alvo = bk.consultar_pubmed_count(alvo, "", email_user, 1900, 2030)
-        if n_total_alvo == 0: n_total_alvo = 1
-        
-        st.markdown(f"Analisando **{len(lista)} moléculas** contra o universo de **{n_total_alvo} artigos**...")
+        st.markdown("## 🧬 Lemos Lambda Deep Processing...")
+        st.markdown(f"Analisando **{len(lista)} moléculas** contra o alvo **'{alvo}'**...")
         prog = st.progress(0)
     
     for i, item in enumerate(lista):
         time.sleep(0.05)
         termo_contexto = contexto if contexto else None
-        
-        # 1. Dados Observados
         n_global = bk.consultar_pubmed_count(item, termo_contexto, email_user, ano_ini, ano_fim)
         n_especifico = bk.consultar_pubmed_count(item, alvo, email_user, ano_ini, ano_fim)
         
-        # --- CÁLCULO DE ENRIQUECIMENTO (Enrichment Score) ---
-        expected = (n_global * n_total_alvo) / N_PUBMED_TOTAL
-        if expected == 0: expected = 0.00001
+        # --- ESTATÍSTICA NOVA (Ratio 2.0 - Lambda Score) ---
+        # 1. Suavização (+1) para evitar zeros e permitir log
+        safe_global = n_global + 1
+        safe_especifico = n_especifico + 1
         
-        enrichment = (n_especifico + 0.1) / expected
+        # 2. Score Logarítmico (Magnitude)
+        lambda_score = math.log10(safe_global) - math.log10(safe_especifico)
         
-        # Lambda Score Simplificado para Ranking
-        lambda_score = math.log10(enrichment) + (math.log10(n_global + 1) * 0.2)
-        
-        # --- CLASSIFICAÇÃO ESTATÍSTICA ---
+        # 3. Classificação
         tag = "⚖️ Neutro"
         score_sort = 0
         
         if n_especifico == 0:
-            if n_global > 300: 
+            # Se não tem nada no alvo, precisa ser MUITO forte fora
+            if lambda_score > 2.5: # ~300 papers fora
                 tag = "💎 Blue Ocean (Inexplorado)"
                 score_sort = 1000
             else:
-                tag = "👻 Fantasma (Ruído Estatístico)"
+                tag = "👻 Fantasma (Sem relevância)"
                 score_sort = 0
         else:
-            if enrichment > 100: 
-                if n_especifico > 5:
-                    tag = "🥇 Ouro (Alta Significância)"
-                    score_sort = 100
-                else:
-                    tag = "🌱 Embrionário (Promissor)"
-                    score_sort = 500
-            elif enrichment > 20:
-                tag = "🚀 Tendência"
+            if lambda_score > 2.0: # 100x mais fora
+                tag = "🚀 Tendência (Translação)"
                 score_sort = 200
-            elif enrichment < 1:
-                tag = "🔴 Saturado / Aleatório"
+            elif lambda_score > 1.0: # 10x mais fora
+                tag = "🥇 Ouro"
+                score_sort = 100
+            elif lambda_score < 0.5: # Diferença pequena
+                tag = "🔴 Saturado"
                 score_sort = 10
-            else:
-                tag = "⚖️ Neutro"
-                score_sort = 20
+            elif n_especifico < 10: # Pouco estudado localmente
+                tag = "🌱 Embrionário (Nascendo agora)"
+                score_sort = 500
 
-        ratio_visual = float(enrichment)
+        # Ratio visual
+        ratio = float(n_global / safe_especifico)
         
         resultados.append({
-            t["col_mol"]: item, t["col_status"]: tag, t["col_ratio"]: round(ratio_visual, 1), t["col_art_alvo"]: n_especifico, t["col_global"]: n_global, "_sort": score_sort
+            t["col_mol"]: item, t["col_status"]: tag, t["col_ratio"]: round(ratio, 1), t["col_art_alvo"]: n_especifico, t["col_global"]: n_global, "_sort": score_sort
         })
         prog.progress((i+1)/len(lista))
     
@@ -254,8 +262,7 @@ def exibir_radar_cientifico(lang_code, textos):
         cols = st.columns(3)
         for i, n in enumerate(batch):
             with cols[i]:
-                # MANTIDO ORIGINAL COMO SOLICITADO
-                if n.get('img'): st.image(n['img'], use_container_width=True)
+                st.image(n['img'], use_container_width=True)
                 st.markdown(f"**{n['titulo'][:75]}...**")
                 st.caption(f"{n['bandeira']} {n['fonte']}")
                 st.link_button(textos["btn_ler_feed"], n['link'], use_container_width=True)
@@ -354,19 +361,7 @@ elif st.session_state.pagina == 'resultados':
         
         st.subheader(t["titulo_mapa"])
         df_show = df.drop(columns=["_sort"])
-        
-        # CORES ATUALIZADAS PARA OS NOVOS STATUS
-        fig = px.bar(df_show.head(25), x=t["col_mol"], y=t["col_ratio"], color=t["col_status"], 
-                     color_discrete_map={
-                         "💎 Blue Ocean (Inexplorado)": "#00CC96", 
-                         "🌱 Embrionário (Promissor)": "#00FF00", 
-                         "🚀 Tendência": "#AB63FA", 
-                         "🥇 Ouro (Alta Significância)": "#636EFA", 
-                         "🔴 Saturado / Aleatório": "#EF553B", 
-                         "👻 Fantasma (Ruído Estatístico)": "#808080",
-                         "⚖️ Neutro": "#D3D3D3"
-                     })
-        
+        fig = px.bar(df_show.head(25), x=t["col_mol"], y=t["col_ratio"], color=t["col_status"], color_discrete_map={"💎 Blue Ocean (Inexplorado)": "#00CC96", "🌱 Embrionário (Nascendo agora)": "#00FF00", "🚀 Tendência (Translação)": "#AB63FA", "🥇 Ouro": "#636EFA", "🔴 Saturado": "#EF553B", "👻 Fantasma (Sem relevância)": "#808080"})
         st.plotly_chart(fig, use_container_width=True)
         st.dataframe(df_show, use_container_width=True, hide_index=True)
         st.download_button(t["btn_baixar"], df_show.to_csv(index=False).encode('utf-8'), "lemos_lambda_report.csv", "text/csv")
