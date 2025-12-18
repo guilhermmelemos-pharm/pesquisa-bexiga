@@ -9,7 +9,7 @@ import feedparser
 import random
 import constantes as c
 
-# Regex ajustado para evitar pegar números de aprovação ou códigos estranhos
+# Regex ajustado para pegar compostos químicos e genes, evitando texto comum
 REGEX_COMPLEXO = r'\b([A-Z][a-zA-Z0-9\-]*(?:\s[A-Z][a-zA-Z0-9\-]+){0,3})\b'
 
 IMAGENS_SCIENCE = [
@@ -21,60 +21,81 @@ IMAGENS_SCIENCE = [
     "https://images.unsplash.com/photo-1579154204601-01588f351e67?auto=format&fit=crop&w=600&q=80",
 ]
 
+# --- LISTAS DE BLOQUEIO INTERNAS (HARDCODED PARA PERFORMANCE) ---
+BLACKLIST_SOBRENOMES = [
+    "wang", "zhang", "li", "liu", "yang", "huang", "wu", "zhou", "xu", "sun", "ma", "zhu", "hu", "guo", "he", "gao", "lin", "luo", "cheng",
+    "kim", "lee", "park", "choi", "jeong", "chung", "song", "kang", "jang", "han", "lim",
+    "singh", "kumar", "sharma", "patel", "gupta", "mishra", "yadav", "das",
+    "smith", "johnson", "williams", "brown", "jones", "garcia", "miller", "davis", "rodriguez", "martinez",
+    "chen", "zhao", "yu", "yin", "chang", "ng", "tran", "tan", "wong", "chan", "cai", "ao", "kr", "bm", "nd", "jr", "sr", "et", "al"
+]
+
+BLACKLIST_GEOGRAFIA = [
+    "china", "usa", "japan", "germany", "uk", "france", "italy", "canada", "australia", "spain", "korea", "india", "brazil",
+    "beijing", "shanghai", "guangzhou", "wuhan", "nanjing", "tianjin", "hangzhou",
+    "london", "cambridge", "oxford", "boston", "new york", "california", "texas", "arizona", "massachusetts", "pennsylvania", "michigan",
+    "tokyo", "osaka", "seoul", "busan", "daegu", "taipei", "hong kong", "singapore",
+    "university", "hospital", "institute", "center", "school", "college", "academy", "department", "division", "ministry", "state", "provincial",
+    "street", "road", "avenue", "district", "province", "city", "ltd", "inc", "corp", "co", "plc"
+]
+
 def validar_termo_inteligente(termo):
     """
-    Filtro Heurístico para remover lixo bibliográfico e siglas inúteis.
-    Retorna True se o termo for BOM, False se for LIXO.
+    Filtro Heurístico Avançado: Mata nomes, cidades e lixo bibliográfico.
     """
     t_limpo = termo.strip()
+    t_lower = t_limpo.lower()
     
-    # 1. Regra de Tamanho e Formato Básico
+    # 1. Tamanho e Estrutura
     if len(t_limpo) < 3: return False
     if t_limpo.isdigit(): return False
-    
-    # 2. Regra de Siglas de Revistas/Doenças (Tudo Maiúsculo curto)
-    # Ex: BMJ, BPH, COVID-19, BJOG, BMB
-    if t_limpo.isupper() and len(t_limpo) <= 5 and t_limpo not in ["PFAS", "TMAO", "NMN", "CBD", "CBG"]: 
+    if re.match(r'^CD\d+$', t_limpo): return False # Remove CD44, CD24, etc.
+
+    # 2. Blacklist de Sobrenomes (Detecta "Chen", "Wang Y", "Li X")
+    palavras = t_lower.split()
+    if any(p in BLACKLIST_SOBRENOMES for p in palavras):
+        # Se for só o sobrenome ou sobrenome + inicial, mata.
+        # Exceção: Termos científicos que coincidem com nomes (raro em 2 palavras, mas possível)
+        if len(palavras) <= 2: return False
+
+    # 3. Blacklist Geográfica e Institucional
+    if any(p in BLACKLIST_GEOGRAFIA for p in palavras):
+        return False
+
+    # 4. Regra de Siglas Curtas (ex: BPH, BJOG) - Exceções VIPs
+    whitelist_siglas = ["PFAS", "TMAO", "NMN", "CBD", "CBG", "LPS", "ATP", "NAD", "RNA", "DNA", "ROS", "NO"]
+    if t_limpo.isupper() and len(t_limpo) <= 5 and t_limpo not in whitelist_siglas: 
         return False
     
-    # 3. Regra de Marcadores de Superfície (CDxx)
-    # Ex: CD44, CD24, CD4, CD8
-    if re.match(r'^CD\d+$', t_limpo): return False
-    
-    # 4. Regra de Revistas e Termos de Citação
-    # Ex: Cell Rep, Sci Rep, Am J, Ann Arbor, Cheng, Chen
-    revistas_banidas = ["Rep", "Rev", "Ann", "Bull", "Lett", "Arch", "Clin", "Exp", "J", "Am", "Engl", "Bio"]
-    palavras = t_limpo.split()
-    
-    # Se a última palavra for uma abreviação de revista (Ex: Cell 'Rep')
-    if palavras[-1] in revistas_banidas: return False
-    
-    # Sobrenomes comuns curtos isolados (Chen, Wang, Li, Kim, etc - difícil listar todos, mas filtramos por padrão)
-    # Se for uma única palavra, começa com maiúscula, tem menos de 5 letras e não está na whitelist
-    whitelist_curta = ["TMAO", "PFAS", "GPR", "ROCK", "NRF2", "SIRT", "MAGL", "FAAH"]
-    if len(palavras) == 1 and len(t_limpo) < 5 and not t_limpo.isupper() and not any(x in t_limpo for x in whitelist_curta):
+    # 5. Regra de Sufixos Corporativos
+    if t_lower.endswith((" therapeutics", " bio", " pharma", " oncology", " inc", " co", " ltd", " group", " sci", " rep", " med", " biol", " chem")):
         return False
 
     return True
 
 def buscar_alvos_emergentes_pubmed(orgao_alvo, email):
+    """
+    Busca profunda no PubMed exigindo contexto molecular para evitar lixo.
+    """
     if not orgao_alvo or not email: return []
     Entrez.email = email
     ano_fim = datetime.now().year
-    ano_inicio = ano_fim - 2 
+    ano_inicio = ano_fim - 3 # Aumentei para 3 anos para pegar mais robustez
     
-    # Query otimizada para fugir de revisões genéricas
+    # QUERY REFINADA: Exige que o termo alvo esteja perto de palavras de ação biológica
+    # Isso evita pegar endereços, pois endereços não "ativam", "inibem" ou "regulam".
     query = (
-        f"({orgao_alvo}) AND ("
-        f"'novel target' OR 'emerging' OR 'receptor' OR 'pathway' OR 'metabolite' OR "
-        f"'progenitor' OR 'stem cell' OR 'organoid' OR 'mechanism' OR "
-        f"'microplastics' OR 'TMAO' OR 'cannabinoid')" # Força termos Sci-Fi na busca
+        f"({orgao_alvo}[Title/Abstract]) AND ("
+        f"\"molecular mechanism\" OR \"signaling pathway\" OR \"therapeutic target\" OR "
+        f"\"gene expression\" OR \"upregulation\" OR \"downregulation\" OR \"activation\" OR "
+        f"\"inhibition\" OR \"novel receptor\" OR \"metabolite\" OR \"microplastics\" OR \"TMAO\")"
         f" AND (\"{ano_inicio}\"[Date - Publication] : \"{ano_fim}\"[Date - Publication])"
-        f" NOT (Review[Publication Type])" # Tenta evitar artigos de revisão que citam muitos journals
+        f" NOT (Review[Publication Type])" 
     )
     
     try:
-        handle = Entrez.esearch(db="pubmed", term=query, retmax=50, sort="relevance")
+        # Busca mais IDs para poder filtrar bastante
+        handle = Entrez.esearch(db="pubmed", term=query, retmax=80, sort="relevance")
         ids = Entrez.read(handle)["IdList"]
         if not ids: return []
         
@@ -86,25 +107,31 @@ def buscar_alvos_emergentes_pubmed(orgao_alvo, email):
         termos_limpos = []
         blacklist_lower = [x.lower() for x in c.BLACKLIST_GERAL]
         
+        # Contagem de frequência para priorizar termos que aparecem mais de uma vez (Sinal vs Ruído)
+        frequencia = {}
         for t in candidatos:
             t = t.strip(" .,();:")
+            if t in frequencia: frequencia[t] += 1
+            else: frequencia[t] = 1
+
+        for t, freq in frequencia.items():
             t_lower = t.lower()
             
-            # 1. Filtro da Blacklist Estática (Manual)
+            # FILTRAGEM EM CASCATA
             if any(bad in t_lower for bad in blacklist_lower): continue
-            
-            # 2. Filtro Heurístico Inteligente (Algoritmo)
             if not validar_termo_inteligente(t): continue
+            if any(bad in t_lower.split() for bad in ["were", "was", "rates", "group", "study", "analysis", "doi", "vol", "no", "fig"]): continue
             
-            # 3. Filtro de Contexto Frasal
-            if any(bad in t_lower.split() for bad in ["were", "was", "rates", "group", "study", "analysis", "doi", "vol", "no"]): continue
-            
-            # 4. Critério de Aceitação: Parece Ciência?
-            # Tem hífen, número no meio, ou é composto
+            # Regra de Ouro: Termos muito curtos que aparecem 1x só geralmente são ruído ou iniciais.
+            # Termos bons tendem a repetir ou são compostos.
+            if len(t) < 5 and freq < 2 and t not in ["TMAO", "PFAS", "NMN"]: continue
+
             if "-" in t or any(x.isupper() for x in t[1:]) or " " in t or t[0].isupper():
                 termos_limpos.append(t)
 
-        return sorted(list(set(termos_limpos)))[:30] 
+        # Retorna os top 40 ordenados por frequência (os mais citados primeiro)
+        termos_ordenados = sorted(termos_limpos, key=lambda x: frequencia[x], reverse=True)
+        return termos_ordenados[:40] 
     except:
         return []
 
@@ -120,7 +147,7 @@ def extrair_conclusao_real(abstract_text, translator):
     if not abstract_text: return "Resumo não disponível."
     match = re.search(r'(Conclusion|Conclusions|In conclusion|Summary|Significance|Results suggest that)(.*)', abstract_text, re.IGNORECASE | re.DOTALL)
     texto_bruto = match.group(2).strip() if match else ". ".join(abstract_text.split(". ")[-3:])
-    texto_final = texto_bruto[:500] 
+    texto_final = texto_bruto[:600] # Aumentei um pouco
     try:
         return translator.translate(texto_final) + "..."
     except:
