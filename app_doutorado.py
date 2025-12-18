@@ -27,259 +27,153 @@ Creation Date: December 2025
 
 import streamlit as st
 import pandas as pd
-import time
 import plotly.express as px
 from datetime import datetime
-from Bio import Entrez 
+import time
 
 # ==========================================
 # IMPORTAÇÃO MODULAR
 # ==========================================
-# Certifique-se que constantes.py e backend.py estão na mesma pasta
 import constantes as c
 import backend as bk
 
 # ==========================================
-# CONFIGURAÇÃO GLOBAL
+# CONFIGURAÇÃO VISUAL
 # ==========================================
 st.set_page_config(page_title="Lemos Lambda", page_icon="λ", layout="wide")
 
-# CSS: Estilo
 st.markdown("""
     <style>
+    .stButton button { border-radius: 12px; height: 50px; font-weight: bold; }
+    .css-1d391kg { padding-top: 2rem; }
+    div[data-testid="stMetricValue"] { font-size: 1.8rem !important; }
     div[data-testid="stImage"] img { height: 150px !important; object-fit: cover !important; border-radius: 8px !important; }
-    .stButton button { width: 100%; }
-    div[data-testid="stVerticalBlock"] > div { gap: 0.5rem; }
     </style>
 """, unsafe_allow_html=True)
 
-# Inicialização do Session State
+# --- ESTADO ---
 if 'alvos_val' not in st.session_state: st.session_state.alvos_val = ""
-if 'fonte_val' not in st.session_state: st.session_state.fonte_val = ""
-if 'alvo_val' not in st.session_state: st.session_state.alvo_val = ""
+if 'resultado_df' not in st.session_state: st.session_state.resultado_df = None
 if 'news_index' not in st.session_state: st.session_state.news_index = 0
 
-# ==========================================
-# UI HELPERS (Funções de Interface)
-# ==========================================
-@st.fragment(run_every=60) 
-def exibir_radar_cientifico(lang_code):
-    news_list = bk.buscar_todas_noticias(lang_code)
-    if not news_list: return
-    total_news = len(news_list)
-    idx = st.session_state.news_index % total_news
-    batch = news_list[idx:idx+3]
-    st.session_state.news_index += 3
-    with st.container(border=True):
-        st.caption(f"📡 **Radar Científico**")
-        cols = st.columns(3)
-        for i, n in enumerate(batch):
-            with cols[i]:
-                st.image(n['img'], use_container_width=True)
-                st.markdown(f"**{n['titulo'][:60]}...**")
-                st.caption(f"{n['bandeira']} {n['fonte']}")
-                st.link_button("Ler" if lang_code=='pt' else "Read", n['link'], use_container_width=True)
-
-def carregar_setup_lemos(t):
-    st.session_state.alvos_val = ", ".join(c.CANDIDATOS_MINERACAO)
-    st.session_state.fonte_val = "Brain OR Kidney OR Liver OR Intestine OR Lung OR Vascular OR Immune System"
-    st.session_state.alvo_val = "Bladder OR Vesical OR Urothelium OR Detrusor OR Cystitis OR Overactive Bladder"
-    st.toast(t["toast_setup"], icon="🧬")
-
-def carregar_termos_indicados_orgao(orgao, email, t):
-    if not orgao or not email:
-        st.error("E-mail e Alvo necessários!")
-        return
-    with st.spinner("Minerando PubMed com precisão farmacológica..."):
-        termos = bk.buscar_alvos_emergentes_pubmed(orgao, email)
-        if termos:
-            atuais = set([x.strip().upper() for x in st.session_state.alvos_val.split(",") if x.strip()])
-            filtrados = [term for term in termos if term.upper() not in atuais]
-            if filtrados:
-                novo_texto = (st.session_state.alvos_val.strip(", ") + ", " + ", ".join(filtrados)).strip(", ")
-                st.session_state.alvos_val = novo_texto
-                st.toast(t["toast_restaurar"], icon="✨")
-            else:
-                st.toast("Nenhum termo novo para adicionar.", icon="ℹ️")
-
-def minerar_blue_oceans_ui(orgao, email, t):
-    """Lógica de UI para mineração, chama APIs diretas para controle de progresso"""
-    if not orgao or not email:
-        st.toast(t["toast_aviso_minerar"], icon="⚠️"); return
-    
-    encontrados = []
-    Entrez.email = email
-    my_bar = st.progress(0, text=t["prog_minerar"])
-    amostra = c.CANDIDATOS_MINERACAO 
-    total = len(amostra)
-    
-    for i, termo in enumerate(amostra):
-        try:
-            time.sleep(0.3) 
-            query = f"({termo}) AND ({orgao}) AND 2010:2025[DP]"
-            handle = Entrez.esearch(db="pubmed", term=query, retmax=0)
-            record = Entrez.read(handle)
-            count = int(record["Count"])
-            if 0 <= count < 150: encontrados.append(f"{termo}")
-            my_bar.progress((i + 1) / total, text=t["prog_testando"].format(termo=termo, count=count))
-        except: continue
-    
-    my_bar.empty()
-    if encontrados:
-        st.session_state.alvos_val = ", ".join(encontrados)
-        st.toast(t["toast_sucesso_minerar"].format(qtd=len(encontrados)), icon="💡")
-
-def processar_upload(t):
-    uploaded_file = st.session_state.get('uploader_key')
-    if uploaded_file is not None:
-        try:
-            content = uploaded_file.getvalue().decode("utf-8")
-            st.session_state.alvos_val = " ".join(content.replace("\n", ",").split())
-            st.toast(t["toast_upload"], icon="📂")
-        except: st.error("Erro upload")
-
-def limpar_campo(key): st.session_state[key] = ""
-
-# ==========================================
-# INTERFACE PRINCIPAL (UI)
-# ==========================================
-lang_opt = st.sidebar.radio("Language / Idioma:", ["🇧🇷 Português", "🇺🇸 English"])
-lang = "pt" if "Português" in lang_opt else "en"
+# --- IDIOMA ---
+lang_opt = st.sidebar.radio("🌐", ["🇧🇷 PT", "🇺🇸 EN"], horizontal=True)
+lang = "pt" if "PT" in lang_opt else "en"
 t = c.TEXTOS[lang]
-modo = st.sidebar.radio("📱 Mode:", ["Desktop", "Mobile (Pocket)"], index=0)
 
-st.sidebar.markdown("---")
-with st.sidebar.expander(t["citar_titulo"]):
-    st.code(t["citar_texto"], language="text")
-    st.link_button(t["link_doi"], "https://doi.org/10.5281/zenodo.17958507")
-st.sidebar.markdown("---")
+# ==========================================
+# UI PRINCIPAL (WIZARD)
+# ==========================================
+st.title(t["titulo_desk"])
+st.caption(t["subtitulo"])
 
-# --- MODO DESKTOP ---
-if modo == "Desktop":
-    st.title(t["titulo_desk"])
-    st.markdown(t["subtitulo"])
-    if 'dados_desk' not in st.session_state: exibir_radar_cientifico(lang)
+# --- ÁREA DE INPUT (PASSO 1) ---
+with st.container(border=True):
+    col_input, col_btn = st.columns([3, 1])
     
-    st.sidebar.header(t["credenciais"])
-    email_user = st.sidebar.text_input(t["email_label"], placeholder="pesquisador@unifesp.br", key="email_desk")
-    anos = st.sidebar.slider(t["periodo"], 1900, datetime.now().year, (2010, datetime.now().year), key="anos_desk")
+    with col_input:
+        st.subheader(t["step_1"])
+        email_user = st.text_input("E-mail (Obrigatório para PubMed)", placeholder="ex: gl@unifesp.br")
+        alvo = st.text_input(t["label_alvo"], placeholder=t["holder_alvo"])
+        contexto = st.text_input(t["label_fonte"], placeholder=t["holder_fonte"])
     
-    st.sidebar.markdown("---")
-    st.sidebar.header(t["config"])
-    st.sidebar.markdown(t["label_fonte"])
-    c1, c2 = st.sidebar.columns([6, 1], vertical_alignment="bottom")
-    with c1: t_fonte = st.text_input("Fonte", key="fonte_val", value=st.session_state.fonte_val, label_visibility="collapsed")
-    with c2: st.button("🗑️", key="del_f", on_click=limpar_campo, args=("fonte_val",))
-    
-    st.sidebar.markdown(t["label_alvo"])
-    c3, c4 = st.sidebar.columns([6, 1], vertical_alignment="bottom")
-    with c3: t_alvo = st.text_input("Alvo", key="alvo_val", value=st.session_state.alvo_val, label_visibility="collapsed")
-    with c4: st.button("🗑️", key="del_a", on_click=limpar_campo, args=("alvo_val",))
-    st.sidebar.button(t["btn_setup"], on_click=carregar_setup_lemos, args=(t,))
-    
-    st.sidebar.markdown("---")
-    st.sidebar.header(t["sec_alvos"])
-    with st.sidebar.expander(t["expander_upload"]):
-        st.file_uploader("Upload", type=["csv", "txt"], key="uploader_key", on_change=processar_upload, args=(t,))
-    st.sidebar.markdown(t["label_lista"])
-    c5, c6 = st.sidebar.columns([6, 1], vertical_alignment="bottom")
-    with c5: 
-        alvos_in = st.text_area(t["label_lista"], value=st.session_state.alvos_val, height=150, label_visibility="collapsed")
-        st.session_state.alvos_val = alvos_in 
-    with c6: st.button("🗑️", key="del_l", on_click=limpar_campo, args=("alvos_val",))
+    with col_btn:
+        st.write(" ")
+        st.write(" ")
+        st.write(" ") # Espaçamento visual
+        # BOTÃO INTELIGENTE DE MINERAÇÃO
+        if st.button(t["btn_magic"], type="primary"):
+            if not email_user or not alvo:
+                st.error("⚠️ E-mail e Alvo necessários!")
+            else:
+                with st.status(t["prog_magic"], expanded=True) as status:
+                    st.write(t["status_minerando"])
+                    # Chama o backend para buscar termos novos (Blue Ocean)
+                    novos_termos = bk.buscar_alvos_emergentes_pubmed(alvo, email_user)
+                    
+                    st.write(t["status_filtrando"])
+                    termos_base = c.CANDIDATOS_MINERACAO
+                    
+                    # Junta lista base + descobertas novas + ácidos/moléculas complexas
+                    lista_final = list(set(termos_base + novos_termos))
+                    st.session_state.alvos_val = ", ".join(lista_final)
+                    
+                    status.update(label=t["status_pronto"], state="complete", expanded=False)
+                    st.toast(f"✅ {len(novos_termos)} novos termos complexos encontrados!", icon="🧬")
 
-    if st.sidebar.button(t["btn_trend"], key="trend_desk"):
-        carregar_termos_indicados_orgao(t_alvo, email_user, t)
+# --- ÁREA DE ANÁLISE (PASSO 2) ---
+st.divider()
+st.subheader(t["step_2"])
 
-    b1, b2 = st.sidebar.columns(2)
-    b1.button(t["btn_restaurar"], on_click=carregar_termos_indicados_orgao, args=(t_alvo, email_user, t))
-    b2.button(t["btn_minerar"], on_click=minerar_blue_oceans_ui, args=(t_alvo, email_user, t))
-    
-    st.sidebar.markdown("---")
-    if st.sidebar.button(t["btn_avanco"], type="primary"):
-        if not email_user: st.error(t["erro_email"])
-        elif not st.session_state.alvos_val: st.warning(t["aviso_lista"])
+# Só mostra a área de análise se tiver termos carregados
+if st.session_state.alvos_val:
+    with st.expander("📝 Ver/Editar Lista de Palavras-Chave (Clique para abrir)", expanded=False):
+        st.session_state.alvos_val = st.text_area("Termos", value=st.session_state.alvos_val, height=150)
+
+    # BOTÃO DE CÁLCULO (RATIO)
+    if st.button(t["analise_btn"], use_container_width=True):
+        if not email_user: st.error("E-mail necessário.")
         else:
-            lst = [x.strip() for x in st.session_state.alvos_val.split(",") if x.strip()]
-            res = []; pg = st.empty(); bar = st.progress(0)
-            for i, item in enumerate(lst):
-                pg.text(t["prog_investigando"].format(atual=i+1, total=len(lst), alvo=item))
-                nf = bk.consultar_pubmed_count(item, t_fonte, email_user, anos[0], anos[1])
-                na = bk.consultar_pubmed_count(item, t_alvo, email_user, anos[0], anos[1])
-                pot = nf/na if na > 0 else nf
-                stat = "💎 DIAMANTE" if pot > 10 else "🥇 Ouro" if pot > 2 else "🔴 Saturado"
-                res.append({"Alvo": item, "Status": stat, "Ratio": pot, "Fonte": nf, "Alvo_Interest": na})
-                bar.progress((i+1)/len(lst))
-            st.session_state['dados_desk'] = pd.DataFrame(res).sort_values(by="Ratio", ascending=False)
+            lista = [x.strip() for x in st.session_state.alvos_val.split(",") if x.strip()]
+            resultados = []
+            
+            progresso = st.progress(0)
+            status_text = st.empty()
+            
+            for i, item in enumerate(lista):
+                status_text.caption(f"🔍 Investigando: **{item}**...")
+                time.sleep(0.05) # Pequeno delay para UI fluida
+                
+                # Buscas no Backend
+                n_global = bk.consultar_pubmed_count(item, contexto, email_user, 2015, 2025)
+                n_especifico = bk.consultar_pubmed_count(item, alvo, email_user, 2015, 2025)
+                
+                # Lógica de Classificação Blue Ocean
+                ratio = n_global / n_especifico if n_especifico > 0 else n_global
+                
+                if n_especifico == 0 and n_global > 50: tag = "💎 Blue Ocean (Inexplorado)"
+                elif ratio > 10: tag = "🥇 Ouro (Promissor)"
+                elif ratio < 2: tag = "🔴 Saturado"
+                else: tag = "⚖️ Neutro"
+                
+                resultados.append({
+                    "Molécula/Alvo": item, 
+                    "Status": tag, 
+                    "Potencial (Ratio)": round(ratio, 1),
+                    "Artigos no Alvo": n_especifico,
+                    "Global": n_global
+                })
+                progresso.progress((i+1)/len(lista))
+            
+            progresso.empty()
+            status_text.empty()
+            st.session_state.resultado_df = pd.DataFrame(resultados).sort_values(by="Potencial (Ratio)", ascending=False)
             st.rerun()
 
-    if 'dados_desk' in st.session_state:
-        df = st.session_state['dados_desk']
-        st.success(t["analise_pronta"].format(top=df.iloc[0]['Alvo']))
+# --- EXIBIÇÃO DE RESULTADOS ---
+if st.session_state.resultado_df is not None:
+    df = st.session_state.resultado_df
+    
+    st.markdown("### 🎯 Resultados")
+    
+    # KPIs Rápidos (Destaques)
+    if not df.empty:
+        top_term = df.iloc[0]
+        c1, c2, c3 = st.columns(3)
+        c1.metric("🏆 Maior Potencial", top_term['Molécula/Alvo'])
+        c2.metric("📊 Score", top_term['Potencial (Ratio)'])
+        c3.metric("📚 Artigos Existentes", top_term['Artigos no Alvo'])
         
-        st.subheader("📊 Visualização de Potencial")
-        filt_ops = df['Status'].unique().tolist()
-        escolha = st.multiselect(t["filtro"], filt_ops, default=filt_ops)
-        df_f = df[df['Status'].isin(escolha)].head(20)
+        # Gráfico Interativo
+        fig = px.bar(df.head(20), x="Molécula/Alvo", y="Potencial (Ratio)", color="Status",
+                     color_discrete_map={"💎 Blue Ocean (Inexplorado)": "#00CC96", "🥇 Ouro (Promissor)": "#636EFA", "🔴 Saturado": "#EF553B"})
+        st.plotly_chart(fig, use_container_width=True)
         
-        st.plotly_chart(px.bar(df_f, x="Alvo", y="Ratio", color="Status", 
-                               color_discrete_map={"💎 DIAMANTE": "#00CC96", "🥇 Ouro": "#636EFA", "🔴 Saturado": "#EF553B"}), use_container_width=True)
+        # Tabela Detalhada
         st.dataframe(df, use_container_width=True, hide_index=True)
-        st.download_button(t["baixar"], df.to_csv(index=False).encode('utf-8'), "prospeccao_lemos.csv", "text/csv")
-        
-        st.divider()
-        st.header(t["raio_x"])
-        sel = st.selectbox("Selecione para ler artigos focados no alvo:", sorted(df['Alvo'].unique().tolist()))
-        if st.button(t["btn_ler"]):
-            with st.spinner(t["lendo"]):
-                arts = bk.buscar_resumos_detalhados(sel, t_alvo, email_user, anos[0], anos[1], lang)
-                if not arts: st.warning(t["sem_artigos"])
-                for a in arts:
-                    with st.expander(f"📄 {a['Title']}"): st.success(a['Resumo_IA'])
-        if st.button(t["btn_scholar"]):
-             st.markdown(f"👉 [Google Scholar](https://scholar.google.com.br/scholar?q={sel}+{t_alvo})")
+    else:
+        st.warning(t["tabela_vazia"])
 
-# --- MODO MOBILE ---
-elif modo == "Mobile (Pocket)":
-    st.title(t["titulo_mob"])
-    if 'dados_mob' not in st.session_state: exibir_radar_cientifico(lang)
-    email_mob = st.text_input(t["email_label"], key="email_mob")
-    with st.expander("⚙️ Config"):
-        anos_mob = st.slider(t["periodo"], 1900, datetime.now().year, (2010, datetime.now().year))
-        st.markdown(t["label_fonte"]); c1,c2=st.columns([6,1], vertical_alignment="bottom")
-        with c1: t_fonte_m=st.text_input("F",key="fm", value=st.session_state.fonte_val, label_visibility="collapsed")
-        with c2: st.button("🗑️",key="xf",on_click=limpar_campo, args=("fonte_val",))
-        st.markdown(t["label_alvo"]); c3,c4=st.columns([6,1], vertical_alignment="bottom")
-        with c3: t_alvo_m=st.text_input("A",key="am", value=st.session_state.alvo_val, label_visibility="collapsed")
-        with c4: st.button("🗑️",key="xa",on_click=limpar_campo, args=("alvo_val",))
-        st.button(t["btn_setup"], on_click=carregar_setup_lemos, args=(t,))
-        st.markdown(t["label_lista"]); c5,c6=st.columns([6,1], vertical_alignment="bottom")
-        with c5: 
-            alvos_m = st.text_area(t["label_lista"], value=st.session_state.alvos_val, height=100, label_visibility="collapsed")
-            st.session_state.alvos_val = alvos_m
-        with c6: st.button("🗑️",key="xl",on_click=limpar_campo, args=("alvos_val",))
-        if st.button(t["btn_trend"], key="trend_mob"):
-            carregar_termos_indicados_orgao(t_alvo_m, email_mob, t)
-        b1,b2=st.columns(2)
-        b1.button(t["btn_restaurar"],on_click=carregar_termos_indicados_orgao,args=(t_alvo_m,email_mob,t))
-        b2.button(t["btn_minerar"],on_click=minerar_blue_oceans_ui,args=(t_alvo_m,email_mob,t))
-
-    if st.button(t["btn_avanco"], type="primary"):
-        if not email_mob: st.error(t["erro_email"])
-        else:
-            l = [x.strip() for x in st.session_state.alvos_val.split(",") if x.strip()]
-            r=[]; p=st.progress(0)
-            for i, x in enumerate(l):
-                time.sleep(0.1)
-                nf = bk.consultar_pubmed_count(x, t_fonte_m, email_mob, anos_mob[0], anos_mob[1])
-                na = bk.consultar_pubmed_count(x, t_alvo_m, email_mob, anos_mob[0], anos_mob[1])
-                ratio = nf/na if na > 0 else nf
-                r.append({"Alvo":x, "P":ratio})
-                p.progress((i+1)/len(l))
-            st.session_state['dados_mob'] = pd.DataFrame(r).sort_values(by="P", ascending=False)
-            st.rerun()
-    if 'dados_mob' in st.session_state:
-        d=st.session_state['dados_mob']
-        st.metric("🏆 Top 1", d.iloc[0]['Alvo'], f"{d.iloc[0]['P']:.1f}")
-        st.dataframe(d, use_container_width=True, hide_index=True)
-        st.download_button("📥 CSV", d.to_csv(index=False).encode('utf-8'), "lemos_lambda_mob.csv", "text/csv")
+# --- RODAPÉ ---
+st.markdown("---")
+st.caption(f"© 2025 Guilherme Lemos | {t['footer_citar']}")
