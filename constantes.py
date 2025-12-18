@@ -6,7 +6,7 @@ PRESET_LEMOS = {
     "fonte": "Brain OR Kidney OR Liver OR Intestine OR Lung OR Vascular OR Immune System"
 }
 
-# --- A LISTA GIGANTE DE INOVAÇÃO (Lemos Lambda Encyclopedia) ---
+# --- SUA LISTA ÚNICA (ENCICLOPÉDIA LEMOS) ---
 CANDIDATOS_MINERACAO = [
     # --- 1. FRONTEIRAS AMBIENTAIS & EXPOSSOMA ---
     "Microplastics", "Nanoplastics", "Bisphenol A", "Phthalates", "PFAS", "Polystyrene nanoparticles",
@@ -29,7 +29,7 @@ CANDIDATOS_MINERACAO = [
     "Ferroptosis", "Pyroptosis", "Necroptosis", "Cuproptosis", "Autophagy", "Mitophagy",
     "mTOR pathway", "AMPK signaling", "Telomerase", "p16INK4a", "p21CIP1",
     
-    # --- 5. RECEPTORES OLFATIVOS & GUSTATIVOS ECTÓPICOS (Inovação Pura) ---
+    # --- 5. RECEPTORES OLFATIVOS & GUSTATIVOS ECTÓPICOS ---
     "Olfactory receptor 51E2 (OR51E2)", "Olfactory receptor 2AT4 (OR2AT4)", "OR10J5", "OR1D2",
     "Bitter taste receptors (TAS2Rs)", "Sweet taste receptors (TAS1R2/TAS1R3)", 
     "Umami receptor", "Chemosensory receptors", "Ectopic olfactory receptors",
@@ -60,56 +60,73 @@ CANDIDATOS_MINERACAO = [
     "Sphingosine-1-phosphate", "Ceramides", "Hyaluronic acid", "Taurine", "Uric Acid",
     "Melatonin", "Adenosine", "ATP", "Glutamate",
     
-    # --- 11. GENÉTICA NÃO-CODIFICANTE (Dark Genome) ---
+    # --- 11. GENÉTICA NÃO-CODIFICANTE ---
     "MALAT1 lncRNA", "HOTAIR lncRNA", "H19 lncRNA", "NEAT1 lncRNA",
     "miR-21", "miR-145", "miR-29", "miR-126", "Circular RNA (circRNA)", "Piwi-interacting RNA"
 ]
 
-# --- FILTRO DE RUÍDO (BLACKLIST) ---
-# Inclui termos metodológicos, autores e empresas que poluem a busca.
+# --- FILTRO DE RUÍDO AUTOMATIZADO (BLACKLIST CATEGÓRICA) ---
+# Se o termo contiver QUALQUER uma dessas palavras, ele é eliminado.
 BLACKLIST_GERAL = [
-    # --- TERMOS QUE VOCÊ ADICIONOU (Autores, Lugares, Empresas, Lixo) ---
-    "advancing", "afkhami-poostchi", "aggregates", "airway sciences", "airway-derived", 
-    "albani", "aldana", "alveolar", "alzheimer", "alzofon", "amato", "amgen", 
-    "amin nd", "anatomy", "angeles", "angeli", "angelica", "angiogenesis", 
-    "ann", "ann arbor", "annusver", "ansari", "application", "applied medical",
-    "acupuncture", "neuromodulation", "adaptive biotechnologies", "adkison", 
-    "administration", "adrenoceptors", "adults", "advanced", "adverse", "affiliated", 
-    "age", "aged", "aging", "workshop", "ahmad", "ahmadzadeh", "ahn", "akamatsu", 
-    "akita", "akiyama", "al assaad", "al-dossari", "all", "allergan", "although", 
-    "adpkd", "aire", "ali", "ams", "asd", "atii", "atmps", "abid", "abilez", 
-    "academy", "acharya", "acute", "adam", "adamson", "addressing", "adelaide", 
-    "adiconis", "admane", "adolescent", "adv healthc mater", "adv mater", 
-    "advanced bioscience", "advanced genomic", "cross-sectional", "postmarketing", 
-    "survey", "adrs", "aes", "ars", "aims", "pmid", "authors", "areas covered", 
-    "accordingly", "induced", "pharma", "pharmaceuticals", "solutions", "abbvie", 
-    "aveo", "accord", "abu dhabi", "abe", "abbosh", "atlab", "abyost", "aiq solutions", 
-    "aikido", "akus-11", "apobec3-induced", "april", "asb3",
-
-    # --- METODOLOGIA & ESTATÍSTICA ---
-    "adverse event", "adverse effect", "ae rate", "safety", "efficacy", "placebo",
-    "control group", "study design", "double-blind", "randomized", "clinical trial",
-    "p-value", "confidence interval", "odds ratio", "hazard ratio", "standard deviation",
-    "anova", "regression", "analysis", "data", "result", "conclusion", "method",
-    "significant", "statistically", "increased", "decreased", "compared to",
-    "associated with", "observed in", "related to", "due to",
+    # 1. TEMPO & CALENDÁRIO (Remove "Apr", "Aug", "Summer 2024")
+    "january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december",
+    "jan", "feb", "mar", "apr", "jun", "jul", "aug", "sep", "oct", "nov", "dec",
+    "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+    "spring", "summer", "autumn", "winter", "fiscal year", "annual",
     
-    # --- TERMOS BIOLÓGICOS GENÉRICOS (Que não são alvos específicos) ---
-    "signaling pathway", "signal transduction", "gene expression", "protein level",
-    "messenger rna", "receptor agonist", "receptor antagonist", "inhibitor",
-    "mechanism of action", "therapeutic target", "potential target", "biomarker",
-    "pathophysiology", "metabolism", "oxidative stress", "inflammation",
-    "cell culture", "in vivo", "in vitro", "western blot", "pcr", "elisa",
-    "stem cell", "progenitor cell", "expression of", "activation of", "levels of",
+    # 2. CORPORATIVO & INSTITUCIONAL (Remove "Astellas", "Merck", "University of...")
+    "inc.", "ltd", "corp", "corporation", "company", "plc", "gmbh", "s.a.", "co.",
+    "pharma", "pharmaceuticals", "biosciences", "biotechnologies", "therapeutics", "solutions",
+    "biopharma", "medtech", "healthcare", "labs", "laboratories", "systems", "group",
+    "university", "universidad", "universite", "college", "school", "academy", "institute",
+    "department", "division", "center", "centre", "hospital", "clinic", "foundation",
+    "association", "society", "board", "committee", "council", "federation", "assembly",
+    "ministry", "agency", "authority", "commission", "consortium", "workshop",
+    # Empresas específicas detectadas no seu log
+    "astellas", "astrazeneca", "abbvie", "merck", "amgen", "allergan", "aveo", "accord", 
+    "anchiano", "apogepha", "axonics", "atlab", "abyost", "aiq solutions", "astrin",
     
-    # --- PALAVRAS DE LIGAÇÃO ---
-    "the", "and", "with", "for", "that", "this", "were", "was", "have", "has",
-    "between", "among", "during", "after", "before", "however", "therefore",
-    "furthermore", "moreover", "additionally", "notably", "interestingly",
+    # 3. PUBLICAÇÃO & METADADOS (Remove "Author", "PMID", "Review")
+    "author", "editor", "publisher", "copyright", "rights reserved", "license",
+    "pmid", "doi", "issn", "isbn", "vol.", "no.", "pp.", "page", "issue",
+    "abstract", "introduction", "results", "discussion", "conclusion", "references",
+    "acknowledgements", "supplementary", "figure", "table", "fig.", "tab.",
+    "review", "article", "report", "letter", "editorial", "commentary", "survey",
+    "received", "accepted", "published", "available online", "corresponding",
+    "affiliated", "addressing", "approval no", "areas covered",
     
-    # --- INSTITUCIONAL ---
-    "department", "university", "hospital", "institute", "center", "usa", "china",
-    "brazil", "europe", "funding", "grant", "review", "article", "copyright"
+    # 4. GEOGRAFIA & DEMOGRAFIA (Remove "Americans", "Abu Dhabi", "Adults")
+    "usa", "uk", "united states", "kingdom", "china", "japan", "germany", "france", "italy",
+    "spain", "brazil", "russia", "india", "korea", "australia", "canada", "europe", "asia", "africa",
+    "american", "european", "asian", "african", "japanese", "chinese", "brazilian",
+    "abu dhabi", "los angeles", "new york", "london", "tokyo", "beijing", "seoul",
+    "adults", "children", "adolescent", "infant", "elderly", "aged", "aging", "men", "women",
+    "male", "female", "pediatric", "geriatric", "demographic", "population",
+    
+    # 5. METODOLOGIA GENÉRICA (Remove "Animal", "Study", "Adverse")
+    "study", "trial", "experiment", "investigation", "analysis", "assessment", "evaluation",
+    "method", "technique", "approach", "procedure", "protocol", "design",
+    "animal", "human", "mouse", "mice", "rat", "murine", "rabbit", "dog", "monkey",
+    "in vivo", "in vitro", "ex vivo", "cell culture", "clinical", "preclinical",
+    "control", "placebo", "double-blind", "randomized", "cohort", "cross-sectional",
+    "data", "statistics", "p-value", "significance", "confidence interval", "odds ratio",
+    "adverse", "safety", "efficacy", "toxicity", "side effect", "tolerability",
+    "treatment", "therapy", "administration", "dosage", "dose", "regimen",
+    "pathophysiology", "mechanism", "pathway", "expression", "activation", "inhibition",
+    "regulation", "modulation", "production", "synthesis", "secretion", "release",
+    "level", "concentration", "activity", "function", "role", "effect", "impact",
+    "associated with", "related to", "observed in", "induced by", "mediated by",
+    "signaling", "transduction", "biomarker", "target", "potential", "candidate",
+    
+    # 6. PALAVRAS DE LIGAÇÃO & LIXO (Remove "The", "With", "Although")
+    "the", "and", "of", "in", "to", "a", "an", "for", "with", "on", "at", "by", "from",
+    "is", "are", "was", "were", "be", "been", "being", "have", "has", "had",
+    "this", "that", "these", "those", "it", "its", "which", "who", "whom", "whose",
+    "between", "among", "within", "during", "after", "before", "while", "when",
+    "however", "although", "though", "nevertheless", "furthermore", "moreover",
+    "additionally", "interestingly", "notably", "importantly", "specifically",
+    "accordingly", "consequently", "therefore", "thus", "hence", "so",
+    "advancing", "application", "applied", "aggregates", "anatomy", "angiogenesis"
 ]
 
 TEXTOS = {
@@ -130,7 +147,7 @@ TEXTOS = {
         
         "btn_lib": "📚 Minerar no Contexto (Fonte)",
         
-        "status_blue_ocean": "🌊 Mergulhando no PubMed em busca de alvos inexplorados e receptores de fronteira...",
+        "status_blue_ocean": "🌊 Mergulhando no PubMed em busca de alvos inexplorados...",
         "msg_sucesso_blue": "🌊 {qtd} novos alvos do Blue Ocean adicionados!",
         "status_minerando": "🔍 Minerando novidades para:",
         "msg_sucesso_dinamico": "✅ Lista Base + {qtd} novidades específicas preservadas!",
@@ -183,9 +200,9 @@ TEXTOS = {
         "header_artigos_enc": "Artigos encontrados:",
         "aviso_sem_artigos": "Nenhum artigo encontrado com resumo disponível neste período.",
         
-        "footer_citar": "Lemos Lambda v1.2.0 - Uso Acadêmico",
+        "footer_citar": "Lemos Lambda v1.3.0 - Uso Acadêmico",
         "citar_titulo": "📄 Como Citar",
-        "citar_texto": "Lemos, G. (2025). Lemos Lambda: Deep Science Prospector [Software]. Versão 1.2.0. DOI: 10.5281/zenodo.17958507",
+        "citar_texto": "Lemos, G. (2025). Lemos Lambda: Deep Science Prospector [Software]. Versão 1.3.0. DOI: 10.5281/zenodo.17958507",
         "link_doi": "🔗 Ver no Zenodo (DOI)"
     },
     "en": {
@@ -259,9 +276,9 @@ TEXTOS = {
         "header_artigos_enc": "Articles found:",
         "aviso_sem_artigos": "No articles found with abstract available in this period.",
         
-        "footer_citar": "Lemos Lambda v1.2.0 - Academic Use",
+        "footer_citar": "Lemos Lambda v1.3.0 - Academic Use",
         "citar_titulo": "📄 How to Cite",
-        "citar_texto": "Lemos, G. (2025). Lemos Lambda: Deep Science Prospector [Software]. Version 1.2.0. DOI: 10.5281/zenodo.17958507",
+        "citar_texto": "Lemos, G. (2025). Lemos Lambda: Deep Science Prospector [Software]. Version 1.3.0. DOI: 10.5281/zenodo.17958507",
         "link_doi": "🔗 View on Zenodo (DOI)"
     }
 }
