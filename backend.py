@@ -9,6 +9,7 @@ import feedparser
 import random
 import constantes as c
 
+# Regex ajustado para evitar pegar números de aprovação ou códigos estranhos
 REGEX_COMPLEXO = r'\b([A-Z][a-zA-Z0-9\-]*(?:\s[A-Z][a-zA-Z0-9\-]+){0,3})\b'
 
 IMAGENS_SCIENCE = [
@@ -20,22 +21,60 @@ IMAGENS_SCIENCE = [
     "https://images.unsplash.com/photo-1579154204601-01588f351e67?auto=format&fit=crop&w=600&q=80",
 ]
 
+def validar_termo_inteligente(termo):
+    """
+    Filtro Heurístico para remover lixo bibliográfico e siglas inúteis.
+    Retorna True se o termo for BOM, False se for LIXO.
+    """
+    t_limpo = termo.strip()
+    
+    # 1. Regra de Tamanho e Formato Básico
+    if len(t_limpo) < 3: return False
+    if t_limpo.isdigit(): return False
+    
+    # 2. Regra de Siglas de Revistas/Doenças (Tudo Maiúsculo curto)
+    # Ex: BMJ, BPH, COVID-19, BJOG, BMB
+    if t_limpo.isupper() and len(t_limpo) <= 5 and t_limpo not in ["PFAS", "TMAO", "NMN", "CBD", "CBG"]: 
+        return False
+    
+    # 3. Regra de Marcadores de Superfície (CDxx)
+    # Ex: CD44, CD24, CD4, CD8
+    if re.match(r'^CD\d+$', t_limpo): return False
+    
+    # 4. Regra de Revistas e Termos de Citação
+    # Ex: Cell Rep, Sci Rep, Am J, Ann Arbor, Cheng, Chen
+    revistas_banidas = ["Rep", "Rev", "Ann", "Bull", "Lett", "Arch", "Clin", "Exp", "J", "Am", "Engl", "Bio"]
+    palavras = t_limpo.split()
+    
+    # Se a última palavra for uma abreviação de revista (Ex: Cell 'Rep')
+    if palavras[-1] in revistas_banidas: return False
+    
+    # Sobrenomes comuns curtos isolados (Chen, Wang, Li, Kim, etc - difícil listar todos, mas filtramos por padrão)
+    # Se for uma única palavra, começa com maiúscula, tem menos de 5 letras e não está na whitelist
+    whitelist_curta = ["TMAO", "PFAS", "GPR", "ROCK", "NRF2", "SIRT", "MAGL", "FAAH"]
+    if len(palavras) == 1 and len(t_limpo) < 5 and not t_limpo.isupper() and not any(x in t_limpo for x in whitelist_curta):
+        return False
+
+    return True
+
 def buscar_alvos_emergentes_pubmed(orgao_alvo, email):
     if not orgao_alvo or not email: return []
     Entrez.email = email
     ano_fim = datetime.now().year
     ano_inicio = ano_fim - 2 
     
+    # Query otimizada para fugir de revisões genéricas
     query = (
         f"({orgao_alvo}) AND ("
         f"'novel target' OR 'emerging' OR 'receptor' OR 'pathway' OR 'metabolite' OR "
-        f"'progenitor' OR 'stem cell' OR 'embryonic' OR 'organoid' OR 'developmental' OR "
-        f"'mechanism')"
+        f"'progenitor' OR 'stem cell' OR 'organoid' OR 'mechanism' OR "
+        f"'microplastics' OR 'TMAO' OR 'cannabinoid')" # Força termos Sci-Fi na busca
         f" AND (\"{ano_inicio}\"[Date - Publication] : \"{ano_fim}\"[Date - Publication])"
+        f" NOT (Review[Publication Type])" # Tenta evitar artigos de revisão que citam muitos journals
     )
     
     try:
-        handle = Entrez.esearch(db="pubmed", term=query, retmax=40, sort="relevance")
+        handle = Entrez.esearch(db="pubmed", term=query, retmax=50, sort="relevance")
         ids = Entrez.read(handle)["IdList"]
         if not ids: return []
         
@@ -48,22 +87,24 @@ def buscar_alvos_emergentes_pubmed(orgao_alvo, email):
         blacklist_lower = [x.lower() for x in c.BLACKLIST_GERAL]
         
         for t in candidatos:
-            t = t.strip(" .,()")
+            t = t.strip(" .,();:")
             t_lower = t.lower()
             
-            if len(t) < 3 or len(t) > 50: continue
-            
-            # FILTRO PARCIAL DE BLACKLIST (AQUI ESTÁ A CORREÇÃO)
-            # Se QUALQUER termo da blacklist estiver contido no termo candidato, descarta.
+            # 1. Filtro da Blacklist Estática (Manual)
             if any(bad in t_lower for bad in blacklist_lower): continue
             
-            # Filtro de palavras proibidas soltas
-            if any(bad in t_lower.split() for bad in ["were", "was", "rates", "group", "study", "analysis"]): continue
+            # 2. Filtro Heurístico Inteligente (Algoritmo)
+            if not validar_termo_inteligente(t): continue
             
+            # 3. Filtro de Contexto Frasal
+            if any(bad in t_lower.split() for bad in ["were", "was", "rates", "group", "study", "analysis", "doi", "vol", "no"]): continue
+            
+            # 4. Critério de Aceitação: Parece Ciência?
+            # Tem hífen, número no meio, ou é composto
             if "-" in t or any(x.isupper() for x in t[1:]) or " " in t or t[0].isupper():
                 termos_limpos.append(t)
 
-        return sorted(list(set(termos_limpos)))[:25] 
+        return sorted(list(set(termos_limpos)))[:30] 
     except:
         return []
 

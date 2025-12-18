@@ -6,127 +6,94 @@ PRESET_LEMOS = {
     "fonte": "Brain OR Kidney OR Liver OR Intestine OR Lung OR Vascular OR Immune System"
 }
 
-# --- SUA LISTA ÚNICA (ENCICLOPÉDIA LEMOS) ---
+# --- ENCICLOPÉDIA DE INOVAÇÃO (Seus termos Sci-Fi garantidos) ---
 CANDIDATOS_MINERACAO = [
-    # --- 1. FRONTEIRAS AMBIENTAIS & EXPOSSOMA ---
+    # Ambiental & Sci-Fi
     "Microplastics", "Nanoplastics", "Bisphenol A", "Phthalates", "PFAS", "Polystyrene nanoparticles",
     "Endocrine disruptors", "Heavy metals", "Glyphosate", "Airborne particulate matter",
     
-    # --- 2. MICROBIOMA & METABÓLITOS ---
+    # Microbioma & Metabolismo
     "Trimethylamine N-oxide (TMAO)", "Indole-3-propionic acid", "Short-chain fatty acids", 
     "Butyrate", "Propionate", "Acetate", "Secondary bile acids", "Urolithin A",
     "Gut microbiota metabolites", "Lipopolysaccharide (LPS)", "Peptidoglycan",
     "Probiotics", "Prebiotics", "Postbiotics", "Akkermansia muciniphila",
     
-    # --- 3. SISTEMA ENDOCANABINOIDE EXPANDIDO ---
+    # Cannabis & Receptores
     "Cannabidiol (CBD)", "Cannabigerol (CBG)", "Cannabinol (CBN)", "Anandamide", "2-Arachidonoylglycerol (2-AG)",
     "Cannabinoid receptor 1", "Cannabinoid receptor 2", "GPR55", "GPR18", "GPR119", 
-    "FAAH enzyme", "MAGL enzyme", "N-acyl ethanolamines", "PPAR-alpha", "PPAR-gamma", "TRPV1 channel",
+    "FAAH enzyme", "MAGL enzyme", "N-acyl ethanolamines", "TRPV1 channel",
     
-    # --- 4. LONGEVIDADE, SENESCÊNCIA & MORTE CELULAR ---
+    # Longevidade & Morte Celular
     "Senolytics", "Senomorphics", "Klotho", "Sirtuins", "SIRT1", "SIRT3", "SIRT6",
     "Nicotinamide mononucleotide (NMN)", "Nicotinamide riboside", "NAD+ metabolism",
     "Ferroptosis", "Pyroptosis", "Necroptosis", "Cuproptosis", "Autophagy", "Mitophagy",
     "mTOR pathway", "AMPK signaling", "Telomerase", "p16INK4a", "p21CIP1",
     
-    # --- 5. RECEPTORES OLFATIVOS & GUSTATIVOS ECTÓPICOS ---
+    # Receptores Olfativos & Gustativos (Inovação)
     "Olfactory receptor 51E2 (OR51E2)", "Olfactory receptor 2AT4 (OR2AT4)", "OR10J5", "OR1D2",
     "Bitter taste receptors (TAS2Rs)", "Sweet taste receptors (TAS1R2/TAS1R3)", 
     "Umami receptor", "Chemosensory receptors", "Ectopic olfactory receptors",
     
-    # --- 6. MECANOTRANSDUÇÃO & CANAIS IÔNICOS ---
+    # Mecano & Canais
     "Piezo1", "Piezo2", "TMEM16A", "TMEM63", "TREK-1 channel", "TRAAK channel",
     "TRPV4", "TRPM8", "TRPA1", "P2X3 receptor", "P2X7 receptor", "ASIC channels",
-    "Mechanosensitive channels", "Stretch-activated channels", "YAP/TAZ pathway", "Hippo pathway",
-    "HCN channels", "Kv7 channels", "BK channels", "SK channels",
+    "YAP/TAZ pathway", "Hippo pathway", "HCN channels", "Kv7 channels",
     
-    # --- 7. COMUNICAÇÃO CELULAR & EXOSSOMAS ---
+    # Comunicação & Órfãos
     "Exosomes", "Extracellular vesicles", "Microvesicles", "Exosomal miRNA", "Gap junctions", 
     "Connexin 43", "Pannexin 1", "Tunneling nanotubes",
-    
-    # --- 8. RECEPTORES ÓRFÃOS & GPCRs ---
     "GPR40 (FFAR1)", "GPR41 (FFAR3)", "GPR43 (FFAR2)", "GPR84", "GPR120 (FFAR4)", 
     "GPR35", "GPR183", "GPR17", "GPR30 (GPER)", "LGR5", "LGR6",
-    "Muscarinic M3", "Beta-3 adrenergic receptor", "Nicotinic alpha-7", "Purinergic signaling",
+    "Muscarinic M3", "Beta-3 adrenergic receptor", "Nicotinic alpha-7",
     
-    # --- 9. INFLAMAÇÃO & RESOLUÇÃO ---
+    # Inflamação & Metabólitos
     "NLRP3 inflammasome", "cGAS-STING pathway", "NF-kappaB", "HMGB1", 
     "Resolvin D1", "Resolvin D2", "Resolvin E1", "Lipoxin A4", "Maresins", "Protectins",
-    "Specialized pro-resolving mediators (SPMs)", "Prostaglandin E2", "Cyclooxygenase-2",
-    "Nitric Oxide Synthase", "Heme Oxygenase-1", "NRF2 pathway",
-    
-    # --- 10. METABÓLITOS CLÁSSICOS & SINALIZADORES ---
+    "Prostaglandin E2", "Cyclooxygenase-2", "Nitric Oxide Synthase", "Heme Oxygenase-1", "NRF2 pathway",
     "Kynurenic acid", "Succinate", "Lactate", "Fumarate", "Itaconate", "Alpha-lipoic acid",
     "Sphingosine-1-phosphate", "Ceramides", "Hyaluronic acid", "Taurine", "Uric Acid",
     "Melatonin", "Adenosine", "ATP", "Glutamate",
     
-    # --- 11. GENÉTICA NÃO-CODIFICANTE ---
+    # Genética
     "MALAT1 lncRNA", "HOTAIR lncRNA", "H19 lncRNA", "NEAT1 lncRNA",
     "miR-21", "miR-145", "miR-29", "miR-126", "Circular RNA (circRNA)", "Piwi-interacting RNA"
 ]
 
-# --- FILTRO DE RUÍDO AUTOMATIZADO (BLACKLIST CATEGÓRICA) ---
-# Se o termo contiver QUALQUER uma dessas palavras, ele é eliminado.
+# --- BLACKLIST ATUALIZADA (O Lixo Sai Aqui) ---
 BLACKLIST_GERAL = [
-    # 1. TEMPO & CALENDÁRIO (Remove "Apr", "Aug", "Summer 2024")
-    "january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december",
-    "jan", "feb", "mar", "apr", "jun", "jul", "aug", "sep", "oct", "nov", "dec",
-    "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
-    "spring", "summer", "autumn", "winter", "fiscal year", "annual",
+    # Revistas e Termos de Publicação
+    "bjog", "bmb", "bmj", "bmn", "bph", "bps", "biophysics", "both", "brucker",
+    "cell rep", "biotechnol", "bioeng", "biozentrum", "biologie", "biology",
+    "adv healthc mater", "adv mater", "ann", "ann arbor", "annusver", "ansari",
+    "approval no", "areas covered", "article", "author", "authors", "review",
+    "abstract", "pmid", "doi", "vol", "issue", "suppl", "fig", "table", "copyright",
+    "received", "accepted", "published", "correspondence", "editor",
     
-    # 2. CORPORATIVO & INSTITUCIONAL (Remove "Astellas", "Merck", "University of...")
-    "inc.", "ltd", "corp", "corporation", "company", "plc", "gmbh", "s.a.", "co.",
-    "pharma", "pharmaceuticals", "biosciences", "biotechnologies", "therapeutics", "solutions",
-    "biopharma", "medtech", "healthcare", "labs", "laboratories", "systems", "group",
-    "university", "universidad", "universite", "college", "school", "academy", "institute",
-    "department", "division", "center", "centre", "hospital", "clinic", "foundation",
-    "association", "society", "board", "committee", "council", "federation", "assembly",
-    "ministry", "agency", "authority", "commission", "consortium", "workshop",
-    # Empresas específicas detectadas no seu log
-    "astellas", "astrazeneca", "abbvie", "merck", "amgen", "allergan", "aveo", "accord", 
-    "anchiano", "apogepha", "axonics", "atlab", "abyost", "aiq solutions", "astrin",
+    # Siglas e Códigos Inúteis
+    "cck-8", "ccnd1", "cd013571", "cd24", "cd44", "cd163", "cd4", "cd8",
+    "cdn", "cgrp", "covid-19", "cscs", "cyp", "adpkd", "aire", "ali", "ams", "asd",
+    "atii", "atmps", "adrs", "aes", "ars", "aims", "apobec3", "april", "asb3", "akus-11",
     
-    # 3. PUBLICAÇÃO & METADADOS (Remove "Author", "PMID", "Review")
-    "author", "editor", "publisher", "copyright", "rights reserved", "license",
-    "pmid", "doi", "issn", "isbn", "vol.", "no.", "pp.", "page", "issue",
-    "abstract", "introduction", "results", "discussion", "conclusion", "references",
-    "acknowledgements", "supplementary", "figure", "table", "fig.", "tab.",
-    "review", "article", "report", "letter", "editorial", "commentary", "survey",
-    "received", "accepted", "published", "available online", "corresponding",
-    "affiliated", "addressing", "approval no", "areas covered",
+    # Autores, Lugares e Empresas
+    "chen", "cheng", "bickle", "birtele", "bolk", "bowles", "bscheider", "abid",
+    "abilez", "acharya", "adam", "adamson", "adelaide", "adiconis", "admane",
+    "ahmad", "ahmadzadeh", "ahn", "akamatsu", "akita", "akiyama", "al assaad",
+    "al-dossari", "albani", "aldana", "alzofon", "amato", "amin", "angeli", "angelica",
+    "cepheid", "biogo", "boundless bio", "cchmc", "ccun", "amgen", "allergan",
+    "astellas", "astrazeneca", "abbvie", "merck", "aveo", "accord", "anchiano",
+    "apogepha", "axonics", "atlab", "abyost", "aiq solutions", "astrin", "bvos",
+    "abu dhabi", "los angeles", "american", "americans", "asahikawa",
     
-    # 4. GEOGRAFIA & DEMOGRAFIA (Remove "Americans", "Abu Dhabi", "Adults")
-    "usa", "uk", "united states", "kingdom", "china", "japan", "germany", "france", "italy",
-    "spain", "brazil", "russia", "india", "korea", "australia", "canada", "europe", "asia", "africa",
-    "american", "european", "asian", "african", "japanese", "chinese", "brazilian",
-    "abu dhabi", "los angeles", "new york", "london", "tokyo", "beijing", "seoul",
-    "adults", "children", "adolescent", "infant", "elderly", "aged", "aging", "men", "women",
-    "male", "female", "pediatric", "geriatric", "demographic", "population",
-    
-    # 5. METODOLOGIA GENÉRICA (Remove "Animal", "Study", "Adverse")
-    "study", "trial", "experiment", "investigation", "analysis", "assessment", "evaluation",
-    "method", "technique", "approach", "procedure", "protocol", "design",
-    "animal", "human", "mouse", "mice", "rat", "murine", "rabbit", "dog", "monkey",
-    "in vivo", "in vitro", "ex vivo", "cell culture", "clinical", "preclinical",
-    "control", "placebo", "double-blind", "randomized", "cohort", "cross-sectional",
-    "data", "statistics", "p-value", "significance", "confidence interval", "odds ratio",
-    "adverse", "safety", "efficacy", "toxicity", "side effect", "tolerability",
-    "treatment", "therapy", "administration", "dosage", "dose", "regimen",
-    "pathophysiology", "mechanism", "pathway", "expression", "activation", "inhibition",
-    "regulation", "modulation", "production", "synthesis", "secretion", "release",
-    "level", "concentration", "activity", "function", "role", "effect", "impact",
-    "associated with", "related to", "observed in", "induced by", "mediated by",
-    "signaling", "transduction", "biomarker", "target", "potential", "candidate",
-    
-    # 6. PALAVRAS DE LIGAÇÃO & LIXO (Remove "The", "With", "Although")
-    "the", "and", "of", "in", "to", "a", "an", "for", "with", "on", "at", "by", "from",
-    "is", "are", "was", "were", "be", "been", "being", "have", "has", "had",
-    "this", "that", "these", "those", "it", "its", "which", "who", "whom", "whose",
-    "between", "among", "within", "during", "after", "before", "while", "when",
-    "however", "although", "though", "nevertheless", "furthermore", "moreover",
-    "additionally", "interestingly", "notably", "importantly", "specifically",
-    "accordingly", "consequently", "therefore", "thus", "hence", "so",
-    "advancing", "application", "applied", "aggregates", "anatomy", "angiogenesis"
+    # Termos Gerais e Metodologia
+    "acupuncture", "neuromodulation", "animal", "animals", "experimentation", "rights",
+    "anticholinergics", "antimuscarinics", "administration", "adrenoceptors",
+    "adults", "advanced", "adverse", "affiliated", "age", "aged", "aging", "workshop",
+    "all", "although", "academy", "acute", "addressing", "adolescent", "medicine",
+    "advanced bioscience", "advanced genomic", "cross-sectional", "postmarketing",
+    "survey", "accordingly", "induced", "pharma", "pharmaceuticals", "solutions",
+    "aggregates", "airway", "alveolar", "alzheimer", "anatomy", "angiogenesis",
+    "application", "applied", "medical", "research", "clinical", "trial", "study",
+    "data", "analysis", "method", "result", "conclusion", "significant", "statistics"
 ]
 
 TEXTOS = {
@@ -147,7 +114,7 @@ TEXTOS = {
         
         "btn_lib": "📚 Minerar no Contexto (Fonte)",
         
-        "status_blue_ocean": "🌊 Mergulhando no PubMed em busca de alvos inexplorados...",
+        "status_blue_ocean": "🌊 Mergulhando no PubMed em busca de alvos inexplorados e Sci-Fi...",
         "msg_sucesso_blue": "🌊 {qtd} novos alvos do Blue Ocean adicionados!",
         "status_minerando": "🔍 Minerando novidades para:",
         "msg_sucesso_dinamico": "✅ Lista Base + {qtd} novidades específicas preservadas!",
@@ -200,9 +167,9 @@ TEXTOS = {
         "header_artigos_enc": "Artigos encontrados:",
         "aviso_sem_artigos": "Nenhum artigo encontrado com resumo disponível neste período.",
         
-        "footer_citar": "Lemos Lambda v1.3.0 - Uso Acadêmico",
+        "footer_citar": "Lemos Lambda v1.4.0 - Uso Acadêmico",
         "citar_titulo": "📄 Como Citar",
-        "citar_texto": "Lemos, G. (2025). Lemos Lambda: Deep Science Prospector [Software]. Versão 1.3.0. DOI: 10.5281/zenodo.17958507",
+        "citar_texto": "Lemos, G. (2025). Lemos Lambda: Deep Science Prospector [Software]. Versão 1.4.0. DOI: 10.5281/zenodo.17958507",
         "link_doi": "🔗 Ver no Zenodo (DOI)"
     },
     "en": {
@@ -276,9 +243,9 @@ TEXTOS = {
         "header_artigos_enc": "Articles found:",
         "aviso_sem_artigos": "No articles found with abstract available in this period.",
         
-        "footer_citar": "Lemos Lambda v1.3.0 - Academic Use",
+        "footer_citar": "Lemos Lambda v1.4.0 - Academic Use",
         "citar_titulo": "📄 How to Cite",
-        "citar_texto": "Lemos, G. (2025). Lemos Lambda: Deep Science Prospector [Software]. Version 1.3.0. DOI: 10.5281/zenodo.17958507",
+        "citar_texto": "Lemos, G. (2025). Lemos Lambda: Deep Science Prospector [Software]. Version 1.4.0. DOI: 10.5281/zenodo.17958507",
         "link_doi": "🔗 View on Zenodo (DOI)"
     }
 }
