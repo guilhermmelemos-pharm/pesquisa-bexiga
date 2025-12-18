@@ -6,14 +6,15 @@ PRESET_LEMOS = {
     "fonte": "Brain OR Kidney OR Liver OR Intestine OR Lung OR Vascular OR Immune System"
 }
 
-# --- A ENCICLOPÉDIA DE INOVAÇÃO (LIMPA E BLINDADA v1.6) ---
+# --- A ENCICLOPÉDIA DE INOVAÇÃO (LIMPA v1.6) ---
+# Aqui ficam apenas os termos que você QUER ver.
 CANDIDATOS_MINERACAO = [
     # --- 1. ESPECÍFICOS DA TESE (Trehalose & Musculatura Lisa) ---
     "Trehalose", "Autophagy flux", "TFEB (Transcription Factor EB)", 
     "Smooth muscle contraction", "Calcium sensitization", "Myosin phosphatase",
     "Rho-kinase (ROCK)", "mTOR pathway", "AMPK signaling",
     
-    # --- 2. SCI-FI & BIOFÍSICA (Fronteira) ---
+    # --- 2. SCI-FI & BIOFÍSICA ---
     "Liquid-liquid phase separation", "Biomolecular condensates", "Stress granules", "P-bodies",
     "Cryptochromes", "Magnetoreception", "Quantum biology", "Radical pair mechanism",
     "Bioelectricity", "Resting membrane potential (Vmem)", "Gap junctional communication",
@@ -75,22 +76,31 @@ CANDIDATOS_MINERACAO = [
     "YAP/TAZ pathway", "Hippo pathway", "WNT4 signaling"
 ]
 
-# --- BLACKLIST GERAL (SUPORTE AO BACKEND V1.6) ---
+# --- BLACKLIST GERAL (O Lixo morre aqui) ---
 BLACKLIST_GERAL = [
-    # Metadados e Lixo Bibliográfico
+    # Siglas Quebradas e Incompletas (Erro de Extração)
+    "tgf-", "nf-", "il-", "rxr-", "ppar-", "tnf-", "tlr4", "ca2", "cd320", 
+    "lps-induced", "cyp-induced", "sv-huc-1", "rna-seq", "pd-l1", "oab",
+    
+    # Locais Específicos que Vazaram
+    "lublin", "berlin", "sakyo-ku", "hwasun-gun", "jeonnam-do", "sun yat-sen",
+    "gustave roussy", "institut curie", "chongqing", "jiangsu", "heidelberg",
+    "china", "usa", "japan", "germany", "uk", "france", "italy", "canada",
+    "beijing", "shanghai", "guangzhou", "wuhan", "london", "boston", "new york",
+    
+    # Empresas e Editoras
+    "bristol myers squibb", "elsevier", "roche", "mdpi", "springer", "wiley",
+    
+    # Revistas e Termos Genéricos
+    "j mol sci", "medical science", "pediatrics", "genetics", "covid-19",
+    "medline", "indexed", "electronic", "epub", "print", "pmid", "doi",
     "background", "methods", "results", "discussion", "conclusion", "abstract",
     "introduction", "references", "acknowledgements", "declaration", "conflict",
     "interest", "funding", "availability", "contributed", "author", "editor",
-    "medline", "indexed", "electronic", "epub", "print", "pmid", "doi",
-    "department", "university", "institute", "center", "hospital", "school",
-    "china", "usa", "japan", "germany", "uk", "france", "italy", "canada",
-    "beijing", "shanghai", "guangzhou", "wuhan", "chongqing", "jiangsu",
-    "london", "boston", "new york", "california", "texas", "heidelberg",
+    
+    # Stopwords Acadêmicas
     "however", "moreover", "furthermore", "additionally", "interestingly",
-    "significantly", "respectively", "associated", "observed", "indicated",
-    "lublin", "berlin", "sakyo-ku", "hwasun-gun", "jeonnam-do", "sun yat-sen",
-    "gustave roussy", "bristol myers squibb", "elsevier", "institut curie",
-    "j mol sci", "medical science", "pediatrics", "genetics", "covid-19"
+    "significantly", "respectively", "associated", "observed", "indicated"
 ]
 
 TEXTOS = {
@@ -159,7 +169,7 @@ TEXTOS = {
         "btn_nova_pesquisa": "⬅️ Nova Pesquisa",
         "info_leitura": "Selecione um alvo abaixo para buscar os artigos reais no PubMed com tradução.",
         "sel_leitura": "Selecione o alvo:",
-        "btn_buscar_artigos": "🔍 Load Articles on:",
+        "btn_buscar_artigos": "🔍 Carregar Artigos sobre:",
         "msg_buscando_lit": "Buscando literatura sobre",
         "header_artigos_enc": "Artigos encontrados:",
         "aviso_sem_artigos": "Nenhum artigo encontrado com resumo disponível neste período.",
