@@ -80,10 +80,10 @@ def limpar_campo(chave_session):
     st.session_state[chave_session] = ""
 
 def aplicar_preset_lemos(textos):
-    """Carrega as configurações do doutorado do Lemos"""
+    """Carrega as configurações do doutorado do Lemos via Callback"""
     st.session_state.input_alvo = c.PRESET_LEMOS["alvo"]
     st.session_state.input_fonte = c.PRESET_LEMOS["fonte"]
-    # Carrega a lista base, mas usa a função segura para não perder o que já tem se quiser
+    # Carrega a lista base de forma segura
     adicionar_termos_seguro(c.CANDIDATOS_MINERACAO, textos)
     st.toast(textos["toast_preset"], icon="🎓")
 
@@ -101,8 +101,8 @@ def adicionar_termos_seguro(novos_termos_lista, textos):
             adicionados.append(t_limpo)
     
     st.session_state.alvos_val = ", ".join(atuais)
-    if adicionados: st.toast(f"{textos['toast_add']} ({len(adicionados)})", icon="✅")
-    else: st.toast(textos['toast_dup'], icon="ℹ️")
+    # Feedback visual (Toast) só se houver novos, mas sem bloquear callback
+    return len(adicionados)
 
 @st.fragment(run_every=60) 
 def exibir_radar_cientifico(lang_code, textos):
@@ -128,7 +128,8 @@ def processar_upload(textos):
         try:
             content = uploaded_file.getvalue().decode("utf-8")
             termos_importados = [x.strip() for x in content.replace("\n", ",").split(",") if x.strip()]
-            adicionar_termos_seguro(termos_importados, textos)
+            count = adicionar_termos_seguro(termos_importados, textos)
+            st.toast(f"{textos['toast_import']} ({count})", icon="📂")
         except: st.error(textos["erro_ler"])
 
 # ==========================================
@@ -168,23 +169,25 @@ with st.container(border=True):
                         st.write(t["status_minerando"])
                         novos_termos = bk.buscar_alvos_emergentes_pubmed(alvo, email_user)
                         st.write(t["status_filtrando"])
-                        adicionar_termos_seguro(c.CANDIDATOS_MINERACAO + novos_termos, t)
+                        count = adicionar_termos_seguro(c.CANDIDATOS_MINERACAO + novos_termos, t)
                         status.update(label=t["status_pronto"], state="complete", expanded=False)
+                        st.toast(f"✅ {len(novos_termos)} novos termos!", icon="🧬")
 
         with c_manual:
             with st.popover(t["label_manual"], use_container_width=True):
                 termo_man = st.text_input("Termo", key="input_manual", placeholder=t["holder_manual"])
                 if st.button(t["btn_add_manual"], use_container_width=True):
                     if termo_man:
-                        adicionar_termos_seguro([x.strip() for x in termo_man.split(",")], t)
+                        count = adicionar_termos_seguro([x.strip() for x in termo_man.split(",")], t)
                         st.session_state.input_manual = ""
                         st.rerun()
 
     with col_config:
         st.subheader("Config")
-        # BOTÃO PRESET LEMOS
-        if st.button(t["btn_preset"], use_container_width=True):
-            aplicar_preset_lemos(t)
+        
+        # --- CORREÇÃO DO ERRO ---
+        # Botão Preset usando on_click para evitar o StreamlitAPIException
+        st.button(t["btn_preset"], on_click=aplicar_preset_lemos, args=(t,), use_container_width=True)
             
         st.subheader(t["label_periodo"])
         anos_range = st.slider("Anos", 2000, datetime.now().year, (2015, datetime.now().year), label_visibility="collapsed")
