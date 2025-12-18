@@ -60,7 +60,9 @@ if 'input_alvo' not in st.session_state: st.session_state.input_alvo = ""
 if 'input_fonte' not in st.session_state: st.session_state.input_fonte = ""
 if 'input_email' not in st.session_state: st.session_state.input_email = ""
 if 'artigos_detalhe' not in st.session_state: st.session_state.artigos_detalhe = None
+# Variáveis de segurança para persistência
 if 'email_guardado' not in st.session_state: st.session_state.email_guardado = ""
+if 'alvo_guardado' not in st.session_state: st.session_state.alvo_guardado = ""
 
 # --- IDIOMA ---
 lang_opt = st.sidebar.radio("🌐 Language:", ["🇧🇷 PT", "🇺🇸 EN"], horizontal=True)
@@ -68,24 +70,18 @@ lang = "pt" if "PT" in lang_opt else "en"
 t = c.TEXTOS[lang]
 
 # ==========================================
-# LÓGICA INTELIGENTE (SMART LOGIC)
+# LÓGICA DE NEGÓCIO
 # ==========================================
 def limpar_campo(chave_session):
     st.session_state[chave_session] = ""
 
 def carregar_lista_dinamica_smart(textos):
-    """
-    Função Híbrida: Carrega a Lista Base + Minera Novidades do Alvo (se existir)
-    """
     email = st.session_state.input_email
     alvo = st.session_state.input_alvo
-    
-    # 1. Começa com a Lista Base do Lemos
     lista_mestra = c.CANDIDATOS_MINERACAO.copy()
     msg_final = textos["msg_sucesso_base"]
     novos_encontrados = 0
     
-    # 2. Se tiver Alvo e Email, torna a lista DINÂMICA
     if alvo and email:
         with st.spinner(f"{textos['status_minerando']} {alvo}..."):
             novos = bk.buscar_alvos_emergentes_pubmed(alvo, email)
@@ -94,15 +90,45 @@ def carregar_lista_dinamica_smart(textos):
                 novos_encontrados = len(novos)
                 msg_final = textos["msg_sucesso_dinamico"].format(qtd=novos_encontrados)
     
-    # 3. Atualiza o estado
     adicionar_termos_seguro(lista_mestra, textos)
     st.toast(msg_final, icon="🧬")
 
+def explorar_blue_ocean(textos):
+    email = st.session_state.input_email
+    alvo = st.session_state.input_alvo
+
+    if not email or not alvo:
+        st.error(textos["erro_campos"])
+        return
+
+    with st.spinner(textos["status_blue_ocean"]):
+        novos = bk.buscar_alvos_emergentes_pubmed(alvo, email)
+        if novos:
+            count = adicionar_termos_seguro(novos, textos)
+            st.success(textos["msg_sucesso_blue"].format(qtd=count))
+        else:
+            st.warning("Nenhum termo novo encontrado.")
+
+def minerar_novidades_fonte(textos):
+    fonte = st.session_state.input_fonte
+    email = st.session_state.input_email
+    
+    if not fonte:
+        st.error(textos["erro_fonte_vazia"])
+        return
+    if not email:
+        st.error(textos["erro_email"])
+        return
+
+    with st.spinner(f"Minerando: {fonte}..."):
+        novos_termos = bk.buscar_alvos_emergentes_pubmed(fonte, email)
+        if novos_termos:
+            count = adicionar_termos_seguro(novos_termos, textos)
+            st.success(f"✅ {count} novos termos em '{fonte}'.")
+
 def aplicar_preset_lemos(textos):
-    """Preenche os campos do Doutorado e chama a carga dinâmica"""
     st.session_state.input_alvo = c.PRESET_LEMOS["alvo"]
     st.session_state.input_fonte = c.PRESET_LEMOS["fonte"]
-    # Após preencher, chama a lógica inteligente para minerar novidades da bexiga na hora
     carregar_lista_dinamica_smart(textos)
 
 def adicionar_termos_seguro(novos_termos_lista, textos):
@@ -125,7 +151,10 @@ def resetar_pesquisa():
     st.rerun()
 
 def ir_para_analise(email_user, contexto, alvo, ano_ini, ano_fim):
+    # SALVA OS DADOS PARA NÃO PERDER NA PRÓXIMA TELA
     st.session_state.email_guardado = email_user
+    st.session_state.alvo_guardado = alvo
+    
     lista = [x.strip() for x in st.session_state.alvos_val.split(",") if x.strip()]
     resultados = []
     
@@ -234,19 +263,21 @@ if st.session_state.pagina == 'home':
             with c_in: st.text_input(t["label_alvo"], key="input_alvo", placeholder=t["holder_alvo"])
             with c_bin: st.button(t["btn_limpar"], key="lixo_alvo", on_click=limpar_campo, args=("input_alvo",))
 
-            # --- BOTÕES INTELIGENTES UNIFICADOS ---
+            # --- GRID DE BOTÕES DE AÇÃO ---
             st.write(" ")
             c_btn1, c_btn2 = st.columns(2)
-            
             with c_btn1:
-                # 1. Carregar Lista Única (Base + Dinâmica)
                 st.button(t["btn_smart_load"], type="primary", on_click=carregar_lista_dinamica_smart, args=(t,), use_container_width=True)
-                
             with c_btn2:
-                # 2. Preset Lemos
+                st.button(t["btn_blue_ocean"], type="secondary", on_click=explorar_blue_ocean, args=(t,), use_container_width=True)
+            
+            st.write(" ")
+            c_btn3, c_btn4 = st.columns(2)
+            with c_btn3:
+                st.button(t["btn_lib"], on_click=minerar_novidades_fonte, args=(t,), use_container_width=True)
+            with c_btn4:
                 st.button(t["btn_preset"], on_click=aplicar_preset_lemos, args=(t,), use_container_width=True)
 
-            # Manual Add (Pequeno, abaixo)
             with st.popover(t["label_manual"], use_container_width=True):
                 termo_man = st.text_input("Termo", key="input_manual", placeholder=t["holder_manual"])
                 if st.button(t["btn_add_manual"], use_container_width=True):
@@ -275,6 +306,9 @@ if st.session_state.pagina == 'home':
             with c1: st.session_state.alvos_val = st.text_area("Termos", value=st.session_state.alvos_val, height=100)
             with c2: 
                 if st.button(t["btn_limpar_tudo"]): st.session_state.alvos_val = ""
+                # BOTÃO DE DOWNLOAD DA LISTA (CSV)
+                lista_txt = st.session_state.alvos_val.replace(", ", "\n").replace(",", "\n")
+                st.download_button(t["btn_export_lista"], lista_txt, "lemos_lambda_list.csv", "text/csv")
         
         # BOTÃO PRINCIPAL DE ANÁLISE
         if st.button(t["analise_btn"], type="primary", use_container_width=True):
@@ -290,7 +324,7 @@ elif st.session_state.pagina == 'resultados':
     
     c_back, c_tit = st.columns([1, 5])
     with c_back:
-        st.button("⬅️ Nova Pesquisa", on_click=resetar_pesquisa, use_container_width=True)
+        st.button(t["btn_nova_pesquisa"], on_click=resetar_pesquisa, use_container_width=True)
     with c_tit:
         st.title(t["resultados"])
     
@@ -302,7 +336,7 @@ elif st.session_state.pagina == 'resultados':
         c2.metric(t["metrica_score"], top[t["col_ratio"]])
         c3.metric(t["metrica_artigos"], top[t["col_art_alvo"]])
         
-        st.subheader("Mapa de Oportunidades")
+        st.subheader(t["titulo_mapa"])
         df_show = df.drop(columns=["_sort"])
         fig = px.bar(df_show.head(25), x=t["col_mol"], y=t["col_ratio"], color=t["col_status"],
                      color_discrete_map={
@@ -318,26 +352,34 @@ elif st.session_state.pagina == 'resultados':
         st.download_button(t["btn_baixar"], df_show.to_csv(index=False).encode('utf-8'), "lemos_lambda_report.csv", "text/csv")
         
         st.divider()
-        st.subheader("📄 Leitura Profunda")
-        termos_disp = df[t["col_mol"]].unique().tolist()
-        sel_mol = st.selectbox("Selecione o alvo:", termos_disp, index=0)
+        st.subheader(t["titulo_leitura"])
+        st.info(t["info_leitura"])
         
-        if st.button(f"🔍 Carregar Artigos sobre: {sel_mol}", type="secondary"):
-            with st.spinner(f"Buscando literatura..."):
-                alvo_analise = st.session_state.input_alvo
-                email_analise = st.session_state.email_guardado
+        # Selectbox ORDENADO ALFABETICAMENTE
+        termos_disp = sorted(df[t["col_mol"]].unique().tolist())
+        sel_mol = st.selectbox(t["sel_leitura"], termos_disp, index=0)
+        
+        if st.button(f"{t['btn_buscar_artigos']} {sel_mol}", type="secondary"):
+            with st.spinner(f"{t['msg_buscando_lit']} {sel_mol}..."):
+                # Recupera alvo e email salvos na memória segura
+                alvo_analise = st.session_state.get('alvo_guardado', '')
+                email_analise = st.session_state.get('email_guardado', '')
                 
                 if not alvo_analise or not email_analise:
-                    st.warning("Dados da sessão perdidos.")
+                    st.warning(t["erro_sessao"])
                 else:
                     arts = bk.buscar_resumos_detalhados(sel_mol, alvo_analise, email_analise, 2015, 2025, lang)
                     st.session_state.artigos_detalhe = arts
         
         if st.session_state.artigos_detalhe:
+            st.markdown(f"### {t['header_artigos_enc']} {len(st.session_state.artigos_detalhe)}")
+            if not st.session_state.artigos_detalhe:
+                st.warning(t["aviso_sem_artigos"])
+            
             for art in st.session_state.artigos_detalhe:
                 with st.expander(f"{art['Title']}"):
-                    st.info(f"**Conclusão/Resumo:**\n\n{art['Resumo_IA']}")
-                    st.link_button("Ler no PubMed 🔗", art['Link'])
+                    st.info(f"**Abstract/Conclusão:**\n\n{art['Resumo_IA']}")
+                    st.link_button("PubMed 🔗", art['Link'])
 
 st.markdown("---"); st.caption(f"© 2025 Guilherme Lemos | {t['footer_citar']}")
 

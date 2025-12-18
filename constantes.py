@@ -1,31 +1,23 @@
 # constantes.py
 # Armazena textos, listas estáticas, traduções e PRESETS.
 
-# --- PRESET LEMOS (DOUTORADO) ---
-# Seus parâmetros fixos de comparação
 PRESET_LEMOS = {
     "alvo": "Bladder OR Vesical OR Urothelium OR Detrusor OR Cystitis OR Overactive Bladder",
     "fonte": "Brain OR Kidney OR Liver OR Intestine OR Lung OR Vascular OR Immune System"
 }
 
-# --- SUA LISTA ÚNICA (BASE) ---
 CANDIDATOS_MINERACAO = [
-    # --- Ácidos e Metabólitos ---
     "Alpha-lipoic acid", "Butyrate", "Short-chain fatty acids", "Sphingosine-1-phosphate",
     "Hyaluronic acid", "Succinate", "Lactate", "Kynurenic acid", "Prostaglandin E2",
     "Resolvin D1", "Lipoxin A4", "Melatonin", "Taurine", "Uric Acid",
-    # --- Receptores e Canais ---
     "P2X3 receptor", "P2X7 receptor", "TRPV1 channel", "TRPM8", "Piezo1", "Piezo2",
     "Cannabinoid receptor 2", "GPR119", "GPR40", "GPR84", "GPR120",
     "Beta-3 adrenergic receptor", "Muscarinic M3", "Nicotinic alpha-7",
-    # --- Vias e Enzimas ---
     "Rho-kinase (ROCK)", "mTOR pathway", "AMPK signaling", "NLRP3 inflammasome",
     "Nitric Oxide Synthase", "Heme Oxygenase-1", "Cyclooxygenase-2", "Phosphodiesterase-5",
-    # --- Genética e RNA ---
     "MALAT1 lncRNA", "miR-21", "miR-145", "SIRT1", "NRF2 pathway", "NF-kappaB"
 ]
 
-# --- FILTRO DE RUÍDO ---
 BLACKLIST_GERAL = [
     "Adverse events", "Adverse effect", "AE rates", "Safety", "Efficacy", "Placebo",
     "Control group", "Study design", "Double-blind", "Randomized", "Clinical trial",
@@ -56,18 +48,21 @@ TEXTOS = {
         "holder_alvo": "ex: Overactive Bladder, Fibrosis...",
         "aviso_pubmed": "⚠️ **Atenção:** Escreva os termos em **INGLÊS** para garantir a mineração correta.",
         
-        # NOVOS BOTÕES INTELIGENTES
         "btn_smart_load": "🔄 Carregar Minha Lista (+ Dinâmica)",
-        "desc_smart_load": "Carrega sua lista base e busca novidades automaticamente para o Alvo inserido.",
-        "btn_preset": "🎓 Carregar Preset Doutorado (Bexiga)",
+        "btn_blue_ocean": "🌊 Explore o Blue Ocean (Apenas Novidades)",
+        "btn_lib": "📚 Minerar no Contexto (Fonte)",
+        "btn_preset": "🎓 Carregar Preset Doutorado (Lemos)",
         
+        "status_blue_ocean": "🌊 Mergulhando no PubMed em busca de alvos inexplorados...",
+        "msg_sucesso_blue": "🌊 {qtd} novos alvos do Blue Ocean adicionados!",
         "status_minerando": "🔍 Minerando novidades para:",
         "msg_sucesso_dinamico": "✅ Lista Base + {qtd} novidades específicas carregadas!",
         "msg_sucesso_base": "✅ Apenas Lista Base carregada (Preencha 'Alvo' para torná-la dinâmica).",
+        "erro_fonte_vazia": "⚠️ Preencha o campo 'Contexto/Fonte' para buscar novidades nele.",
+        "toast_preset": "🧬 Preset Lemos carregado com sucesso!",
         
         "analise_btn": "🚀 Executar Análise de Potencial",
         "resultados": "🎯 Dashboard de Prospecção",
-        
         "label_periodo": "📅 Período de Análise",
         "label_manual": "🔎 Investigar Termo Específico",
         "holder_manual": "ex: Curcumina, Gene X...",
@@ -76,12 +71,14 @@ TEXTOS = {
         "toast_dup": "⚠️ Duplicatas ignoradas.",
         "label_fonte": "Contexto Comparativo (Opcional):",
         "holder_fonte": "ex: Brain, Kidney, Liver...",
+        "desc_fonte": "Define o 'universo' de comparação. Também usado para mineração contextual.",
         "titulo_import": "📂 Importar Lista Extra",
         "desc_import": "Upload (.csv/.txt)",
         "toast_import": "✅ termos importados!",
         "erro_ler": "Erro ao ler arquivo.",
         "btn_limpar": "🗑️",
         "btn_limpar_tudo": "🗑️ Limpar Lista",
+        "btn_export_lista": "💾 Salvar Lista (CSV)",
         "ver_editar": "📝 Ver/Editar Lista de Palavras-Chave",
         "qtd_termos": "Qtd:",
         "radar_titulo": "📡 Radar Científico",
@@ -96,9 +93,23 @@ TEXTOS = {
         "col_global": "Global/Fonte",
         "btn_baixar": "📥 Baixar Relatório CSV",
         "erro_email": "E-mail necessário para conectar ao NCBI.",
-        "footer_citar": "Lemos Lambda v2.2 - Uso Acadêmico",
+        "erro_campos": "⚠️ Preencha E-mail e Alvo (em Inglês)!",
+        "erro_sessao": "⚠️ Dados da sessão expiraram. Por favor, faça a pesquisa novamente.",
+        
+        # NOVAS TRADUÇÕES RESULTADOS
+        "titulo_mapa": "Mapa de Oportunidades",
+        "titulo_leitura": "📄 Leitura Profunda: Investigação de Papers",
+        "btn_nova_pesquisa": "⬅️ Nova Pesquisa",
+        "info_leitura": "Selecione um alvo abaixo para buscar os artigos reais no PubMed com tradução.",
+        "sel_leitura": "Selecione o alvo:",
+        "btn_buscar_artigos": "🔍 Carregar Artigos sobre:",
+        "msg_buscando_lit": "Buscando literatura sobre",
+        "header_artigos_enc": "Artigos encontrados:",
+        "aviso_sem_artigos": "Nenhum artigo encontrado com resumo disponível neste período.",
+        
+        "footer_citar": "Lemos Lambda v1.1.0 - Uso Acadêmico",
         "citar_titulo": "📄 Como Citar",
-        "citar_texto": "Lemos, G. (2025). Lemos Lambda: Deep Science Prospector [Software]. Versão 2.2.0. DOI: 10.5281/zenodo.17958507",
+        "citar_texto": "Lemos, G. (2025). Lemos Lambda: Deep Science Prospector [Software]. Versão 1.1.0. DOI: 10.5281/zenodo.17958507",
         "link_doi": "🔗 Ver no Zenodo (DOI)"
     },
     "en": {
@@ -112,18 +123,21 @@ TEXTOS = {
         "holder_alvo": "ex: Overactive Bladder, Fibrosis...",
         "aviso_pubmed": "⚠️ **Warning:** Please input terms in **ENGLISH**.",
         
-        # NEW SMART BUTTONS
         "btn_smart_load": "🔄 Load My List (+ Dynamic)",
-        "desc_smart_load": "Loads your base list and automatically mines novelties for the input Target.",
+        "btn_blue_ocean": "🌊 Explore Blue Ocean (Novelties Only)",
+        "btn_lib": "📚 Context Mining (Source)",
         "btn_preset": "🎓 Load Lemos PhD Preset",
         
+        "status_blue_ocean": "🌊 Diving into PubMed for unexplored targets...",
+        "msg_sucesso_blue": "🌊 {qtd} new Blue Ocean targets added!",
         "status_minerando": "🔍 Mining novelties for:",
         "msg_sucesso_dinamico": "✅ Base List + {qtd} specific novelties loaded!",
         "msg_sucesso_base": "✅ Base List loaded only (Fill 'Target' to make it dynamic).",
+        "erro_fonte_vazia": "⚠️ Fill in 'Context/Source' field to search novelties within it.",
+        "toast_preset": "🧬 Lemos Preset loaded successfully!",
         
         "analise_btn": "🚀 Run Potential Analysis",
         "resultados": "🎯 Prospecting Dashboard",
-        
         "label_periodo": "📅 Analysis Period",
         "label_manual": "🔎 Investigate Specific Term",
         "holder_manual": "ex: Curcumin, Gene X...",
@@ -132,12 +146,14 @@ TEXTOS = {
         "toast_dup": "⚠️ Duplicates ignored.",
         "label_fonte": "Comparative Context (Optional):",
         "holder_fonte": "ex: Brain, Kidney, Liver...",
+        "desc_fonte": "Defines comparison universe. Also used for contextual mining.",
         "titulo_import": "📂 Import Extra List",
         "desc_import": "Upload (.csv/.txt)",
         "toast_import": "✅ terms imported!",
         "erro_ler": "Error reading file.",
         "btn_limpar": "🗑️",
         "btn_limpar_tudo": "🗑️ Clear List",
+        "btn_export_lista": "💾 Save List (CSV)",
         "ver_editar": "📝 View/Edit Keywords List",
         "qtd_termos": "Qty:",
         "radar_titulo": "📡 Science Radar",
@@ -152,9 +168,23 @@ TEXTOS = {
         "col_global": "Global/Source",
         "btn_baixar": "📥 Download CSV Report",
         "erro_email": "E-mail required.",
-        "footer_citar": "Lemos Lambda v2.2 - Academic Use",
+        "erro_campos": "⚠️ Fill in E-mail and Target (in English)!",
+        "erro_sessao": "⚠️ Session data expired. Please run search again.",
+        
+        # NEW TRANSLATIONS RESULTS
+        "titulo_mapa": "Opportunity Map",
+        "titulo_leitura": "📄 Deep Reading: Paper Investigation",
+        "btn_nova_pesquisa": "⬅️ New Search",
+        "info_leitura": "Select a target below to fetch real articles from PubMed with translation.",
+        "sel_leitura": "Select target:",
+        "btn_buscar_artigos": "🔍 Load Articles on:",
+        "msg_buscando_lit": "Searching literature for",
+        "header_artigos_enc": "Articles found:",
+        "aviso_sem_artigos": "No articles found with abstract available in this period.",
+        
+        "footer_citar": "Lemos Lambda v1.1.0 - Academic Use",
         "citar_titulo": "📄 How to Cite",
-        "citar_texto": "Lemos, G. (2025). Lemos Lambda: Deep Science Prospector [Software]. Version 2.2.0. DOI: 10.5281/zenodo.17958507",
+        "citar_texto": "Lemos, G. (2025). Lemos Lambda: Deep Science Prospector [Software]. Version 1.1.0. DOI: 10.5281/zenodo.17958507",
         "link_doi": "🔗 View on Zenodo (DOI)"
     }
 }
