@@ -1,6 +1,7 @@
 streamlit
 pandas
-biopython
 plotly
+biopython
 deep-translator
 feedparser
+nltk
