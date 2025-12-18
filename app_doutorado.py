@@ -23,7 +23,7 @@ SOFTWARE.
 
 Author: Guilherme Lemos (Unifesp)
 Creation Date: December 2025
-Version: 1.7
+Version: 1.7 (Statistical Enrichment Engine)
 """
 import streamlit as st
 import pandas as pd
@@ -170,8 +170,6 @@ def ir_para_analise(email_user, contexto, alvo, ano_ini, ano_fim):
     resultados = []
     
     # --- PREPARAÇÃO ESTATÍSTICA (Z-SCORE BASELINE) ---
-    # Calculamos o tamanho total do alvo para normalizar (Ex: Quantos papers de "Bexiga" existem?)
-    # Usamos uma estimativa do PubMed (~36 milhões) para calcular a probabilidade base.
     N_PUBMED_TOTAL = 36000000
     n_total_alvo = 0
     
@@ -179,9 +177,8 @@ def ir_para_analise(email_user, contexto, alvo, ano_ini, ano_fim):
     with placeholder.container():
         st.markdown("## 🧬 Lemos Lambda Statistical Engine...")
         st.write("Calibrando linha de base estatística...")
-        # Busca inicial de calibração (Baseline)
         n_total_alvo = bk.consultar_pubmed_count(alvo, "", email_user, 1900, 2030)
-        if n_total_alvo == 0: n_total_alvo = 1 # Evitar divisão por zero
+        if n_total_alvo == 0: n_total_alvo = 1
         
         st.markdown(f"Analisando **{len(lista)} moléculas** contra o universo de **{n_total_alvo} artigos**...")
         prog = st.progress(0)
@@ -195,16 +192,12 @@ def ir_para_analise(email_user, contexto, alvo, ano_ini, ano_fim):
         n_especifico = bk.consultar_pubmed_count(item, alvo, email_user, ano_ini, ano_fim)
         
         # --- CÁLCULO DE ENRIQUECIMENTO (Enrichment Score) ---
-        # Qual seria o número esperado de papers se a distribuição fosse aleatória?
-        # Expected = (Frequencia_Droga * Frequencia_Orgao) / Total_PubMed
         expected = (n_global * n_total_alvo) / N_PUBMED_TOTAL
         if expected == 0: expected = 0.00001
         
-        # Enrichment = Observado / Esperado (Quantas vezes mais frequente que o acaso?)
         enrichment = (n_especifico + 0.1) / expected
         
-        # Z-Score Simplificado (Log-Likelihood) para Ranking
-        # Combina a força do enriquecimento com a certeza do volume global
+        # Lambda Score Simplificado para Ranking
         lambda_score = math.log10(enrichment) + (math.log10(n_global + 1) * 0.2)
         
         # --- CLASSIFICAÇÃO ESTATÍSTICA ---
@@ -212,7 +205,6 @@ def ir_para_analise(email_user, contexto, alvo, ano_ini, ano_fim):
         score_sort = 0
         
         if n_especifico == 0:
-            # Blue Ocean: Alta expectativa global, zero presença local
             if n_global > 300: 
                 tag = "💎 Blue Ocean (Inexplorado)"
                 score_sort = 1000
@@ -220,8 +212,7 @@ def ir_para_analise(email_user, contexto, alvo, ano_ini, ano_fim):
                 tag = "👻 Fantasma (Ruído Estatístico)"
                 score_sort = 0
         else:
-            # Análise de Significância
-            if enrichment > 100: # 100x mais frequente que o acaso
+            if enrichment > 100: 
                 if n_especifico > 5:
                     tag = "🥇 Ouro (Alta Significância)"
                     score_sort = 100
@@ -238,7 +229,6 @@ def ir_para_analise(email_user, contexto, alvo, ano_ini, ano_fim):
                 tag = "⚖️ Neutro"
                 score_sort = 20
 
-        # Ratio visual (para o gráfico)
         ratio_visual = float(enrichment)
         
         resultados.append({
@@ -365,7 +355,7 @@ elif st.session_state.pagina == 'resultados':
         st.subheader(t["titulo_mapa"])
         df_show = df.drop(columns=["_sort"])
         
-        #  - Representação da lógica aplicada
+        # CORES ATUALIZADAS PARA OS NOVOS STATUS
         fig = px.bar(df_show.head(25), x=t["col_mol"], y=t["col_ratio"], color=t["col_status"], 
                      color_discrete_map={
                          "💎 Blue Ocean (Inexplorado)": "#00CC96", 
