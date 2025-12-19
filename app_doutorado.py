@@ -307,4 +307,3 @@ st.write("")
 st.caption(t.get("footer_citar", "Academic Use"))
 with st.expander(t.get("citar_titulo", "Citation"), expanded=False):
     st.code(t.get("citar_texto", ""), language="text")
-    )
