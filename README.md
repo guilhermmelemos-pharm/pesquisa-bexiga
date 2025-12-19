@@ -1,29 +1,34 @@
 # λ Lemos Lambda: Deep Science Prospector
 
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://lemosgbuscador.streamlit.app/)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17958507.svg)](https://doi.org/10.5281/zenodo.17958507)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+> **Version:** 1.6.1  
+> **Author:** Guilherme Lemos (Unifesp)  
+> **License:** MIT  
 
-**Lemos Lambda** is a scientific competitive intelligence tool designed for pharmacology and physiology researchers. It automates PubMed data mining to identify "Blue Oceans"—promising therapeutic targets that are widely studied in general physiology but neglected in specific organs (e.g., Bladder), identifying high-impact research opportunities.
+## 🧬 Overview
+**Lemos Lambda** is a pharmacological prospecting tool designed to identify emerging molecular targets in biomedical literature. Unlike standard search engines, it uses a heuristic **"Semantic Wall"** architecture to filter out 99% of structural noise (administrative metadata, clinical acronyms, grant codes) and isolate high-value biological signals.
+
+It calculates a **Lambda Score** to rank targets based on the "Blue Ocean" strategy: finding molecules with high global relevance but low saturation in the specific target organ/tissue.
 
 ## 🚀 Key Features
 
-* **Opportunity Ratio (Ratio):** Automatically calculates the publication ratio between a "Super Source" (e.g., Brain, Kidney) and your "Target Organ".
-* **'Blue Ocean' Mining:** A built-in algorithm that screens a curated list of ~60 innovative targets (Orphan GPCRs, Piezo1/2, Ferroptosis) against your specific tissue to find rare opportunities.
-* **Bibliographic X-Ray:** Reads, summarizes, and translates relevant abstracts automatically.
-* **Smart Classification:** Tags terms as "Diamond" (Unexplored Opportunity), "Gold", or "Saturated" based on publication volume.
+* **Deep Mining:** Real-time extraction from PubMed (Title/Abstract) using Biopython.
+* **Functional Context Filter:** automatically discards articles that do not contain mechanistic vocabulary (e.g., *signaling, pathway, relaxation*), ensuring biological relevance.
+* **Inverted Lambda Score:** A metric that highlights "Opportunity vs. Saturation".
+* **Architecture of Silence:** A 7-layer filtration pipeline to ensure clean data.
 
-## 🛠️ How to Use
+## 🛠️ Filtration Pipeline (The Semantic Wall)
 
-### Option 1: Web App (No installation required)
-Access the tool directly via your browser:
-👉 **[https://lemosgbuscador.streamlit.app/](https://lemosgbuscador.streamlit.app/)**
+1.  **Query Restriction:** Limits search to `[Title/Abstract]` to avoid affiliation/grant noise.
+2.  **Type Exclusion:** `NOT (Review OR Editorial OR Comment)`.
+3.  **Functional Context:** Article text must contain functional keywords (e.g., *activation, inhibition*).
+4.  **Structural Regex:** Captures only alphanumeric patterns typical of gene symbols (e.g., *TRPV1, HO-1*).
+5.  **Semantic Blacklist:** Blocks clinical acronyms (OAB, UTI), statistics (ANOVA, CI), and geography (USA, NSW).
+6.  **Biological Whitelist:** Rescues short chemical entities (NO, H2S, CO) often missed by regex.
+7.  **Frequency Cutoff:** Removes terms appearing in >25% of the corpus (too generic).
 
-### Option 2: Run Locally (For developers)
-1.  Clone this repository:
-    ```bash
-    git clone [https://github.com/guilhermelemos-pharm/pesquisa-bexiga.git](https://github.com/guilhermelemos-pharm/pesquisa-bexiga.git)
-    ```
+## 📦 Installation
+
+1.  Clone this repository or extract the files.
 2.  Install dependencies:
     ```bash
     pip install -r requirements.txt
@@ -33,17 +38,8 @@ Access the tool directly via your browser:
     streamlit run app_doutorado.py
     ```
 
-## 📄 How to Cite
+## 📄 Citation
 
-If **Lemos Lambda** has assisted your research, please cite it. This is crucial for supporting open-source academic software.
+If you use this software in your research, please cite:
 
-> Lemos, G. (2025). *Lemos Lambda: Deep Science Prospector* [Software]. Available at: https://github.com/guilhermelemos-pharm/pesquisa-bexiga
-
-Or use the `CITATION.cff` file in this repository to export directly to BibTeX or EndNote.
-
-## ⚖️ License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-Developed by **Guilherme Lemos** (Federal University of São Paulo - Unifesp)
+> Lemos, G. (2025). *Lemos Lambda: Deep Science Prospector* [Software]. Version 1.6.1. Unifesp.

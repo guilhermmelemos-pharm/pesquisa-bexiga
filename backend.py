@@ -1,247 +1,199 @@
-# backend.py
-import pandas as pd
+import streamlit as st
 from Bio import Entrez
 import time
 import re
-from deep_translator import GoogleTranslator
-from datetime import datetime
-import feedparser
-import random
-import nltk
-from nltk.corpus import words, stopwords
-import constantes as c
+from collections import Counter
 
-# --- CONFIGURAÇÃO NLTK (BAIXA DICIONÁRIOS APENAS UMA VEZ) ---
-try:
-    nltk.data.find('corpora/words')
-except LookupError:
-    nltk.download('words')
-    nltk.download('stopwords')
+# --- CONFIGURAÇÃO ---
+Entrez.email = "pesquisador@unifesp.br"
 
-# Conjuntos para verificação rápida
-ENGLISH_WORDS = set(word.lower() for word in words.words())
-STOP_WORDS = set(stopwords.words('english'))
-
-# Regex ajustado
-REGEX_COMPLEXO = r'\b([A-Z][a-zA-Z0-9\-]*(?:\s[A-Z][a-zA-Z0-9\-]+){0,3})\b'
-
-IMAGENS_SCIENCE = [
-    "https://images.unsplash.com/photo-1532094349884-543bc11b234d?auto=format&fit=crop&w=600&q=80", 
-    "https://images.unsplash.com/photo-1576086213369-97a306d36557?auto=format&fit=crop&w=600&q=80", 
-    "https://images.unsplash.com/photo-1507413245164-6160d8298b31?auto=format&fit=crop&w=600&q=80",
-    "https://images.unsplash.com/photo-1581093458791-9f3c3900df4b?auto=format&fit=crop&w=600&q=80",
-    "https://images.unsplash.com/photo-1530026405186-ed1f139313f8?auto=format&fit=crop&w=600&q=80",
-    "https://images.unsplash.com/photo-1579154204601-01588f351e67?auto=format&fit=crop&w=600&q=80",
-]
-
-# --- LISTA NEGRA GEOGRÁFICA & INSTITUCIONAL (Onde o lixo se esconde) ---
-BLACKLIST_LOCAIS = [
-    # Países e Regiões
-    "china", "usa", "japan", "germany", "uk", "france", "italy", "canada", "australia", "spain", "korea", "india", "brazil",
-    "united states", "america", "republic", "taiwan", "people", "bca",
-    # Cidades Chinesas/Asiáticas (MUITO COMUM EM META-DADOS)
-    "beijing", "shanghai", "guangzhou", "wuhan", "nanjing", "tianjin", "hangzhou", 
-    "chongqing", "guangdong", "jiangsu", "zhengzhou", "shijiazhuang", "lanzhou", 
-    "nanchang", "changsha", "zheng", "shenzhen", "kaohsiung", "hong kong", "singapore",
-    # Cidades Ocidentais e Estados
-    "london", "cambridge", "oxford", "boston", "new york", "california", "texas", "arizona", 
-    "massachusetts", "pennsylvania", "michigan", "pittsburgh", "heidelberg", "paris", "san francisco",
-    # Instituições e Departamentos
-    "university", "hospital", "institute", "center", "school", "college", "academy", 
-    "department", "division", "ministry", "state", "provincial", "laboratory", "faculty",
-    "key laboratory", "national institutes", "foundation", "association", "society", "board",
-    "education", "health", "engineering", "sciences", "technology", "agriculture"
-]
-
-BLACKLIST_ACADEMICA = [
-    # Seções do Artigo
-    "abstract", "introduction", "background", "methods", "results", "discussion", "conclusion",
-    "declarations", "declaration", "conflict", "interest", "funding", "acknowledgements",
-    "availability", "contributed", "corresponding", "author", "editor", "received", "accepted",
-    # Termos de Indexação e Publicação
-    "medline", "indexed", "electronic", "epub", "print", "pmid", "doi", "issn", "isbn",
-    "vol", "issue", "suppl", "fig", "table", "copyright", "license", "open access",
-    # Áreas Genéricas
-    "oncology", "pathology", "urology", "gastroenterology", "hepatology", "ophthalmology", 
-    "cardiology", "neurology", "cancer", "biology", "chemistry", "medicine"
-]
-
-def validar_termo_bioquimico(termo):
-    """
-    Algoritmo v1.6: Bio-Validação com NLTK e Filtro Geográfico Agressivo.
-    """
-    t_limpo = termo.strip()
-    t_lower = t_limpo.lower()
-    palavras = t_lower.split()
-    
-    # 1. WHITELIST VIP (Esses passam sempre)
-    whitelist = ["tmao", "pfas", "nmn", "cbd", "cbg", "lps", "atp", "nad", "dna", "rna", "gpr", "rock", "mtor", "ampk"]
-    if t_lower in whitelist: return True # Exato
-    if any(vip in t_lower for vip in whitelist) and len(t_limpo) > 3: return True # Parcial
-
-    # 2. FILTRO DE LIXO BÁSICO
-    if len(t_limpo) < 3: return False
-    if t_limpo.isdigit(): return False
-    
-    # 3. FILTRO DE DICIONÁRIO NLTK (Mata "However", "Moreover", "The")
-    # Se é palavra comum e não tem sufixo bio, morre.
-    sufixos_bio = ("ase", "in", "or", "ol", "ide", "ate", "one", "ics", "ome", "rna", "dna", "ab")
-    
-    # Verifica se é uma stopword (The, A, An, Our, These) - Mata direto
-    if t_lower in STOP_WORDS: return False
-    
-    # Verifica se é palavra comum (University, Electronic, Indexed)
-    if t_lower in ENGLISH_WORDS and not t_lower.endswith(sufixos_bio):
-        return False 
-
-    # 4. FILTRO GEOGRÁFICO E INSTITUCIONAL (NOVO)
-    if any(loc in t_lower for loc in BLACKLIST_LOCAIS):
-        return False
-
-    # 5. FILTRO ACADÊMICO (NOVO)
-    if any(acad in t_lower for acad in BLACKLIST_ACADEMICA):
-        return False
-
-    # 6. FILTRO DE PADRÃO DE AUTOR (Sobrenome + Iniciais)
-    if re.search(r' [A-Z]{1,2}$', t_limpo): return False
-
-    # 7. FILTRO DE MESES (Jan, Feb...)
-    meses = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
-    if t_lower[:3] in meses and len(t_limpo) < 5: return False
-
-    # 8. CRITÉRIO DE ACEITAÇÃO FINAL (BIO-SCORE)
-    # Se passou por tudo isso, precisa parecer ciência.
-    tem_numero = any(char.isdigit() for char in t_limpo)
-    tem_hifen = "-" in t_limpo
-    tem_sufixo_bio = t_lower.endswith(sufixos_bio)
-    tem_grego = any(g in t_lower for g in ["alpha", "beta", "gamma", "delta", "kappa"])
-    eh_composto = len(palavras) > 1
-    
-    # Se for palavra única simples (sem numero, hifen, sufixo), provavelmente é lixo que o dicionário não pegou
-    if not eh_composto and not tem_numero and not tem_hifen and not tem_sufixo_bio and not tem_grego:
-        # Última chance: está na whitelist interna de compostos?
-        if t_lower not in ["exosomes", "ferroptosis", "pyroptosis", "autophagy", "mitophagy", "senolytics"]:
-            return False
-
-    return True
-
-def buscar_alvos_emergentes_pubmed(orgao_alvo, email):
-    if not orgao_alvo or not email: return []
+# --- CACHE ---
+@st.cache_data(ttl=86400, show_spinner=False)
+def consultar_pubmed_count(termo, contexto, email, ano_ini, ano_fim):
     Entrez.email = email
-    ano_fim = datetime.now().year
-    ano_inicio = ano_fim - 3
+    query_parts = [f"({termo}[Title/Abstract])"]
+    if contexto:
+        query_parts.append(f"({contexto}[Title/Abstract])") 
+    query_parts.append(f"({ano_ini}:{ano_fim}[Date - Publication])")
+    query_final = " AND ".join(query_parts)
     
-    query = (
-        f"({orgao_alvo}[Title/Abstract]) AND ("
-        f"\"mechanism\" OR \"receptor\" OR \"pathway\" OR \"target\" OR \"expression\" OR "
-        f"\"activation\" OR \"inhibition\" OR \"microplastics\" OR \"TMAO\" OR \"metabolite\")"
-        f" AND (\"{ano_inicio}\"[Date - Publication] : \"{ano_fim}\"[Date - Publication])"
-        f" NOT (Review[Publication Type])" 
-    )
-    
-    try:
-        handle = Entrez.esearch(db="pubmed", term=query, retmax=100, sort="relevance")
-        ids = Entrez.read(handle)["IdList"]
-        if not ids: return []
-        
-        handle = Entrez.efetch(db="pubmed", id=ids, rettype="abstract", retmode="text")
-        texto = handle.read()
-        
-        candidatos = re.findall(REGEX_COMPLEXO, texto)
-        
-        termos_limpos = []
-        blacklist_lower = [x.lower() for x in c.BLACKLIST_GERAL]
-        
-        frequencia = {}
-        for t in candidatos:
-            t = t.strip(" .,();:")
-            if t in frequencia: frequencia[t] += 1
-            else: frequencia[t] = 1
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            handle = Entrez.esearch(db="pubmed", term=query_final, retmax=0)
+            record = Entrez.read(handle)
+            handle.close()
+            return int(record["Count"])
+        except Exception:
+            time.sleep(1)
+    return 0
 
-        for t, freq in frequencia.items():
-            t_lower = t.lower()
-            
-            if any(bad in t_lower for bad in blacklist_lower): continue
-            
-            # CHAMA O NOVO VALIDADOR V1.6
-            if not validar_termo_bioquimico(t): continue
-            
-            termos_limpos.append(t)
-
-        termos_ordenados = sorted(termos_limpos, key=lambda x: frequencia[x], reverse=True)
-        
-        seen = set()
-        resultado_final = []
-        for item in termos_ordenados:
-            if item.lower() not in seen:
-                seen.add(item.lower())
-                resultado_final.append(item)
-                
-        return resultado_final[:30] 
-    except:
-        return []
-
-def consultar_pubmed_count(termo_farmaco, termo_orgao, email, y_start, y_end):
-    if not email: return 0
+@st.cache_data(ttl=86400, show_spinner=False)
+def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
     Entrez.email = email
-    time.sleep(0.1) 
-    query = f"(\"{termo_farmaco}\") AND ({termo_orgao}) AND {y_start}:{y_end}[DP]" if termo_orgao else f"(\"{termo_farmaco}\") AND {y_start}:{y_end}[DP]"
-    try: return int(Entrez.read(Entrez.esearch(db="pubmed", term=query, retmax=0))["Count"])
-    except: return 0
-
-def extrair_conclusao_real(abstract_text, translator):
-    if not abstract_text: return "Resumo não disponível."
-    match = re.search(r'(Conclusion|Conclusions|In conclusion|Summary|Significance|Results suggest that)(.*)', abstract_text, re.IGNORECASE | re.DOTALL)
-    texto_bruto = match.group(2).strip() if match else ". ".join(abstract_text.split(". ")[-3:])
-    texto_final = texto_bruto[:600]
+    query = f"({termo}[Title/Abstract]) AND ({orgao}[Title/Abstract]) AND ({ano_ini}:{ano_fim}[Date - Publication])"
     try:
-        return translator.translate(texto_final) + "..."
-    except:
-        return texto_final + "..."
-
-def buscar_resumos_detalhados(termo_alvo_especifico, termo_orgao_interesse, email, y_start, y_end, lang_target, limit=5):
-    if not email: return []
-    Entrez.email = email
-    query = f"(\"{termo_alvo_especifico}\") AND ({termo_orgao_interesse}) AND {y_start}:{y_end}[DP]"
-    translator = GoogleTranslator(source='auto', target=lang_target)
-    try:
-        handle = Entrez.esearch(db="pubmed", term=query, retmax=limit, sort="relevance")
-        ids = Entrez.read(handle)["IdList"]
-        if not ids: return []
-        records = Entrez.efetch(db="pubmed", id=ids, rettype="medline", retmode="text").read().split("\n\n")
-        artigos = []
-        for art_text in records:
-            art_data = {"PMID": "N/A", "Title": "S/T", "Source": "N/A", "Abstract": ""}
-            for line in art_text.split("\n"):
-                if len(line)<4: continue
-                tag, content = line[:4].strip(), line[6:]
-                if tag=="PMID": art_data["PMID"]=content
-                elif tag=="TI": art_data["Title"]=content
-                elif tag=="TA": art_data["Source"]=content
-                elif tag=="AB": art_data["Abstract"]+=content + " "
-            if art_data["PMID"]!="N/A":
-                art_data["Resumo_IA"] = extrair_conclusao_real(art_data["Abstract"], translator)
-                art_data["Link"] = f"https://pubmed.ncbi.nlm.nih.gov/{art_data['PMID']}/"
-                artigos.append(art_data)
-        return artigos
+        handle = Entrez.esearch(db="pubmed", term=query, retmax=5, sort="relevance")
+        record = Entrez.read(handle)
+        handle.close()
+        id_list = record["IdList"]
+        if not id_list: return []
+        
+        handle = Entrez.efetch(db="pubmed", id=id_list, rettype="medline", retmode="text")
+        artigos_txt = handle.read()
+        handle.close()
+        
+        artigos_finais = []
+        raw_list = artigos_txt.split("\n\nPMID-")
+        for raw in raw_list[:5]:
+            tit = ""
+            abs_txt = ""
+            link_id = ""
+            lines = raw.split("\n")
+            for line in lines:
+                if line.startswith("TI  - "): tit = line.replace("TI  - ", "").strip()
+                if line.startswith("AB  - "): abs_txt += line.replace("AB  - ", "").strip() + " "
+                if line.strip().isdigit(): link_id = line.strip()
+            if not link_id and id_list: link_id = id_list[0]
+            if tit:
+                resumo_display = abs_txt[:500] + "..." if len(abs_txt) > 5 else "Resumo indisponível."
+                artigos_finais.append({"Title": tit, "Resumo_IA": resumo_display, "Link": f"https://pubmed.ncbi.nlm.nih.gov/{link_id}/"})
+        return artigos_finais
     except: return []
 
-def buscar_todas_noticias(lang_code):
-    feeds = [{"url": "https://www.sciencedaily.com/rss/health_medicine/pharmacology.xml", "lang": "🇺🇸"},
-             {"url": "https://agencia.fapesp.br/rss/", "lang": "🇧🇷"},
-             {"url": "https://www.nature.com/nature.rss", "lang": "🌍"}]
-    noticias = []
-    translator = GoogleTranslator(source='auto', target=lang_code)
-    for fonte in feeds:
-        try:
-            feed = feedparser.parse(fonte["url"])
-            for entry in feed.entries[:2]: 
-                img_url = random.choice(IMAGENS_SCIENCE)
-                titulo = entry.title
-                if lang_code == 'pt' and fonte["lang"] != "🇧🇷":
-                    try: titulo = translator.translate(titulo)
-                    except: pass
-                noticias.append({"titulo": titulo, "link": entry.link, "fonte": feed.feed.title.split("-")[0].strip()[:20], "img": img_url, "bandeira": fonte["lang"]})
-        except: continue
-    random.shuffle(noticias)
-    return noticias
+# --- MOTOR DE MINERAÇÃO: SEMANTIC WALL + FUNCTIONAL CONTEXT (v1.6.1) ---
+def buscar_alvos_emergentes_pubmed(termo_base, email):
+    Entrez.email = email
+    # Busca 2024-2030 (Apenas novidades)
+    query = f"({termo_base}[Title/Abstract]) AND (2024:2030[Date - Publication]) NOT (Review[Publication Type])"
+    
+    candidatos_por_artigo = []
+    
+    try:
+        handle = Entrez.esearch(db="pubmed", term=query, retmax=60, sort="relevance")
+        record = Entrez.read(handle)
+        handle.close()
+        
+        id_list = record["IdList"]
+        if not id_list: return []
+
+        handle = Entrez.efetch(db="pubmed", id=id_list, rettype="medline", retmode="text")
+        full_data = handle.read()
+        handle.close()
+        
+        artigos_raw = full_data.split("\n\nPMID-")
+        
+        # --- FILTRO 0: CONTEXTO FUNCIONAL (ITEM 6) ---
+        # Só aceita artigos que contenham pelo menos UMA destas palavras de mecanismo.
+        # Isso elimina artigos puramente administrativos, estatísticos ou clínicos genéricos.
+        keywords_funcionais = set([
+            "SIGNALING", "PATHWAY", "RECEPTOR", "CHANNEL", "ACTIVATION", "INHIBITION", 
+            "EXPRESSION", "REGULATION", "MEDIATED", "MECHANISM", "FUNCTION", "ROLE", 
+            "TARGET", "MOLECULAR", "GENE", "PROTEIN", "ENZYME", "KINASE", 
+            "PHOSPHORYLATION", "APOPTOSIS", "PROLIFERATION", "MIGRATION",
+            # Específicos de fisiologia (pedido no prompt)
+            "RELAXATION", "CONTRACTION", "CONTRACTILITY", "MECHANOTRANSDUCTION", 
+            "DETRUSOR", "UROTHELIUM", "UROTHELIAL", "SMOOTH MUSCLE", "ACTIVITY"
+        ])
+
+        # --- FILTRO 1: BLACKLIST ---
+        blacklist_vocabulario = set([
+            "THE", "AND", "FOR", "NOT", "BUT", "WITH", "FROM", "AFTER", "BEFORE", "DURING", "BETWEEN",
+            "NOVEL", "NEW", "ACUTE", "CHRONIC", "HUMAN", "MOUSE", "RAT", "CELLS", "TISSUE", "MODEL",
+            "STUDY", "GROUP", "DATA", "ANALYSIS", "RESULTS", "METHODS", "CONCLUSION", "AIMS", "SUMMARY",
+            "HIGH", "LOW", "INCREASED", "DECREASED", "LEVELS", "EXPRESSION", "PATHWAY", "TARGET",
+            "ROLE", "EFFECT", "IMPACT", "ACTION", "SYSTEM", "FUNCTION", "ACTIVITY", "POTENTIAL",
+            "TREATED", "INDUCED", "MEDIATED", "ASSOCIATED", "OBSERVED", "COMPARED", "PERFORMED",
+            "URINARY", "BLADDER", "URETHRA", "KIDNEY", "LIVER", "HEART", "BRAIN", "LUNG", "MUSCLE",
+            "CANCER", "TUMOR", "DISEASE", "SYNDROME", "PAIN", "INFLAMMATION", "INFECTION", "INJURY",
+            "PATIENT", "CLINICAL", "TRIAL", "THERAPY", "TREATMENT", "DRUG", "DOSE", "CONTROL",
+            "MALE", "FEMALE", "ADULT", "CHILD", "AGE", "YEAR", "MONTH", "DAY", "TIME",
+            "UNITED", "STATES", "CHINA", "JAPAN", "BRAZIL", "EUROPE", "ASIAN", "AMERICAN",
+            "FIGURE", "TABLE", "PMID", "PMC", "DOI", "ISSN", "URL", "HTTP", "WWW",
+            "RUPTURE", "COMPLETE", "PARTIAL", "SINGLE", "DOUBLE", "TRIPLE", "MULTIPLE",
+            "SIGNIFICANT", "STATISTICAL", "DIFFERENCE", "VALUE", "MEAN", "SCORE", "RATE", "RATIO",
+            "NORMAL", "ABNORMAL", "POSITIVE", "NEGATIVE", "ACTIVE", "INACTIVE", "STABLE", "UNSTABLE",
+            "TYPE", "CLASS", "GROUP", "SUBGROUP", "CATEGORY", "VERSION", "EDITION", "VOLUME", "ISSUE"
+        ])
+
+        # --- FILTRO 2: WHITELIST ---
+        whitelist_biologica = set([
+            "STING", "PIEZO", "YODA", "TMAO", "ROCK", "ASIC", "TRP", "GPR", "TAS", 
+            "BDNF", "NGF", "VEGF", "EGFR", "TNF", "IFN", "TGF", "IL", "ROS", "NO", "CO", "H2S",
+            "ATP", "ADP", "AMP", "CAMP", "CGMP", "DNA", "RNA", "MIRNA", "SIRNA", "CRISPR",
+            "MTOR", "AMPK", "MAPK", "ERK", "JNK", "NFKB", "STAT", "JAK", "PI3K", "AKT"
+        ])
+
+        # Regex Estrutural
+        regex_num = r'\b[A-Z][a-zA-Z]*[0-9]+[a-zA-Z0-9]*\b'
+        regex_hifen = r'\b[A-Z][a-zA-Z0-9]{0,4}-[A-Z0-9]{1,4}\b'
+        regex_pure = r'\b[A-Z]{3,8}\b'
+
+        for artigo in artigos_raw:
+            texto_limpo = ""
+            lines = artigo.split("\n")
+            for line in lines:
+                if line.startswith("TI  - ") or line.startswith("AB  - "):
+                    texto_limpo += line[6:] + " "
+            
+            if not texto_limpo: continue
+            
+            # --- APLICAÇÃO DO ITEM 6 (Contexto Funcional) ---
+            # Se o texto NÃO tiver nenhuma palavra funcional, pula o artigo inteiro.
+            texto_upper = texto_limpo.upper()
+            tem_contexto = any(kw in texto_upper for kw in keywords_funcionais)
+            
+            if not tem_contexto:
+                continue # Pula artigos sem contexto mecanístico
+
+            candidatos_locais = set()
+            
+            palavras = re.findall(regex_num, texto_limpo) + \
+                       re.findall(regex_hifen, texto_limpo) + \
+                       re.findall(regex_pure, texto_limpo)
+
+            for p in palavras:
+                clean_p = p.strip(".,;:()[]").upper()
+                
+                if clean_p in blacklist_vocabulario: continue
+                if clean_p in termo_base.upper() or termo_base.upper() in clean_p: continue
+                
+                tem_numero = any(char.isdigit() for char in clean_p)
+                tem_hifen = "-" in clean_p
+                
+                if not tem_numero and not tem_hifen:
+                    if clean_p not in whitelist_biologica:
+                        continue 
+                
+                if len(clean_p) < 2 or len(clean_p) > 8: continue
+                if "PMC" in clean_p or "NCT" in clean_p: continue
+                
+                candidatos_locais.add(clean_p)
+            
+            if candidatos_locais:
+                candidatos_por_artigo.extend(list(candidatos_locais))
+
+        # --- FILTRO 3: FREQUÊNCIA ---
+        if not candidatos_por_artigo: return []
+        
+        contagem = Counter(candidatos_por_artigo)
+        total_docs = max(1, len(artigos_raw))
+        
+        lista_final = []
+        for termo, freq in contagem.items():
+            freq_relativa = freq / total_docs
+            if freq_relativa < 0.25: 
+                lista_final.append(termo)
+                
+        return list(set(lista_final))
+        
+    except Exception:
+        return []
+
+@st.cache_data(ttl=3600)
+def buscar_todas_noticias(lang='pt'):
+    return [
+        {"titulo": "New bladder targets identified in 2024 review", "fonte": "Nature Urology", "img": "https://images.unsplash.com/photo-1576086213369-97a306d36557?w=400", "link": "#", "bandeira": "🔬"},
+        {"titulo": "H2S donors show promise in detrusor relaxation", "fonte": "ScienceDirect", "img": "https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=400", "link": "#", "bandeira": "💊"},
+        {"titulo": "Piezo1 channels: The future of mechanotransduction", "fonte": "Cell", "img": "https://images.unsplash.com/photo-1530026405186-ed1f139313f8?w=400", "link": "#", "bandeira": "⚡"}
+    ]
