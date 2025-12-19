@@ -305,20 +305,7 @@ st.markdown("---")
 st.markdown(f"<div class='footer-text'>{t.get('footer_rights', '© 2025 Guilherme Lemos | Unifesp')}</div>", unsafe_allow_html=True)
 st.write("")
 
-cf1, cf2 = st.columns([2, 1])
-
-with cf1:
-    st.caption(t.get("footer_citar", "Academic Use"))
-    with st.expander(t.get("citar_titulo", "Citation"), expanded=False):
-        st.code(t.get("citar_texto", ""), language="text")
-
-with cf2:
-    st.caption(t.get("apoio_titulo", "Support:"))
-    st.markdown(
-        """
-        <a href="https://www.buymeacoffee.com/SEU_USUARIO_AQUI" target="_blank">
-            <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 35px !important;width: 130px !important;" >
-        </a>
-        """,
-        unsafe_allow_html=True
+st.caption(t.get("footer_citar", "Academic Use"))
+with st.expander(t.get("citar_titulo", "Citation"), expanded=False):
+    st.code(t.get("citar_texto", ""), language="text")
     )
