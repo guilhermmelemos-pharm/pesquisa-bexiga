@@ -5,7 +5,7 @@ import re
 from collections import Counter
 
 # --- CONFIGURAÇÃO ---
-Entrez.email = "pesquisador@unifesp.br"
+Entrez.email = "glemos@unifesp.br"
 
 # --- CACHE ---
 @st.cache_data(ttl=86400, show_spinner=False)
@@ -196,4 +196,5 @@ def buscar_todas_noticias(lang='pt'):
         {"titulo": "New bladder targets identified in 2024 review", "fonte": "Nature Urology", "img": "https://images.unsplash.com/photo-1576086213369-97a306d36557?w=400", "link": "#", "bandeira": "🔬"},
         {"titulo": "H2S donors show promise in detrusor relaxation", "fonte": "ScienceDirect", "img": "https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=400", "link": "#", "bandeira": "💊"},
         {"titulo": "Piezo1 channels: The future of mechanotransduction", "fonte": "Cell", "img": "https://images.unsplash.com/photo-1530026405186-ed1f139313f8?w=400", "link": "#", "bandeira": "⚡"}
+
     ]
