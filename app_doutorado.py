@@ -304,7 +304,6 @@ else:
 st.markdown("---")
 st.markdown(f"<div class='footer-text'>{t.get('footer_rights', '© 2025 Guilherme Lemos | Unifesp')}</div>", unsafe_allow_html=True)
 st.write("")
-
 st.caption(t.get("footer_citar", "Academic Use"))
 with st.expander(t.get("citar_titulo", "Citation"), expanded=False):
     st.code(t.get("citar_texto", ""), language="text")
