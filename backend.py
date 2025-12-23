@@ -126,13 +126,17 @@ def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
         return artigos
     except: return []
 
-# --- MOTOR DE MINERAÇÃO ---
+# --- MOTOR DE MINERAÇÃO (CALIBRADO V2.2 - Janela Estendida) ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def buscar_alvos_emergentes_pubmed(termo_base, email):
     if email: Entrez.email = email
-    query = f"({termo_base}[Title/Abstract]) AND (2024:2030[Date - Publication]) AND (NOT Review[pt])"
+    
+    # 1. DATA AMPLIADA PARA 2016 (Janela de ~10 anos)
+    query = f"({termo_base}[Title/Abstract]) AND (2016:2030[Date - Publication]) AND (NOT Review[pt])"
+    
     try:
-        handle = Entrez.esearch(db="pubmed", term=query, retmax=50, sort="relevance")
+        # Mantive retmax 100 para ter boa amostragem
+        handle = Entrez.esearch(db="pubmed", term=query, retmax=100, sort="relevance")
         record = Entrez.read(handle); handle.close()
         if not record["IdList"]: return []
 
@@ -142,29 +146,50 @@ def buscar_alvos_emergentes_pubmed(termo_base, email):
 
         keywords_funcionais = {"SIGNALING", "PATHWAY", "RECEPTOR", "CHANNEL", "ACTIVATION", "INHIBITION", "EXPRESSION",
                                "REGULATION", "MEDIATED", "MECHANISM", "FUNCTION", "ROLE", "TARGET", "MOLECULAR", "GENE",
-                               "PROTEIN", "ENZYME", "KINASE", "AUTOPHAGY", "APOPTOSIS", "DIFFERENTIATION", "HOMEOSTASIS", "STRESS"}
+                               "PROTEIN", "ENZYME", "KINASE", "AUTOPHAGY", "APOPTOSIS", "DIFFERENTIATION", "HOMEOSTASIS", 
+                               "STRESS", "CONTRACTILITY", "RELAXATION"}
         
-        blacklist = {"AND", "THE", "FOR", "NOT", "BUT", "WITH", "FROM", "STUDY", "RESULTS", "CELLS", "WAS", "WERE", "CBS", "FAU", "AID"} 
-        unidades = {"MMHG","KPA","MIN","SEC","HRS","ML","MG","KG","NM","UM","MM","NMOL"}
+        # Blacklist Expandida Mantida
+        blacklist = {"AND", "THE", "FOR", "NOT", "BUT", "WITH", "FROM", "STUDY", "RESULTS", "CELLS", "WAS", "WERE", 
+                     "CBS", "FAU", "AID", "USE", "AIM", "DUE", "VIA", "MAY", "CAN", "HAS", "HAD", "LOW", "HIGH",
+                     "NEW", "TWO", "ONE", "RAT", "MICE", "DOG", "PIG", "CAT", "MAN", "AGE", "OLD", "DRUG", "USED",
+                     "AFTER", "BEFORE", "DURING", "WITHIN", "BETWEEN", "AMONG", "UNDER", "ABOVE", "BELOW", "THESE",
+                     "THOSE", "THIS", "THAT", "WHICH", "WHAT", "WHEN", "WHERE", "WHY", "HOW", "ALL", "ANY", "EACH",
+                     "SIGNIFICANTLY", "RESPECTIVELY", "CONCLUSION", "BACKGROUND", "METHODS", "OBJECTIVE", "PURPOSE",
+                     "DEPARTMENT", "UNIVERSITY", "HOSPITAL", "CENTER", "CENTRE", "SCHOOL", "COLLEGE", "INSTITUTE",
+                     "RESEARCH", "SCIENCE", "SCIENCES", "MEDICINE", "MEDICAL", "CLINICAL", "PATIENTS", "GROUP", "GROUPS",
+                     "CONTROL", "TREATED", "UNTREATED", "SHAM", "VEHICLE", "MODEL", "MODELS", "DATA", "ANALYSIS",
+                     "USING", "USED", "PERFORMED", "OBSERVED", "SHOWED", "FOUND", "INDICATED", "SUGGESTED", "DEMONSTRATED",
+                     "INVESTIGATED", "EVALUATED", "COMPARED", "INCREASED", "DECREASED", "LEVELS", "EFFECTS"} 
+        
+        unidades = {"MMHG","KPA","MIN","SEC","HRS","ML","MG","KG","NM","UM","MM","NMOL", "MOL", "PH"}
 
         candidatos_por_artigo = []
         for artigo in artigos_raw:
             texto_upper = artigo.upper()
             if not any(kw in texto_upper for kw in keywords_funcionais): continue
 
-            encontrados = re.findall(r'\b[A-Z][A-Z0-9-]{2,8}\b', texto_upper)
+            # Regex 15 chars mantido
+            encontrados = re.findall(r'\b[A-Z][A-Z0-9-]{2,14}\b', texto_upper)
+            
             candidatos_locais = set()
             for t in encontrados:
                 t_clean = re.sub(r'[^A-Z0-9]', '', t)
-                if t_clean in blacklist or t_clean in unidades or len(t_clean)<3 or t_clean==termo_base.upper(): continue
-                if t_clean.isdigit() or len(re.findall(r'[0-9]', t_clean))>2: continue
+                
+                if t_clean in blacklist or t_clean in unidades: continue
+                if len(t_clean) < 3: continue 
+                if t_clean == termo_base.upper().replace(" ", ""): continue
+                if t_clean.isdigit(): continue 
+                
                 candidatos_locais.add(t_clean)
             candidatos_por_artigo.extend(list(candidatos_locais))
 
         if not candidatos_por_artigo: return []
         contagem = Counter(candidatos_por_artigo)
         total_docs = max(1, len(artigos_raw))
-        return [termo for termo,freq in contagem.most_common(12) if (freq/total_docs)<0.35][:7]
+        
+        # Filtro de corte mantido
+        return [termo for termo,freq in contagem.most_common(15) if (freq/total_docs)<0.50][:10]
     except: return []
 
 # --- RADAR DE NOTÍCIAS ---
