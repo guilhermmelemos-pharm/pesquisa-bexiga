@@ -19,10 +19,9 @@ def analisar_abstract_com_ia(titulo, abstract, api_key, lang='pt'):
         prompt = f"""Como PhD em Farmacologia, analise:
         TÍTULO: {titulo} | RESUMO: {abs_input}
         FORMATO: Alvo → Fármaco → Efeito (Contextualizado ao Título).
-        REGRAS: Máx 25 palavras. Resposta única para este contexto. Idioma: {idioma}."""
+        REGRAS: Máx 25 palavras. Resposta única e técnica. Idioma: {idioma}."""
 
-        # Loop de Failover para evitar 404/429
-        for mod in ['gemini-1.5-flash', 'gemini-1.5-flash-8b', 'gemini-1.5-pro', 'gemini-2.0-flash-exp']:
+        for mod in ['gemini-1.5-flash-8b', 'gemini-1.5-flash', 'gemini-1.5-pro']:
             try:
                 model = genai.GenerativeModel(mod)
                 response = model.generate_content(prompt, generation_config={"temperature": 0.7})
@@ -79,10 +78,9 @@ def buscar_alvos_emergentes_pubmed(termo_base, email):
         handle = Entrez.efetch(db="pubmed", id=record["IdList"], rettype="medline", retmode="text")
         dados = handle.read().upper(); handle.close()
         
-        # BLACKLIST MASSIVA (CONFORME SOLICITADO)
+        # BLACKLIST AGRESSIVA (Filtra resíduos metodológicos e geográficos)
         blacklist = {
             "THE", "AND", "FOR", "NOT", "BUT", "WITH", "FROM", "AFTER", "BEFORE", "DURING", "BETWEEN",
-            "NOVEL", "NEW", "ACUTE", "CHRONIC", "HUMAN", "MOUSE", "RAT", "CELLS", "TISSUE", "MODEL",
             "STUDY", "GROUP", "DATA", "ANALYSIS", "RESULTS", "METHODS", "CONCLUSION", "AIMS", "SUMMARY",
             "HIGH", "LOW", "INCREASED", "DECREASED", "LEVELS", "EXPRESSION", "PATHWAY", "TARGET",
             "ROLE", "EFFECT", "IMPACT", "ACTION", "SYSTEM", "FUNCTION", "ACTIVITY", "POTENTIAL",
@@ -92,23 +90,32 @@ def buscar_alvos_emergentes_pubmed(termo_base, email):
             "PATIENT", "CLINICAL", "TRIAL", "THERAPY", "TREATMENT", "DRUG", "DOSE", "CONTROL",
             "MALE", "FEMALE", "ADULT", "CHILD", "AGE", "YEAR", "MONTH", "DAY", "TIME",
             "UNITED", "STATES", "CHINA", "JAPAN", "BRAZIL", "EUROPE", "ASIAN", "AMERICAN",
-            "FIGURE", "TABLE", "PMID", "PMC", "DOI", "ISSN", "URL", "HTTP", "WWW",
-            "RUPTURE", "COMPLETE", "PARTIAL", "SINGLE", "DOUBLE", "TRIPLE", "MULTIPLE",
-            "SIGNIFICANT", "STATISTICAL", "DIFFERENCE", "VALUE", "MEAN", "SCORE", "RATE", "RATIO",
-            "NORMAL", "ABNORMAL", "POSITIVE", "NEGATIVE", "ACTIVE", "INACTIVE", "STABLE", "UNSTABLE",
-            "TYPE", "CLASS", "GROUP", "SUBGROUP", "CATEGORY", "VERSION", "EDITION", "VOLUME", "ISSUE",
-            "USING", "REVIEW", "MECHANISM", "SIGNALING", "PROTEIN", "GENE", "FACTOR", "RESPONSE"
+            "FIGURE", "TABLE", "PMID", "PMC", "DOI", "ISSN", "URL", "HTTP", "WWW", "TYPE", "CLASS", 
+            "RECEPTOR", "CHANNEL", "PROTEIN", "GENE", "FACTOR", "RESPONSE", "CELLS", "TISSUE", "MODEL",
+            "USING", "REVIEW", "MECHANISM", "SIGNALING", "NOVEL", "NEW", "ACUTE", "CHRONIC", "HUMAN",
+            "MOUSE", "RAT", "SIGNIFICANT", "STATISTICAL", "VALUE", "MEAN", "RATE", "RATIO", "NORMAL",
+            "POSITIVE", "NEGATIVE", "ACTIVE", "INACTIVE", "STABLE", "UNSTABLE", "TOTAL", "CASE", "REPORT"
         }
-        whitelist = {"STING", "PIEZO", "YODA", "ROCK", "ASIC", "TRP", "GPR", "ROS", "NO", "ATP", "MTOR", "NFKB", "P2X", "P2Y"}
+        
+        # Filtro de Unidades e Termos Curtos Irrelevantes
+        unidades = {"MMHG", "KPA", "MIN", "SEC", "HRS", "ML", "MG", "KG", "NM", "UM", "MM"}
+        
         encontrados = re.findall(r'\b[A-Z][A-Z0-9-]{2,8}\b', dados)
-        candidatos = [t for t in encontrados if t in whitelist or (t not in blacklist and len(t) >= 3 and t not in termo_base.upper())]
+        candidatos = []
+        for t in encontrados:
+            # Só aceita se: não estiver na blacklist, não for unidade, for longo o suficiente e não for o termo base
+            if t not in blacklist and t not in unidades and len(t) >= 3 and t not in termo_base.upper():
+                # Evita siglas de países e termos muito comuns de 3 letras que sobraram
+                if t not in {"USA", "PRC", "UK", "EU", "APP", "ALL", "WAS", "ARE", "HAS"}:
+                    candidatos.append(t)
+        
         return [t for t, count in Counter(candidatos).most_common(7)]
     except: return []
 
 def buscar_todas_noticias(lang='pt'):
     try:
-        # Radar Científico: Fronteiras da Ciência Global
-        handle = Entrez.esearch(db="pubmed", term="(pharmacology OR molecular targets) AND (2025[Date - Publication])", retmax=3, sort="pub_date")
+        # Radar de Ciência Global: Nature, Science, Cell e Farmacologia Geral
+        handle = Entrez.esearch(db="pubmed", term="(pharmacology[Filter]) AND (2025[Date - Publication])", retmax=3, sort="pub_date")
         record = Entrez.read(handle); handle.close()
         handle = Entrez.efetch(db="pubmed", id=record["IdList"], rettype="medline", retmode="text")
         dados = handle.read(); handle.close()
