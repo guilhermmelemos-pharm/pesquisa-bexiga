@@ -116,6 +116,7 @@ def ir_para_analise(email, contexto, alvo, y_ini, y_fim, textos):
     res = []
     
     with st.spinner(textos["spinner_analise"]):
+        # Mudança 1: Busca o n_total_alvo de forma absoluta no PubMed
         n_total_alvo = bk.consultar_pubmed_count(alvo, "", email, 1900, 2030)
         if n_total_alvo == 0: n_total_alvo = 1
     
@@ -127,6 +128,7 @@ def ir_para_analise(email, contexto, alvo, y_ini, y_fim, textos):
     
     for i, item in enumerate(lista):
         time.sleep(0.01) 
+        # Mudança 2: Busca Global sem o filtro do contexto para garantir Hits Global > Hits Alvo
         n_global = bk.consultar_pubmed_count(item, "", email, y_ini, y_fim)
         n_especifico = bk.consultar_pubmed_count(item, alvo, email, y_ini, y_fim)
         
@@ -228,16 +230,16 @@ if st.session_state.pagina == 'resultados':
         
         if st.button(f"{t['btn_investigar']} {sel}", type="secondary"):
             with st.spinner(t["spinner_investigando"]):
-                # O backend buscar_resumos_detalhados agora captura Keywords
+                # Mudança 3: O backend agora fornece Info_IA (Keywords ou Abstract Curto)
                 artigos_raw = bk.buscar_resumos_detalhados(sel, st.session_state.alvo_guardado, st.session_state.email_guardado, 2015, 2025)
                 st.session_state.artigos_detalhe = []
                 for i, art in enumerate(artigos_raw[:3]):
-                    # Mudança Chave: Passamos 'Keywords' em vez de resumo longo
-                    resumo_ia = bk.analisar_abstract_com_ia(art['Title'], art['Keywords'], st.session_state.api_key_usuario, st.session_state.lang)
+                    # Passamos 'Info_IA' que é leve e evita cooldown
+                    resumo_ia = bk.analisar_abstract_com_ia(art['Title'], art['Info_IA'], st.session_state.api_key_usuario, st.session_state.lang)
                     st.session_state.artigos_detalhe.append({"Title": art['Title'], "Resumo_IA": resumo_ia, "Link": art['Link']})
                     if i < 2: 
-                        st.toast(f"Cadenciando IA: Artigo {i+1} pronto...", icon="⏳")
-                        time.sleep(10) # Delay anti-bloqueio
+                        st.toast(f"Aguardando cota: Artigo {i+1} pronto...", icon="⏳")
+                        time.sleep(10) # Delay anti-bloqueio seguro
                 st.rerun()
 
         if st.session_state.artigos_detalhe:
@@ -276,7 +278,6 @@ else:
     with col_config:
         st.subheader(t["header_config"])
         with st.expander(t["expander_ia"], expanded=True):
-            # Widget de chave persistente
             st.session_state.api_key_usuario = st.text_input("Google API Key", type="password", value=st.session_state.api_key_usuario)
             st.markdown(f"[{t['link_key']}](https://aistudio.google.com/app/apikey)")
         st.divider()
@@ -289,7 +290,8 @@ else:
         st.success(f"✅ {len(st.session_state.alvos_val.split(','))} alvos prontos.")
         with st.expander(t["expander_lista"]):
             st.text_area("", key="alvos_val", height=150)
-            if st.button(t["btn_limpar"]): limpar_lista_total(); st.rerun()
+            # Rótulo atualizado conforme instrução do usuário: "termos indicados"
+            if st.button("termos indicados"): limpar_lista_total(); st.rerun()
         if st.button(t["btn_executar"], type="primary", use_container_width=True):
             if not st.session_state.input_email: st.error(t["erro_email"])
             else: ir_para_analise(st.session_state.input_email, st.session_state.input_fonte, st.session_state.input_alvo, anos[0], anos[1], t)
