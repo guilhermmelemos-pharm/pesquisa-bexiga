@@ -318,12 +318,15 @@ else:
                 tm = st.text_input("Termo", key="input_manual", placeholder=t["holder_manual"])
                 if st.button(t["btn_add_manual"]):
                     if tm: adicionar_termos_seguro(tm.split(","), t); st.rerun()
-        with col_config:
-        # 2. Tudo aqui dentro deve ter 4 espaços (Tab) para a direita
-        st.subheader(t["header_config"]) 
+
+    # --- CORREÇÃO DE INDENTAÇÃO AQUI ---
+    with col_config:
+        # Note o espaço extra aqui na frente (TAB)
+        st.subheader(t["header_config"])
         with st.expander(t["expander_ia"], expanded=True):
             st.caption(t["caption_ia"])
             
+            # Fix da Amnésia (Mantém a chave na memória)
             val_atual = st.session_state.api_key_usuario
             
             input_key = st.text_input(
@@ -339,3 +342,17 @@ else:
         anos = st.slider(t["slider_tempo"], 2000, datetime.now().year, (2015, datetime.now().year))
         st.text_input(t["label_contexto"], key="input_fonte")
         st.file_uploader(t["uploader_label"], type=["csv", "txt"], key="uploader_key", on_change=processar_upload, args=(t,))
+
+    st.divider()
+    if st.session_state.alvos_val:
+        msg = t.get("msg_alvos_ok", "alvos prontos.")
+        st.success(f"✅ **{len(st.session_state.alvos_val.split(','))} {msg}**")
+        
+        # --- CAIXA EDITÁVEL ---
+        with st.expander(t["expander_lista"]):
+             st.text_area("", key="alvos_val", height=150)
+             if st.button(t["btn_limpar"]): limpar_lista_total(); st.rerun()
+        
+        if st.button(t["btn_executar"], type="primary", use_container_width=True):
+            if not st.session_state.input_email: st.error(t["erro_email"])
+            else: ir_para_analise(st.session_state.input_email, st.session_state.input_fonte, st.session_state.input_alvo, anos[0], anos[1], t)
