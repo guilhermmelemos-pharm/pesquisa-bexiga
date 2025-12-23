@@ -82,26 +82,52 @@ def buscar_alvos_emergentes_pubmed(termo_base, email):
         handle = Entrez.efetch(db="pubmed", id=record["IdList"], rettype="medline", retmode="text")
         dados = handle.read().upper(); handle.close()
         
+        # --- BLACKLIST v4.0 (Agressiva: Limpeza Total) ---
         blacklist = {
-            "AUID", "ORCID", "AUTHOR", "AFFILIATION", "CORRESPONDENCE", "COMPANY", "LAB", "GROUP", 
-            "BS", "MS", "PHD", "MD", "FAU", "INC", "CORP", "LTD", "RESEARCH", "CLINICAL", "CANCER", 
-            "ONCOLOGY", "UROLOGY", "MEDICINE", "MEDICAL", "HOSPITAL", "STUDY", "DATA", "ANALYSIS", 
-            "RESULTS", "METHODS", "CONCLUSION", "AIMS", "SUMMARY", "REVIEW", "TRIAL", "CASE", "REPORT", 
-            "FIGURE", "TABLE", "PMID", "PMC", "DOI", "ISSN", "URL", "HTTP", "WWW", "PUBLISHED", 
-            "THAT", "WERE", "THIS", "THESE", "THOSE", "WHICH", "WHEN", "WHERE", "ALSO", "THAN", 
-            "BOTH", "UPON", "ONLY", "BEEN", "SOME", "COULD", "TOTAL", "WELL", "VERY", "FROM", 
-            "USA", "PRC", "UK", "EU", "CHINA", "NANJING", "FREIBURG", "UNIFESP", "RECEPTOR", 
-            "CHANNEL", "PROTEIN", "GENE", "FACTOR", "RESPONSE", "CELLS", "TISSUE", "MODEL", 
-            "EXPRESSION", "PATHWAY", "TARGET", "URINARY", "BLADDER"
+            # Conectivos e Verbos (Os que você citou + reforço)
+            "AND", "THE", "FOR", "WITH", "WAS", "WERE", "THAT", "THIS", "THESE", "THOSE", 
+            "FROM", "INTO", "UPON", "ONLY", "ALSO", "THAN", "BOTH", "WHICH", "WHEN", 
+            "WHERE", "BEEN", "SOME", "COULD", "WELL", "VERY", "HAS", "HAD", "ARE", 
+            "ALL", "BEING", "BUT", "NOT", "THROUGH", "BETWEEN", "UNDER", "ABOUT",
+            
+            # Institucional, Metadados e Localização
+            "CBS", "PHST", "CENTER", "HOSPITAL", "UNIVERSITY", "INSTITUTE", "MEDICAL", 
+            "MEDICINE", "CLINIC", "INC", "CORP", "LTD", "DEPT", "LAB", "GROUP",
+            "USA", "PRC", "UK", "EU", "CHINA", "NANJING", "FREIBURG", "UNIFESP",
+            "AUID", "ORCID", "AUTHOR", "AFFILIATION", "CORRESPONDENCE", "EMAIL", "E-MAIL",
+            "PUBLISHED", "COPYRIGHT", "LICENSE", "ONLINE", "PRINT", "DOI", "ISSN",
+            
+            # Metodológico e Geral (RESEARCH, CLINICAL...)
+            "RESEARCH", "CLINICAL", "STUDY", "DATA", "ANALYSIS", "RESULTS", "METHODS", 
+            "CONCLUSION", "AIMS", "SUMMARY", "REVIEW", "TRIAL", "CASE", "REPORT",
+            "SIGNIFICANT", "STATISTICAL", "VALUE", "MEAN", "RATE", "RATIO", "TOTAL",
+            "NORMAL", "POSITIVE", "NEGATIVE", "ACTIVE", "INACTIVE", "STABLE", "UNSTABLE",
+            "FIGURE", "TABLE", "TYPE", "CLASS", "LEVELS", "HIGH", "LOW", "INCREASED", "DECREASED",
+            
+            # Biológico Genérico (Filtro para sobrar apenas o ALVO real)
+            "RECEPTOR", "CHANNEL", "PROTEIN", "GENE", "FACTOR", "RESPONSE", "CELLS", 
+            "TISSUE", "MODEL", "USING", "MECHANISM", "SIGNALING", "NOVEL", "NEW", 
+            "EXPRESSION", "PATHWAY", "TARGET", "URINARY", "BLADDER", "URETHRA", "KIDNEY"
         }
+        
         unidades = {"MMHG", "KPA", "MIN", "SEC", "HRS", "ML", "MG", "KG", "NM", "UM", "MM", "NMOL"}
         
+        # Regex: Captura siglas, mas remove pontuações grudadas (como 'CBS,')
         encontrados = re.findall(r'\b[A-Z]{3,8}\b|\b[A-Z]{1,3}[0-9]{1,2}\b', dados)
+        
         candidatos = []
         for t in encontrados:
-            if t in blacklist or t in unidades or len(t) < 3 or t == termo_base.upper(): continue
-            if t.isdigit() or len(re.findall(r'[0-9]', t)) > 2: continue
-            candidatos.append(t)
+            # Limpa qualquer resíduo de caractere não alfabético
+            t_clean = re.sub(r'[^A-Z0-9]', '', t)
+            
+            if t_clean in blacklist or t_clean in unidades: continue
+            if len(t_clean) < 3 or t_clean == termo_base.upper(): continue
+            if t_clean.isdigit() or len(re.findall(r'[0-9]', t_clean)) > 2: continue
+            
+            # Filtro final para palavras comuns de 3 letras que a blacklist pode ter pulado
+            if t_clean in {"APP", "THE", "AND", "FOR", "NOT", "BUT", "WAS", "ARE", "HAS", "HAD"}: continue
+            
+            candidatos.append(t_clean)
         
         return [t for t, count in Counter(candidatos).most_common(7)]
     except: return []
@@ -130,3 +156,4 @@ def buscar_todas_noticias(lang='pt'):
                 })
         return news
     except: return []
+
