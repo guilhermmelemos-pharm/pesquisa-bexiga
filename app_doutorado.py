@@ -252,12 +252,18 @@ if st.session_state.pagina == 'resultados':
                     
                     c_ia, c_link = st.columns([1, 1])
                     
-                    # Botão para Ativar a IA apenas neste artigo específico
+                    # Coluna de Interação com IA (Lógica Ajustada)
                     with c_ia:
-                        if st.button(f"🤖 Analisar este artigo", key=f"btn_ia_{i}"):
-                            if not st.session_state.api_key_usuario:
-                                st.error("⚠️ Configure sua API Key na tela inicial.")
-                            else:
+                        # Se não tiver chave, mostra o campo de input ali mesmo
+                        if not st.session_state.api_key_usuario:
+                            nova_chave = st.text_input("Cole sua Google API Key:", type="password", key=f"key_input_{i}", help="Cole a chave e pressione Enter para liberar a análise.")
+                            if nova_chave:
+                                st.session_state.api_key_usuario = nova_chave
+                                st.rerun()
+                        
+                        # Se já tiver chave (ou acabou de colocar), mostra o botão de análise
+                        if st.session_state.api_key_usuario:
+                            if st.button(f"🤖 Analisar este artigo", key=f"btn_ia_{i}"):
                                 with st.spinner("Analisando..."):
                                     # Chama a função leve do backend passando Info_IA
                                     resumo = bk.analisar_abstract_com_ia(
@@ -333,4 +339,4 @@ with cf1:
 with cf2:
     st.caption(t["apoio_titulo"])
     st.text_input("Chave Pix:", value="960f3f16-06ce-4e71-9b5f-6915b2a10b5a", disabled=False)
-                       
+        
