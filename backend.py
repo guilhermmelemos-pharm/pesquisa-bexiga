@@ -9,7 +9,7 @@ import time
 # --- CONFIGURAÇÃO ---
 Entrez.email = "pesquisador_guest@unifesp.br" 
 
-# --- 1. IA: MODO INVESTIGAÇÃO SÊNIOR (ANTI-CONGESTIONAMENTO) ---
+# --- IA: MODO INVESTIGAÇÃO SÊNIOR ---
 def analisar_abstract_com_ia(titulo, abstract, api_key, lang='pt'):
     if not api_key: return "⚠️ IA não ativada"
     try:
@@ -23,7 +23,6 @@ def analisar_abstract_com_ia(titulo, abstract, api_key, lang='pt'):
         FORMATO: Alvo → Fármaco → Efeito (Contextualizado ao Título).
         REGRAS: Máx 25 palavras. Proibido respostas genéricas. Idioma: {idioma}."""
 
-        # Ordem de failover: 8b é mais leve e tem maior cota
         for mod in ['gemini-1.5-flash-8b', 'gemini-1.5-flash', 'gemini-1.5-pro']:
             try:
                 model = genai.GenerativeModel(mod)
@@ -32,11 +31,11 @@ def analisar_abstract_com_ia(titulo, abstract, api_key, lang='pt'):
             except Exception as e:
                 if "429" in str(e): time.sleep(2)
                 continue 
-        return f"💡 IA Ocupada: {titulo[:50]}... (Tente novamente em instantes)"
+        return f"💡 IA Ocupada: {titulo[:50]}..."
     except Exception as e:
         return f"❌ Erro Crítico: {str(e)[:40]}"
 
-# --- 2. BUSCA E ESTATÍSTICA NO PUBMED ---
+# --- BUSCA PUBMED ---
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
 def _fetch_pubmed_count(query):
     handle = Entrez.esearch(db="pubmed", term=query, retmax=0)
@@ -72,8 +71,7 @@ def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
         return artigos
     except: return []
 
-# --- 3. MINERAÇÃO INTELIGENTE (BLACKLIST v3.0 COMPLETA) ---
-[Image of data filtering and text mining process in bioinformatics]
+# --- MINERAÇÃO (BLACKLIST v3.0) ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def buscar_alvos_emergentes_pubmed(termo_base, email):
     if email: Entrez.email = email
@@ -108,8 +106,7 @@ def buscar_alvos_emergentes_pubmed(termo_base, email):
         return [t for t, count in Counter(candidatos).most_common(7)]
     except: return []
 
-# --- 4. RADAR DINÂMICO DE FRONTEIRA (COM IMAGENS) ---
-[Image of protein signaling pathway visualization in drug discovery]
+# --- RADAR ---
 def buscar_todas_noticias(lang='pt'):
     try:
         query = "(molecular pharmacology OR drug targets) AND (2024/08/01:2025/12/31[Date - Publication])"
