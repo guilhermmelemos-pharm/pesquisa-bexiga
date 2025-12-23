@@ -9,6 +9,7 @@ import time
 # --- CONFIGURAÇÃO ---
 Entrez.email = "pesquisador_guest@unifesp.br" 
 
+# --- IA: MODO INVESTIGAÇÃO SÊNIOR (DINÂMICA PURA) ---
 def analisar_abstract_com_ia(titulo, abstract, api_key, lang='pt'):
     if not api_key: return "⚠️ IA não ativada"
     try:
@@ -21,18 +22,20 @@ def analisar_abstract_com_ia(titulo, abstract, api_key, lang='pt'):
         FORMATO: Alvo → Fármaco → Efeito (Contextualizado ao Título).
         REGRAS: Máx 25 palavras. Resposta única e técnica. Idioma: {idioma}."""
 
+        # Prioridade para o Flash-8b que tem maior cota RPM
         for mod in ['gemini-1.5-flash-8b', 'gemini-1.5-flash', 'gemini-1.5-pro']:
             try:
                 model = genai.GenerativeModel(mod)
                 response = model.generate_content(prompt, generation_config={"temperature": 0.7})
                 return response.text.strip()
             except:
-                time.sleep(1)
+                time.sleep(1.5)
                 continue 
         return f"💡 IA Ocupada: {titulo[:40]}..."
     except Exception as e:
         return f"❌ Erro: {str(e)[:30]}"
 
+# --- BUSCA NO PUBMED ---
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
 def _fetch_pubmed_count(query):
     handle = Entrez.esearch(db="pubmed", term=query, retmax=0)
@@ -68,6 +71,7 @@ def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
         return artigos
     except: return []
 
+# --- MINERAÇÃO INTELIGENTE (BLACKLIST ULTRA-AGRESSIVA) ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def buscar_alvos_emergentes_pubmed(termo_base, email):
     if email: Entrez.email = email
@@ -78,36 +82,29 @@ def buscar_alvos_emergentes_pubmed(termo_base, email):
         handle = Entrez.efetch(db="pubmed", id=record["IdList"], rettype="medline", retmode="text")
         dados = handle.read().upper(); handle.close()
         
-        # BLACKLIST AGRESSIVA (Filtra resíduos metodológicos e geográficos)
         blacklist = {
-            "THE", "AND", "FOR", "NOT", "BUT", "WITH", "FROM", "AFTER", "BEFORE", "DURING", "BETWEEN",
-            "STUDY", "GROUP", "DATA", "ANALYSIS", "RESULTS", "METHODS", "CONCLUSION", "AIMS", "SUMMARY",
-            "HIGH", "LOW", "INCREASED", "DECREASED", "LEVELS", "EXPRESSION", "PATHWAY", "TARGET",
-            "ROLE", "EFFECT", "IMPACT", "ACTION", "SYSTEM", "FUNCTION", "ACTIVITY", "POTENTIAL",
-            "TREATED", "INDUCED", "MEDIATED", "ASSOCIATED", "OBSERVED", "COMPARED", "PERFORMED",
-            "URINARY", "BLADDER", "URETHRA", "KIDNEY", "LIVER", "HEART", "BRAIN", "LUNG", "MUSCLE",
-            "CANCER", "TUMOR", "DISEASE", "SYNDROME", "PAIN", "INFLAMMATION", "INFECTION", "INJURY",
-            "PATIENT", "CLINICAL", "TRIAL", "THERAPY", "TREATMENT", "DRUG", "DOSE", "CONTROL",
-            "MALE", "FEMALE", "ADULT", "CHILD", "AGE", "YEAR", "MONTH", "DAY", "TIME",
-            "UNITED", "STATES", "CHINA", "JAPAN", "BRAZIL", "EUROPE", "ASIAN", "AMERICAN",
-            "FIGURE", "TABLE", "PMID", "PMC", "DOI", "ISSN", "URL", "HTTP", "WWW", "TYPE", "CLASS", 
-            "RECEPTOR", "CHANNEL", "PROTEIN", "GENE", "FACTOR", "RESPONSE", "CELLS", "TISSUE", "MODEL",
-            "USING", "REVIEW", "MECHANISM", "SIGNALING", "NOVEL", "NEW", "ACUTE", "CHRONIC", "HUMAN",
-            "MOUSE", "RAT", "SIGNIFICANT", "STATISTICAL", "VALUE", "MEAN", "RATE", "RATIO", "NORMAL",
-            "POSITIVE", "NEGATIVE", "ACTIVE", "INACTIVE", "STABLE", "UNSTABLE", "TOTAL", "CASE", "REPORT"
-            "HOSPITAL", "PHST", "UROLOGY", "MEDICAL", "MEDICINE", "CENTER"
+            # Institucional e Geográfico
+            "HOSPITAL", "UNIVERSITY", "INSTITUTE", "MEDICAL", "CENTER", "MEDICINE", "CLINIC", "INC", "BS", "FAU", 
+            "FREIBURG", "NANJING", "CHINA", "USA", "PRC", "UK", "EU", "DEPT", "UROLOGY", "ONCOLOGY", "SCIENCE",
+            # Verbos e Termos Curtos Comuns
+            "WERE", "ALSO", "THAN", "BOTH", "UPON", "THOSE", "THESE", "WHICH", "WHEN", "BEEN", "SOME", "ONLY", 
+            "COULD", "TOTAL", "CASE", "REPORT", "WAS", "ARE", "HAS", "ALL", "HAD", "BEING", "WELL", "VERY",
+            # Metodológico
+            "STUDY", "GROUP", "DATA", "ANALYSIS", "RESULTS", "METHODS", "CONCLUSION", "AIMS", "SUMMARY", "PMID", 
+            "PMC", "DOI", "ISSN", "URL", "HTTP", "WWW", "FIGURE", "TABLE", "TYPE", "CLASS", "NORMAL", "RATE", 
+            "RATIO", "MEAN", "VALUE", "STATISTICAL", "SIGNIFICANT", "STABLE", "UNSTABLE", "ACTIVE", "INACTIVE",
+            # Biológico Genérico (Para focar em ALVOS)
+            "RECEPTOR", "CHANNEL", "PROTEIN", "GENE", "FACTOR", "RESPONSE", "CELLS", "TISSUE", "MODEL", "USING", 
+            "REVIEW", "MECHANISM", "SIGNALING", "NOVEL", "NEW", "ACUTE", "CHRONIC", "HUMAN", "MOUSE", "RAT", 
+            "ASSOCIATED", "MEDIATED", "INDUCED", "TREATED", "EXPRESSION", "PATHWAY", "TARGET", "URINARY", "BLADDER"
         }
-        
-        # Filtro de Unidades e Termos Curtos Irrelevantes
-        unidades = {"MMHG", "KPA", "MIN", "SEC", "HRS", "ML", "MG", "KG", "NM", "UM", "MM"}
+        unidades = {"MMHG", "KPA", "MIN", "SEC", "HRS", "ML", "MG", "KG", "NM", "UM", "MM", "NMOL", "PHST"}
         
         encontrados = re.findall(r'\b[A-Z][A-Z0-9-]{2,8}\b', dados)
         candidatos = []
         for t in encontrados:
-            # Só aceita se: não estiver na blacklist, não for unidade, for longo o suficiente e não for o termo base
-            if t not in blacklist and t not in unidades and len(t) >= 3 and t not in termo_base.upper():
-                # Evita siglas de países e termos muito comuns de 3 letras que sobraram
-                if t not in {"USA", "PRC", "UK", "EU", "APP", "ALL", "WAS", "ARE", "HAS"}:
+            if t not in blacklist and t not in unidades and len(t) >= 3 and t not in termo_base.upper() and not t.isdigit():
+                if t not in {"APP", "THE", "AND", "FOR", "NOT", "BUT", "WITH", "FROM"}:
                     candidatos.append(t)
         
         return [t for t, count in Counter(candidatos).most_common(7)]
@@ -115,7 +112,7 @@ def buscar_alvos_emergentes_pubmed(termo_base, email):
 
 def buscar_todas_noticias(lang='pt'):
     try:
-        # Radar de Ciência Global: Nature, Science, Cell e Farmacologia Geral
+        # Foco em Inovações Farmacológicas 2025
         handle = Entrez.esearch(db="pubmed", term="(pharmacology[Filter]) AND (2025[Date - Publication])", retmax=3, sort="pub_date")
         record = Entrez.read(handle); handle.close()
         handle = Entrez.efetch(db="pubmed", id=record["IdList"], rettype="medline", retmode="text")
@@ -129,4 +126,3 @@ def buscar_todas_noticias(lang='pt'):
             if tit: news.append({"titulo": tit, "fonte": "Science Frontier", "link": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"})
         return news
     except: return []
-
