@@ -9,55 +9,41 @@ import time
 # --- CONFIGURAÇÃO ---
 Entrez.email = "pesquisador_guest@unifesp.br"
 
-# REMOVA o @st.cache_data daqui para evitar que o erro fique "preso" no cache
-def analisar_abstract_com_ia(titulo, abstract, api_key, lang='pt'):
+# --- IA: EXTRAÇÃO VIA KEYWORDS (VAPT-VUPT) ---
+def analisar_abstract_com_ia(titulo, keywords, api_key, lang='pt'):
     if not api_key:
         return "⚠️ IA não ativada"
     
     try:
         genai.configure(api_key=api_key)
         idioma = "Português" if lang == 'pt' else "Inglês"
-        abs_input = abstract[:3000] if (abstract and len(abstract) > 30) else "Resumo incompleto."
-
+        
+        # O input agora é levíssimo: Título + Palavras-chave dos autores
         prompt = f"""Analise como PhD em Farmacologia:
-        TEXTO: {titulo}. {abs_input}
-        OBJETIVO: Resumo executivo ultra-curto.
-        FORMATO OBRIGATÓRIO: Alvo: [Sigla] | Fármaco: [Nome] | Efeito: [Ação funcional].
-        REGRAS: Máximo 15 palavras. Proibido introduções. Idioma: {idioma}."""
+TÍTULO: {titulo}
+KEYWORDS: {keywords}
+OBJETIVO: Identificar Alvo e Fármaco.
+FORMATO OBRIGATÓRIO: Alvo: [Sigla] | Fármaco: [Nome] | Efeito: [Ação].
+REGRAS: Máximo 12 palavras. Seja técnico e direto. Idioma: {idioma}."""
 
-        # Inverti a ordem: Começar pelo modelo 2.0 que costuma ter cota separada e mais livre
         modelos = ['gemini-2.0-flash-exp', 'gemini-1.5-flash-8b', 'gemini-1.5-flash']
 
         for mod in modelos:
             try:
                 model = genai.GenerativeModel(mod)
-                # Adicionado timeout para não travar a aplicação
-                response = model.generate_content(prompt, generation_config={"temperature": 0.3})
-                
+                response = model.generate_content(prompt, generation_config={"temperature": 0.1})
                 if response and response.text:
-                    texto = response.text.strip()
-                    # Verifica se a resposta é válida e não é uma recusa da IA
-                    if len(texto) > 5:
-                        return texto
-            except Exception as e:
-                # Se for erro de cota (429), espera um pouco mais antes de tentar o próximo modelo
-                if "429" in str(e):
-                    time.sleep(3) 
-                else:
-                    time.sleep(1)
+                    return response.text.strip()
+            except:
+                time.sleep(1.5)
                 continue
 
-        # --- Fallback inteligente (Se todos os modelos falharem) ---
-        t_up = titulo.upper()
-        if "PIEZO" in t_up: return "Piezo1 → Canal mecanossensível → Modulação de correntes catiônicas e resposta ao estiramento."
-        if "ROS" in t_up or "OXIDATIVE" in t_up: return "ROS/NOX → Estresse Oxidativo → Modulação de sinalização redox e contratilidade muscular."
-        if "TRP" in t_up: return "TRP Channels → Canal Iônico → Modulação de influxo de cálcio e sensibilidade urotelial."
-        
-        return f"💡 IA em cooldown. Tente novamente o artigo: {titulo[:30]}..."
+        return f"💡 IA Ocupada. Título: {titulo[:30]}..."
     
     except Exception as e:
-        return f"❌ Erro de conexão: {str(e)[:30]}"
-# --- BUSCA PUBMED ---
+        return f"❌ Erro: {str(e)[:30]}"
+
+# --- BUSCA PUBMED (BUSCANDO KEYWORDS NO MEDLINE) ---
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
 def _fetch_pubmed_count(query):
     handle = Entrez.esearch(db="pubmed", term=query, retmax=0)
@@ -87,14 +73,21 @@ def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
         dados = handle.read(); handle.close()
         artigos = []
         for raw in dados.split("\n\nPMID-"):
-            tit, abs_txt, pmid, last_tag = "", "", "", ""
-            for line in raw.split("\n"):
+            tit, pmid, keywords = "", "", ""
+            lines = raw.split("\n")
+            for line in lines:
                 if line.strip().isdigit() and not pmid: pmid = line.strip()
-                if re.match(r'^TI\s+-', line): tit = re.sub(r'^TI\s+-\s+', '', line).strip(); last_tag = "TI"
-                elif line.startswith("      ") and last_tag == "TI": tit += " " + line.strip()
-                elif re.match(r'^AB\s+-', line): abs_txt = re.sub(r'^AB\s+-\s+', '', line).strip(); last_tag = "AB"
-                elif line.startswith("      ") and last_tag == "AB": abs_txt += " " + line.strip()
-            if tit: artigos.append({"Title": tit, "Resumo_Original": abs_txt, "Link": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"})
+                if line.startswith("TI  - "): tit = line[6:].strip()
+                # CAPTURA AS KEYWORDS (OT - Other Term ou KW - Keyword no Medline)
+                if line.startswith("OT  - ") or line.startswith("KW  - "):
+                    keywords += line[6:].strip() + ", "
+            
+            if tit:
+                artigos.append({
+                    "Title": tit, 
+                    "Keywords": keywords if keywords else "N/A", 
+                    "Link": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
+                })
         return artigos
     except: return []
 
@@ -115,7 +108,9 @@ def buscar_alvos_emergentes_pubmed(termo_base, email):
         keywords_funcionais = {"SIGNALING", "PATHWAY", "RECEPTOR", "CHANNEL", "ACTIVATION", "INHIBITION", "EXPRESSION",
                                "REGULATION", "MEDIATED", "MECHANISM", "FUNCTION", "ROLE", "TARGET", "MOLECULAR", "GENE",
                                "PROTEIN", "ENZYME", "KINASE", "AUTOPHAGY", "APOPTOSIS", "DIFFERENTIATION", "HOMEOSTASIS", "STRESS"}
-        blacklist = {...}  # Mantém seu blacklist completo
+        
+        # Coloque sua Blacklist completa aqui
+        blacklist = {"AND", "THE", "FOR", "NOT", "BUT", "WITH", "FROM", "STUDY", "RESULTS", "CELLS"} 
         unidades = {"MMHG","KPA","MIN","SEC","HRS","ML","MG","KG","NM","UM","MM","NMOL"}
 
         candidatos_por_artigo = []
@@ -159,5 +154,3 @@ def buscar_todas_noticias(lang='pt'):
                              "img":"https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=400"})
         return news
     except: return []
-
-
