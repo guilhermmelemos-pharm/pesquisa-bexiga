@@ -1,100 +1,35 @@
-import streamlit as st
-from Bio import Entrez
-import google.generativeai as genai
-import re
-from collections import Counter
-import time
-
-# --- CONFIGURAÇÃO ---
-Entrez.email = "pesquisador_guest@unifesp.br" 
-
 def analisar_abstract_com_ia(titulo, abstract, api_key, lang='pt'):
     if not api_key: return "⚠️ IA não ativada"
     try:
         genai.configure(api_key=api_key)
         idioma = "Português" if lang == 'pt' else "Inglês"
-        abstract_txt = abstract[:3000] if abstract else "Texto ausente."
         
-        # PROMPT DE INFERÊNCIA SÊNIOR V2.15
+        # Se o abstract for nulo ou cortado, focamos na Inferência Sênior
+        abstract_txt = abstract if (abstract and len(abstract) > 20) else "Abstract incompleto. Infira pelo título."
+        
         prompt = f"""Como PhD em Farmacologia, analise:
         TITULO: {titulo}
-        RESUMO: {abstract_txt}
-        AÇÃO: Se o resumo estiver incompleto, use o TITULO para inferir o mecanismo.
+        RESUMO: {abstract_txt[:3000]}
+        
+        AÇÃO: Use o TITULO para inferir o mecanismo farmacológico caso o resumo esteja ausente.
         FORMATO OBRIGATÓRIO: Alvo → Fármaco/Substância → Efeito funcional na bexiga.
         REGRAS: Máximo 30 palavras. Idioma: {idioma}."""
 
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        response = model.generate_content(prompt)
+        # --- MIGRAÇÃO PARA NOMES ESTÁVEIS (Evita 404) ---
+        # Tentamos o Gemini 1.5 Flash estável (sem o prefixo models/ que às vezes buga)
+        # Ou o novo Gemini 2.0 Flash se disponível na sua região/SDK
+        try:
+            model = genai.GenerativeModel('gemini-1.5-flash')
+            response = model.generate_content(prompt)
+        except:
+            # Fallback para a versão estável específica
+            model = genai.GenerativeModel('gemini-1.5-pro')
+            response = model.generate_content(prompt)
+            
         return response.text.strip()
+    
     except Exception as e:
-        if "429" in str(e): return f"💡 Inferência: {titulo} (Cota excedida, tente em 1 min)"
-        return f"❌ Erro na IA: {str(e)[:30]}"
-
-def consultar_pubmed_count(termo, contexto, email, ano_ini, ano_fim):
-    if email: Entrez.email = email
-    query = f"({termo}) AND ({contexto}) AND ({ano_ini}:{ano_fim}[Date - Publication]) AND (NOT Review[pt])"
-    try:
-        handle = Entrez.esearch(db="pubmed", term=query, retmax=0)
-        record = Entrez.read(handle)
-        handle.close()
-        return int(record["Count"])
-    except: return 0
-
-def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
-    if email: Entrez.email = email
-    query = f"({termo}) AND ({orgao}) AND ({ano_ini}:{ano_fim}[Date - Publication])"
-    try:
-        handle = Entrez.esearch(db="pubmed", term=query, retmax=3)
-        record = Entrez.read(handle)
-        handle.close()
-        ids = record["IdList"]
-        if not ids: return []
-        handle = Entrez.efetch(db="pubmed", id=ids, rettype="medline", retmode="text")
-        dados = handle.read()
-        handle.close()
-        artigos = []
-        for raw in dados.split("\n\nPMID-"):
-            tit = ""; pmid = ""; abs_txt = ""; last_tag = ""
-            for line in raw.split("\n"):
-                if line.strip().isdigit() and not pmid: pmid = line.strip()
-                if line.startswith("TI  - "): tit = line.replace("TI  - ", "").strip(); last_tag = "TI"
-                elif line.startswith("      ") and last_tag == "TI": tit += " " + line.strip()
-                if line.startswith("AB  - "): abs_txt = line.replace("AB  - ", "").strip(); last_tag = "AB"
-                elif line.startswith("      ") and last_tag == "AB": abs_txt += " " + line.strip()
-            if tit: artigos.append({"Title": tit, "Resumo_Original": abs_txt, "Link": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"})
-        return artigos
-    except: return []
-
-def buscar_alvos_emergentes_pubmed(termo_base, email):
-    if email: Entrez.email = email
-    query = f"({termo_base}) AND (receptor OR signaling OR channel) AND (2023:2026[Date - Publication])"
-    try:
-        handle = Entrez.esearch(db="pubmed", term=query, retmax=30)
-        record = Entrez.read(handle)
-        handle.close()
-        if not record["IdList"]: return []
-        handle = Entrez.efetch(db="pubmed", id=record["IdList"], rettype="medline", retmode="text")
-        dados = handle.read(); handle.close()
-        candidatos = re.findall(r'\b[A-Z][A-Z0-9]{2,8}\b', dados)
-        blacklist = {"THE", "AND", "FOR", "PMID", "PMC", "DOI", "USA", "TYPE", "CELL", "ROLE"}
-        validos = [c for c in candidatos if c not in blacklist and c not in termo_base.upper()]
-        return [item for item, count in Counter(validos).most_common(7)]
-    except: return []
-
-def buscar_todas_noticias(lang='pt'):
-    try:
-        # Busca real por novidades em ROS e Bexiga
-        query = "(bladder OR detrusor) AND (oxidative stress OR reactive oxygen species)"
-        handle = Entrez.esearch(db="pubmed", term=query, retmax=3, sort="pub_date")
-        record = Entrez.read(handle); handle.close()
-        handle = Entrez.efetch(db="pubmed", id=record["IdList"], rettype="medline", retmode="text")
-        dados = handle.read(); handle.close()
-        news = []
-        for art in dados.split("\n\nPMID-"):
-            tit = ""; pmid = ""
-            for line in art.split("\n"):
-                if line.startswith("TI  - "): tit = line.replace("TI  - ", "").strip()
-                if line.strip().isdigit() and not pmid: pmid = line.strip()
-            if tit: news.append({"titulo": tit, "fonte": "PubMed", "link": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"})
-        return news
-    except: return []
+        erro_str = str(e)
+        if "429" in erro_str: 
+            return f"💡 Inferência: {titulo} → (Cota excedida. Tente em 1 min)"
+        return f"❌ Erro na IA: {erro_str[:40]}"
