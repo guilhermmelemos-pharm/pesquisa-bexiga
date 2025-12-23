@@ -79,10 +79,10 @@ def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
             for line in lines:
                 if line.strip().isdigit() and not pmid: pmid = line.strip()
                 if line.startswith("TI  - "): tit = line[6:].strip()
-                # 1. Captura Keywords
+                # 1. Captura Keywords (OT = Author Keywords, KW = Mesh Keywords)
                 if line.startswith("OT  - ") or line.startswith("KW  - "):
                     keywords += line[6:].strip() + ", "
-                # 2. Captura apenas o início do abstract como backup de segurança (primeiras linhas)
+                # 2. Captura apenas o início do abstract como backup (primeiros 500 chars)
                 if line.startswith("AB  - ") and not fallback_text:
                     fallback_text = line[6:500].strip()
             
@@ -115,7 +115,7 @@ def buscar_alvos_emergentes_pubmed(termo_base, email):
                                "REGULATION", "MEDIATED", "MECHANISM", "FUNCTION", "ROLE", "TARGET", "MOLECULAR", "GENE",
                                "PROTEIN", "ENZYME", "KINASE", "AUTOPHAGY", "APOPTOSIS", "DIFFERENTIATION", "HOMEOSTASIS", "STRESS"}
         
-        # Blacklist v6.1: Removendo ruídos administrativos e termos indicados pelo usuário
+        # Blacklist v6.1
         blacklist = {"AND", "THE", "FOR", "NOT", "BUT", "WITH", "FROM", "STUDY", "RESULTS", "CELLS", "WAS", "WERE", "CBS", "FAU", "AID"} 
         unidades = {"MMHG","KPA","MIN","SEC","HRS","ML","MG","KG","NM","UM","MM","NMOL"}
 
