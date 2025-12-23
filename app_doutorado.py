@@ -266,11 +266,11 @@ if st.session_state.pagina == 'resultados':
                                         st.session_state.api_key_usuario, 
                                         st.session_state.lang
                                     )
-                                    # Mostra o resultado imediatamente
+                                    # Mostra o resultado imediatamente com VISUAL DARK MODE (Caixa Escura / Texto Branco)
                                     st.markdown(f"""
-                                    <div style='background-color: #f0f2f6; padding: 15px; border-radius: 8px; border-left: 5px solid #FF4B4B;'>
-                                        <small>🧠 <b>Análise Lemos Lambda:</b></small><br>
-                                        {resumo}
+                                    <div style='background-color: #262730; color: #ffffff; padding: 15px; border-radius: 8px; border-left: 5px solid #FF4B4B; margin-top: 10px;'>
+                                        <small style='color: #FF4B4B;'>🧠 <b>Análise Lemos Lambda:</b></small><br>
+                                        <span style='font-size: 1.1em;'>{resumo}</span>
                                     </div>
                                     """, unsafe_allow_html=True)
                     
@@ -333,4 +333,4 @@ with cf1:
 with cf2:
     st.caption(t["apoio_titulo"])
     st.text_input("Chave Pix:", value="960f3f16-06ce-4e71-9b5f-6915b2a10b5a", disabled=False)
-    
+                       
