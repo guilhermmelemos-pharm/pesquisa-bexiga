@@ -9,8 +9,8 @@ import time
 # --- CONFIGURAÇÃO ---
 Entrez.email = "pesquisador_guest@unifesp.br"
 
-# --- IA: EXTRAÇÃO VIA KEYWORDS (VAPT-VUPT) ---
-def analisar_abstract_com_ia(titulo, keywords, api_key, lang='pt'):
+# --- IA: EXTRAÇÃO VIA DADOS CURTOS (ANTI-COOLDOWN) ---
+def analisar_abstract_com_ia(titulo, dados_curtos, api_key, lang='pt'):
     if not api_key:
         return "⚠️ IA não ativada"
     
@@ -18,13 +18,10 @@ def analisar_abstract_com_ia(titulo, keywords, api_key, lang='pt'):
         genai.configure(api_key=api_key)
         idioma = "Português" if lang == 'pt' else "Inglês"
         
-        # O input agora é levíssimo: Título + Palavras-chave dos autores
-        # Isso evita o erro de "IA Ocupada" por excesso de caracteres.
+        # O prompt agora processa apenas o "filé mignon" do paper (Keywords ou Início do Abstract)
         prompt = f"""Analise como PhD em Farmacologia:
-TÍTULO: {titulo}
-KEYWORDS: {keywords}
-OBJETIVO: Identificar Alvo e Fármaco.
-FORMATO OBRIGATÓRIO: Alvo: [Sigla] | Fármaco: [Nome] | Efeito: [Ação].
+FONTE: {titulo}. {dados_curtos}
+FORMATO OBRIGATÓRIO: Alvo: [Sigla] | Fármaco: [Nome] | Efeito: [Ação funcional].
 REGRAS: Máximo 12 palavras. Seja técnico e direto. Idioma: {idioma}."""
 
         modelos = ['gemini-2.0-flash-exp', 'gemini-1.5-flash-8b', 'gemini-1.5-flash']
@@ -39,12 +36,12 @@ REGRAS: Máximo 12 palavras. Seja técnico e direto. Idioma: {idioma}."""
                 time.sleep(1.5)
                 continue
 
-        return f"💡 IA Ocupada. Título: {titulo[:30]}..."
+        return f"💡 IA Ocupada. Alvo provável: {titulo[:30]}..."
     
     except Exception as e:
         return f"❌ Erro: {str(e)[:30]}"
 
-# --- BUSCA PUBMED (BUSCANDO KEYWORDS NO MEDLINE) ---
+# --- BUSCA PUBMED ---
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
 def _fetch_pubmed_count(query):
     handle = Entrez.esearch(db="pubmed", term=query, retmax=0)
@@ -55,8 +52,10 @@ def _fetch_pubmed_count(query):
 @st.cache_data(ttl=86400, show_spinner=False)
 def consultar_pubmed_count(termo, contexto, email, ano_ini, ano_fim):
     if email: Entrez.email = email
-    # Agora a busca ignora o contexto para garantir que Global seja maior que Alvo
-    query = f"({termo}) AND ({contexto}) AND ({ano_ini}:{ano_fim}[Date - Publication]) AND (NOT Review[pt])"
+    # Busca global real ignorando o contexto se ele for vazio
+    query = f"({termo})"
+    if contexto: query += f" AND ({contexto})"
+    query += f" AND ({ano_ini}:{ano_fim}[Date - Publication]) AND (NOT Review[pt])"
     try:
         return _fetch_pubmed_count(query)
     except:
@@ -75,20 +74,24 @@ def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
         dados = handle.read(); handle.close()
         artigos = []
         for raw in dados.split("\n\nPMID-"):
-            tit, pmid, keywords = "", "", ""
+            tit, pmid, keywords, fallback_text = "", "", "", ""
             lines = raw.split("\n")
             for line in lines:
                 if line.strip().isdigit() and not pmid: pmid = line.strip()
                 if line.startswith("TI  - "): tit = line[6:].strip()
-                # CAPTURA AS KEYWORDS (OT - Other Term ou KW - Keyword no Medline)
-                # O Medline usa OT para termos do autor e KW para termos Mesh/Keywords
+                # 1. Captura Keywords
                 if line.startswith("OT  - ") or line.startswith("KW  - "):
                     keywords += line[6:].strip() + ", "
+                # 2. Captura apenas o início do abstract como backup de segurança (primeiras linhas)
+                if line.startswith("AB  - ") and not fallback_text:
+                    fallback_text = line[6:500].strip()
             
             if tit:
+                # Prioriza Keywords (mais limpo); se não houver, usa o início do abstract
+                info_final = keywords if len(keywords) > 5 else fallback_text
                 artigos.append({
                     "Title": tit, 
-                    "Keywords": keywords if keywords else "N/A", 
+                    "Info_IA": info_final if info_final else "Sem resumo disponível.", 
                     "Link": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
                 })
         return artigos
@@ -112,8 +115,8 @@ def buscar_alvos_emergentes_pubmed(termo_base, email):
                                "REGULATION", "MEDIATED", "MECHANISM", "FUNCTION", "ROLE", "TARGET", "MOLECULAR", "GENE",
                                "PROTEIN", "ENZYME", "KINASE", "AUTOPHAGY", "APOPTOSIS", "DIFFERENTIATION", "HOMEOSTASIS", "STRESS"}
         
-        # Blacklist v6.1: Removendo ruídos administrativos
-        blacklist = {"AND", "THE", "FOR", "NOT", "BUT", "WITH", "FROM", "STUDY", "RESULTS", "CELLS", "WAS", "WERE"} 
+        # Blacklist v6.1: Removendo ruídos administrativos e termos indicados pelo usuário
+        blacklist = {"AND", "THE", "FOR", "NOT", "BUT", "WITH", "FROM", "STUDY", "RESULTS", "CELLS", "WAS", "WERE", "CBS", "FAU", "AID"} 
         unidades = {"MMHG","KPA","MIN","SEC","HRS","ML","MG","KG","NM","UM","MM","NMOL"}
 
         candidatos_por_artigo = []
@@ -157,3 +160,4 @@ def buscar_todas_noticias(lang='pt'):
                              "img":"https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=400"})
         return news
     except: return []
+        
