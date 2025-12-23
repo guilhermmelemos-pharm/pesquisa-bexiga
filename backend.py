@@ -9,17 +9,16 @@ import time
 # --- CONFIGURAÇÃO ---
 Entrez.email = "pesquisador_guest@unifesp.br"
 
-# --- IA: EXTRAÇÃO VIA DADOS CURTOS (ANTI-COOLDOWN + SAFETY OFF) ---
+# --- IA: EXTRAÇÃO VIA DADOS CURTOS (MODO DEBUG ATIVADO) ---
 def analisar_abstract_com_ia(titulo, dados_curtos, api_key, lang='pt'):
     if not api_key:
-        return "⚠️ IA não ativada"
+        return "⚠️ Erro: Nenhuma API Key inserida."
     
     try:
         genai.configure(api_key=api_key)
         idioma = "Português" if lang == 'pt' else "Inglês"
         
-        # 1. Configuração de Segurança (Safety Settings)
-        # Define BLOCK_NONE para evitar que o Google bloqueie termos farmacológicos/médicos
+        # Travas de segurança desligadas
         safety_settings = [
             {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
             {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
@@ -27,14 +26,15 @@ def analisar_abstract_com_ia(titulo, dados_curtos, api_key, lang='pt'):
             {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
         ]
         
-        # Prompt otimizado para ler Keywords ou Início do Abstract
-        prompt = f"""Analise como PhD em Farmacologia:
+        prompt = f"""PhD em Farmacologia, analise:
 FONTE: {titulo}. {dados_curtos}
-FORMATO OBRIGATÓRIO: Alvo: [Sigla] | Fármaco: [Nome] | Efeito: [Ação funcional].
-REGRAS: Máximo 12 palavras. Seja técnico e direto. Idioma: {idioma}."""
+FORMATO: Alvo: [Sigla] | Fármaco: [Nome] | Efeito: [Ação].
+REGRAS: Máximo 12 palavras. Seja técnico. Idioma: {idioma}."""
 
-        # 2. Prioridade de Modelos Alterada: Flash 1.5 primeiro (mais estável)
-        modelos = ['gemini-1.5-flash', 'gemini-1.5-flash-8b', 'gemini-2.0-flash-exp']
+        # Tenta apenas o modelo mais básico e estável primeiro
+        modelos = ['gemini-1.5-flash'] 
+        
+        erros_coletados = []
 
         for mod in modelos:
             try:
@@ -42,18 +42,25 @@ REGRAS: Máximo 12 palavras. Seja técnico e direto. Idioma: {idioma}."""
                 response = model.generate_content(
                     prompt, 
                     generation_config={"temperature": 0.1},
-                    safety_settings=safety_settings # Aplica a liberação de conteúdo
+                    safety_settings=safety_settings
                 )
+                
+                # Se a IA retornou algo, sucesso
                 if response and response.text:
                     return response.text.strip()
-            except:
-                time.sleep(1.5)
+                else:
+                    erros_coletados.append(f"{mod}: Resposta Vazia (Bloqueio?)")
+                    
+            except Exception as e:
+                # AQUI ESTÁ A MUDANÇA: Guardamos o erro real
+                erros_coletados.append(f"{mod}: {str(e)}")
                 continue
 
-        return f"💡 IA Ocupada. Alvo provável: {titulo[:30]}..."
+        # Se chegou aqui, falhou. Retorna o erro real para você ler na tela.
+        return f"❌ DIAGNÓSTICO: {'; '.join(erros_coletados)}"
     
-    except Exception as e:
-        return f"❌ Erro: {str(e)[:30]}"
+    except Exception as e_geral:
+        return f"❌ ERRO CRÍTICO: {str(e_geral)}"
 
 # --- BUSCA PUBMED ---
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
@@ -74,7 +81,6 @@ def consultar_pubmed_count(termo, contexto, email, ano_ini, ano_fim):
     except:
         return 0
 
-# --- AQUI ESTAVA O ERRO: Esta função PRECISA gerar o 'Info_IA' ---
 @st.cache_data(ttl=86400, show_spinner=False)
 def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
     if email: Entrez.email = email
@@ -93,22 +99,16 @@ def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
             for line in lines:
                 if line.strip().isdigit() and not pmid: pmid = line.strip()
                 if line.startswith("TI  - "): tit = line[6:].strip()
-                
-                # 1. Captura Keywords (OT/KW)
                 if line.startswith("OT  - ") or line.startswith("KW  - "):
                     keywords += line[6:].strip() + ", "
-                
-                # 2. Captura Início do Abstract (Backup)
                 if line.startswith("AB  - ") and not fallback_text:
                     fallback_text = line[6:500].strip()
             
             if tit:
-                # LÓGICA DE CRIAÇÃO DA CHAVE 'Info_IA'
                 info_final = keywords if len(keywords) > 5 else fallback_text
-                
                 artigos.append({
                     "Title": tit, 
-                    "Info_IA": info_final if info_final else "Sem resumo disponível.", # <--- O ERRO SUMIRÁ AQUI
+                    "Info_IA": info_final if info_final else "Sem resumo disponível.", 
                     "Link": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
                 })
         return artigos
@@ -176,4 +176,4 @@ def buscar_todas_noticias(lang='pt'):
                              "img":"https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=400"})
         return news
     except: return []
-        
+            
