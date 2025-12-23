@@ -25,9 +25,9 @@ def analisar_abstract_com_ia(titulo, abstract, api_key, lang='pt'):
     
     MISSÃO:
     1. Se o resumo estiver cortado/ausente: Use o TÍTULO para inferir o mecanismo provável.
-    2. Formato obrigatório: Alvo → Fármaco/Substância → Efeito funcional na bexiga.
+    2. Formato obrigatório: Alvo → Fármaco/Substância → Efeito funcional no orgão.
     3. Nunca responda 'dados insuficientes'.
-    4. Seja técnico e conciso (máx 30 palavras). Idioma: {idioma_resp}.
+    4. Seja técnico e conciso (máx 30 palavras). Além disso, evite dar a mesma resposta para todos os papers, faça uma resposta individula. Idioma: {idioma_resp}.
     """
 
     # LISTA DE MODELOS PARA TENTATIVAS (Evita 404 e 429)
@@ -154,3 +154,4 @@ def buscar_todas_noticias(lang='pt'):
             if tit: news.append({"titulo": tit, "fonte": "PubMed", "link": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"})
         return news
     except: return [{"titulo": "Pesquisando novidades...", "fonte": "PubMed", "link": "#"}]
+
