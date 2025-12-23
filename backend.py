@@ -9,7 +9,7 @@ import time
 # --- CONFIGURAÇÃO ---
 Entrez.email = "pesquisador_guest@unifesp.br" 
 
-# --- IA: CÉREBRO DIGITAL (MODO DETETIVE V2.11) ---
+# --- IA: CÉREBRO DIGITAL (MODO DETETIVE V2.12) ---
 def analisar_abstract_com_ia(titulo, abstract, api_key, lang='pt'):
     if not api_key:
         return "⚠️ IA não ativada (Insira a Chave na Configuração)"
@@ -21,24 +21,25 @@ def analisar_abstract_com_ia(titulo, abstract, api_key, lang='pt'):
         # Modo Sherlock: Se o resumo for curto/ausente, foca no título
         abstract_limpo = abstract if (abstract and len(abstract) > 20) else "Abstract not available. Infer from title."
         
-        # PROMPT UNIFICADO E OTIMIZADO
+        # PROMPT ULTRA-FOCADO V2.12 (Consome menos cota e evita cortes)
         prompt = f"""
-        Atue como um Pesquisador Sênior Investigativo em Farmacologia.
-        Analise os dados abaixo e responda em {idioma_resp}.
+        Objective: Summary for a PhD researcher. 
+        Respond in {idioma_resp}.
         
-        TÍTULO: {titulo}
-        RESUMO: {abstract_limpo[:7000]}
+        DATA: {titulo} | {abstract_limpo[:4000]}
         
-        MISSÃO:
-        Identifique o Alvo Molecular, o Fármaco/Substância e o Efeito Fisiológico.
-        Se o resumo estiver ausente, use seu conhecimento para inferir o mecanismo provável baseado no título.
-        Seja direto no formato: Alvo -> Fármaco -> Efeito.
+        TASK:
+        Summarize in exactly 3 short bullet points:
+        - ALVO PRINCIPAL (Ex: Canal Piezo1)
+        - MECANISMO (Ação na bexiga/detrusor)
+        - RELEVÂNCIA (Impacto clínico/funcional)
+        
+        Be extremely concise. Use technical terms.
         """
 
-        # Modelos com nomes simplificados para evitar erro 404
-        modelos_para_testar = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro']
+        # Modelos com nomes oficiais para evitar erro 404
+        modelos_para_testar = ['gemini-1.5-flash', 'gemini-1.5-pro']
         
-        erros_coletados = []
         for nome_modelo in modelos_para_testar:
             try:
                 model = genai.GenerativeModel(nome_modelo)
@@ -46,14 +47,12 @@ def analisar_abstract_com_ia(titulo, abstract, api_key, lang='pt'):
                 return response.text.strip()
             except Exception as e:
                 erro_msg = str(e)
-                # Se for erro de cota (429), espera um pouco
                 if "429" in erro_msg:
-                    time.sleep(1)
-                erros_coletados.append(f"{nome_modelo}: {erro_msg[:50]}")
+                    time.sleep(2) # Pausa maior se for cota
                 continue 
         
-        # Se chegar aqui, todos os modelos falharam (provavelmente cota)
-        return f"📖 {abstract[:250]}... (IA ocupada ou cota excedida)"
+        # FALLBACK: Se a IA falhar por cota, mostra o início do abstract original
+        return f"📖 {abstract[:300]}... (IA ocupada, tente em 1 min)"
         
     except Exception as e:
         return f"❌ Erro Crítico: {str(e)[:50]}"
@@ -127,11 +126,12 @@ def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
         return artigos_finais
     except: return []
 
-# --- MINERAÇÃO DE ALVOS ---
+# --- MINERAÇÃO DE ALVOS (SMART MINER) ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def buscar_alvos_emergentes_pubmed(termo_base, email):
     if email and "@" in email: Entrez.email = email
-    query = f"({termo_base}) AND (receptor OR pathway OR channel) AND (2023:2030[Date - Publication])"
+    # Busca focada em mecanismos e receptores recentes
+    query = f"({termo_base}) AND (receptor OR pathway OR channel OR signaling) AND (2023:2030[Date - Publication])"
     try:
         handle = Entrez.esearch(db="pubmed", term=query, retmax=50)
         record = Entrez.read(handle)
@@ -142,17 +142,49 @@ def buscar_alvos_emergentes_pubmed(termo_base, email):
         dados = handle.read()
         handle.close()
         
-        # Filtro simplificado de palavras em caixa alta (Alvos)
         candidatos = re.findall(r'\b[A-Z][A-Z0-9]{2,8}\b', dados)
-        blacklist = {"THE", "AND", "FOR", "PMID", "PMC", "DOI", "USA", "TYPE", "CELL"}
+        blacklist = {"THE", "AND", "FOR", "PMID", "PMC", "DOI", "USA", "TYPE", "CELL", "ROLE", "DATA"}
         validos = [c for c in candidatos if c not in blacklist and c not in termo_base.upper()]
         
-        return [item for item, count in Counter(validos).most_common(7)]
+        return [item for item, count in Counter(validos).most_common(10)]
     except: return []
 
+# --- RADAR CIENTÍFICO DINÂMICO ---
 @st.cache_data(ttl=3600)
 def buscar_todas_noticias(lang='pt'):
-    return [
-        {"titulo": "New bladder targets identified in 2024", "fonte": "Nature Urology", "img": "https://images.unsplash.com/photo-1576086213369-97a306d36557?w=400", "link": "#", "bandeira": "🔬"},
-        {"titulo": "H2S donors and detrusor relaxation", "fonte": "ScienceDirect", "img": "https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=400", "link": "#", "bandeira": "💊"}
-    ]
+    # Radar focado no seu Doutorado: Bexiga, ROS e Farmacologia
+    termos_radar = "((bladder OR detrusor) AND (oxidative stress OR reactive oxygen species OR pharmacology))"
+    
+    try:
+        handle = Entrez.esearch(db="pubmed", term=termos_radar, retmax=10, sort="pub_date")
+        record = Entrez.read(handle)
+        handle.close()
+        
+        id_list = record["IdList"]
+        if not id_list: return []
+        
+        handle = Entrez.efetch(db="pubmed", id=id_list, rettype="medline", retmode="text")
+        dados = handle.read()
+        handle.close()
+        
+        artigos_raw = dados.split("\n\nPMID-")
+        news = []
+        
+        for artigo in artigos_raw:
+            tit = ""
+            pmid = ""
+            for line in artigo.split("\n"):
+                if line.startswith("TI  - "): tit = line.replace("TI  - ", "").strip()
+                if line.strip().isdigit() and not pmid: pmid = line.strip()
+            
+            if tit and len(news) < 6:
+                news.append({
+                    "titulo": tit,
+                    "fonte": "PubMed Recent",
+                    "img": "https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=400",
+                    "link": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/",
+                    "bandeira": "🧬"
+                })
+        return news
+    except:
+        return [{"titulo": "Aguardando novas publicações...", "fonte": "PubMed", "img": "", "link": "#", "bandeira": "⏳"}]
