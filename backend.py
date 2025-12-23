@@ -91,7 +91,7 @@ def buscar_alvos_emergentes_pubmed(termo_base, email):
             "UNIVERSITY", "INSTITUTE", "LABORATORY", "CENTER", "DEPT", "SCHOOL", "FOUNDATION", "CBS", "SCIENCES", "MEDLINE", "GERMANY", "MERCK", "DEC", "LID", "CELL",
             
             # Geográfico e Institucional
-            "USA", "PRC", "UK", "EU", "CHINA", "NANJING", "FREIBURG", "UNIFESP", "BRAZIL", "SHANGHAI",
+            "USA", "PRC", "UK", "EU", "CHINA", "NANJING", "FREIBURG", "UNIFESP", "BRAZIL", "SHANGHAI", "CBS", "SCIENCE", "JOURNAL", "PFIZER", "PUBMED", "SQUIBB", "HEALTH", "WORK",
             
             # Conectivos e Verbos que a IA "pesca"
             "WERE", "THAT", "THIS", "THESE", "THOSE", "WHICH", "WHEN", "WHERE", "ALSO", "THAN", "BOTH",
@@ -156,6 +156,7 @@ def buscar_todas_noticias(lang='pt'):
                 })
         return news
     except: return []
+
 
 
 
