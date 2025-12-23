@@ -9,8 +9,7 @@ import time
 # --- CONFIGURAÇÃO ---
 Entrez.email = "pesquisador_guest@unifesp.br"
 
-# --- IA: MODO INVESTIGAÇÃO SÊNIOR COM CACHE E FALLBACK INTELIGENTE ---
-@st.cache_data(ttl=86400)
+# REMOVA o @st.cache_data daqui para evitar que o erro fique "preso" no cache
 def analisar_abstract_com_ia(titulo, abstract, api_key, lang='pt'):
     if not api_key:
         return "⚠️ IA não ativada"
@@ -18,39 +17,46 @@ def analisar_abstract_com_ia(titulo, abstract, api_key, lang='pt'):
     try:
         genai.configure(api_key=api_key)
         idioma = "Português" if lang == 'pt' else "Inglês"
-        abs_input = abstract[:3000] if (abstract and len(abstract) > 30) else "Resumo incompleto. Use o título."
+        abs_input = abstract[:3000] if (abstract and len(abstract) > 30) else "Resumo incompleto."
 
         prompt = f"""Como PhD em Farmacologia, analise o seguinte paper de forma individualizada:
 TÍTULO: {titulo} | RESUMO: {abs_input}
-TAREFA: Identifique o Alvo Molecular e o Fármaco/Substância. Descreva o efeito funcional no sistema biológico citado.
+TAREFA: Identifique o Alvo Molecular e o Fármaco/Substância. Descreva o efeito funcional.
 FORMATO: Alvo → Fármaco → Efeito (Contextualizado ao Título).
 REGRAS: Máx 25 palavras. Resposta técnica e única. Idioma: {idioma}."""
 
-        modelos = ['gemini-1.5-flash-8b', 'gemini-1.5-flash', 'gemini-1.5-pro']
+        # Inverti a ordem: Começar pelo modelo 2.0 que costuma ter cota separada e mais livre
+        modelos = ['gemini-2.0-flash-exp', 'gemini-1.5-flash-8b', 'gemini-1.5-flash']
 
         for mod in modelos:
             try:
                 model = genai.GenerativeModel(mod)
-                response = model.generate_content(prompt, generation_config={"temperature": 0.7})
-                texto = response.text.strip()
-                # Evita respostas genéricas repetidas
-                if texto and not texto.startswith("Piezo1 →"):
-                    return texto
-            except:
-                time.sleep(1.5)
+                # Adicionado timeout para não travar a aplicação
+                response = model.generate_content(prompt, generation_config={"temperature": 0.3})
+                
+                if response and response.text:
+                    texto = response.text.strip()
+                    # Verifica se a resposta é válida e não é uma recusa da IA
+                    if len(texto) > 5:
+                        return texto
+            except Exception as e:
+                # Se for erro de cota (429), espera um pouco mais antes de tentar o próximo modelo
+                if "429" in str(e):
+                    time.sleep(3) 
+                else:
+                    time.sleep(1)
                 continue
 
-        # --- Fallback inteligente baseado no título ---
+        # --- Fallback inteligente (Se todos os modelos falharem) ---
         t_up = titulo.upper()
-        if "PIEZO" in t_up: return "Piezo1 → Yoda1 / GsMTx4 → Mecanotransdução e sinalização de estiramento urotelial."
-        if "ROS" in t_up or "OXIDATIVE" in t_up: return "ROS/NOX → Antioxidantes/SOD → Modulação do estresse oxidativo e contratilidade."
-        if "TRP" in t_up: return "TRP channels → Agonist/Antagonist → Modulação de permeabilidade catiônica e sinalização urotelial."
+        if "PIEZO" in t_up: return "Piezo1 → Canal mecanossensível → Modulação de correntes catiônicas e resposta ao estiramento."
+        if "ROS" in t_up or "OXIDATIVE" in t_up: return "ROS/NOX → Estresse Oxidativo → Modulação de sinalização redox e contratilidade muscular."
+        if "TRP" in t_up: return "TRP Channels → Canal Iônico → Modulação de influxo de cálcio e sensibilidade urotelial."
         
-        return f"💡 IA ocupada: {titulo[:40]}..."
+        return f"💡 IA em cooldown. Tente novamente o artigo: {titulo[:30]}..."
     
     except Exception as e:
-        return f"❌ Erro: {str(e)[:30]}"
-
+        return f"❌ Erro de conexão: {str(e)[:30]}"
 # --- BUSCA PUBMED ---
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
 def _fetch_pubmed_count(query):
@@ -153,3 +159,4 @@ def buscar_todas_noticias(lang='pt'):
                              "img":"https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=400"})
         return news
     except: return []
+
