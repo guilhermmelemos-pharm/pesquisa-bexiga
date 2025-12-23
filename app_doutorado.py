@@ -357,4 +357,5 @@ with cf2:
     st.caption(t["apoio_titulo"])
     st.caption(t["apoio_desc"])
     # ATENÇÃO: COLOQUE SUA CHAVE PIX ABAIXO
-    st.text_input("Chave Pix (Copia e Cola):", value="SUA_CHAVE_PIX_AQUI", disabled=False)
+
+    st.text_input("Chave Pix (Copia e Cola):", value="960f3f16-06ce-4e71-9b5f-6915b2a10b5a", disabled=False)
