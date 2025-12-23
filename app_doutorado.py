@@ -245,15 +245,18 @@ if st.session_state.pagina == 'resultados':
         csv = df.drop(columns=["_sort"]).to_csv(index=False).encode('utf-8')
         st.download_button(t["btn_baixar"], csv, "lemos_lambda_report.csv", "text/csv")
         
-        st.divider()
+       st.divider()
         st.subheader(t["header_leitura"])
         sel = st.selectbox(t["label_investigar"], sorted(df[t["col_mol"]].unique().tolist()))
         
         if st.button(f"{t['btn_investigar']} {sel}", type="secondary"):
             with st.spinner(t["spinner_investigando"]):
+                # Busca resumos no PubMed (Ilimitado)
                 artigos_raw = bk.buscar_resumos_detalhados(sel, st.session_state.alvo_guardado, st.session_state.email_guardado, 2015, 2025)
                 st.session_state.artigos_detalhe = []
-                for art in artigos_raw:
+                
+                # Analisa apenas os 3 primeiros para poupar a cota do Google
+                for art in artigos_raw[:3]:
                     resumo_ia = bk.analisar_abstract_com_ia(
                         art['Title'], 
                         art['Resumo_Original'], 
@@ -263,7 +266,10 @@ if st.session_state.pagina == 'resultados':
                     st.session_state.artigos_detalhe.append({
                         "Title": art['Title'], "Resumo_IA": resumo_ia, "Link": art['Link']
                     })
+                    # PAUSA DE SEGURANÇA: 3 segundos para o Google não te bloquear
+                    time.sleep(3) 
         
+        # Exibição dos cards com os resumos gerados
         if st.session_state.artigos_detalhe:
             for a in st.session_state.artigos_detalhe:
                 with st.expander(f"{a['Title']}"):
@@ -370,4 +376,5 @@ with cf2:
     st.caption(t["apoio_desc"])
     # Sua Chave Pix (Coloquei a do exemplo anterior, pode alterar se precisar)
     st.text_input("Chave Pix (Copia e Cola):", value="960f3f16-06ce-4e71-9b5f-6915b2a10b5a", disabled=False)
+
 
