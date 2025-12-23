@@ -213,45 +213,69 @@ if st.session_state.pagina == 'resultados':
     
     df = st.session_state.resultado_df
     if df is not None and not df.empty:
+        # Métricas do Top 1
         top = df.iloc[0]
         c1, c2, c3 = st.columns(3)
         c1.metric(t["metric_top"], top[t["col_mol"]], delta=top[t["col_status"]])
         c2.metric(t["metric_score"], top[t["col_ratio"]])
         c3.metric("P-Valor", top["P-Value"])
         
+        # Heatmap e Tabela
         st.subheader(t["header_heatmap"])
         st.plotly_chart(px.bar(df.drop(columns=["_sort"]).head(25), x=t["col_mol"], y=t["col_ratio"], color=t["col_status"]), use_container_width=True)
         st.dataframe(df.drop(columns=["_sort"]), use_container_width=True, hide_index=True)
         
         st.divider()
+        
+        # --- INVESTIGAÇÃO SOB DEMANDA (NOVA LÓGICA V2.0) ---
         st.subheader(t["header_leitura"])
         lista_alvos = sorted(df[t["col_mol"]].unique().tolist())
-        sel = st.selectbox(t["label_investigar"], lista_alvos)
         
-        if st.button(f"{t['btn_investigar']} {sel}", type="secondary"):
-            with st.spinner(t["spinner_investigando"]):
-                # Busca resumos processados pelo backend (que gera o Info_IA)
-                artigos_raw = bk.buscar_resumos_detalhados(sel, st.session_state.alvo_guardado, st.session_state.email_guardado, 2015, 2025)
-                st.session_state.artigos_detalhe = []
-                for i, art in enumerate(artigos_raw[:3]):
-                    # MUDANÇA CRUCIAL: Passa 'Info_IA' (Keywords/Resumo Curto) para evitar Cooldown
-                    resumo_ia = bk.analisar_abstract_com_ia(
-                        art['Title'], 
-                        art['Info_IA'], 
-                        st.session_state.api_key_usuario, 
-                        st.session_state.lang
-                    )
-                    st.session_state.artigos_detalhe.append({"Title": art['Title'], "Resumo_IA": resumo_ia, "Link": art['Link']})
-                    if i < 2: 
-                        st.toast(f"Aguardando cota: Artigo {i+1} pronto...", icon="⏳")
-                        time.sleep(10) # Delay anti-bloqueio seguro
-                st.rerun()
+        # Seleção e Busca Inicial (Sem IA)
+        c_sel, c_btn = st.columns([3, 1], vertical_alignment="bottom")
+        with c_sel: sel = st.selectbox(t["label_investigar"], lista_alvos)
+        with c_btn: 
+            if st.button(f"🔎 Buscar Papers", use_container_width=True):
+                with st.spinner(t["spinner_investigando"]):
+                    # Busca 5 artigos no PubMed (rápido e leve) e guarda os dados (incluindo Info_IA)
+                    st.session_state.artigos_detalhe = bk.buscar_resumos_detalhados(sel, st.session_state.alvo_guardado, st.session_state.email_guardado, 2015, 2025)
+                    st.rerun()
 
+        # Renderização dos Cards com IA "Click-to-Analyze"
         if st.session_state.artigos_detalhe:
-            for a in st.session_state.artigos_detalhe:
-                with st.expander(f"🔬 {a['Title']}", expanded=True):
-                    st.info(f"🤖 {a['Resumo_IA']}")
-                    st.link_button(t["btn_pubmed"], a['Link'])
+            st.info(f"Foram encontrados {len(st.session_state.artigos_detalhe)} artigos recentes sobre {sel}.")
+            
+            for i, art in enumerate(st.session_state.artigos_detalhe):
+                with st.expander(f"📄 {art['Title']}", expanded=False):
+                    # Mostra os dados brutos (Keywords ou início do abstract)
+                    st.caption(f"**Keywords/Contexto:** {art.get('Info_IA', 'N/A')[:200]}...")
+                    
+                    c_ia, c_link = st.columns([1, 1])
+                    
+                    # Botão para Ativar a IA apenas neste artigo específico
+                    with c_ia:
+                        if st.button(f"🤖 Analisar este artigo", key=f"btn_ia_{i}"):
+                            if not st.session_state.api_key_usuario:
+                                st.error("⚠️ Configure sua API Key na tela inicial.")
+                            else:
+                                with st.spinner("Analisando..."):
+                                    # Chama a função leve do backend passando Info_IA
+                                    resumo = bk.analisar_abstract_com_ia(
+                                        art['Title'], 
+                                        art.get('Info_IA', ''), 
+                                        st.session_state.api_key_usuario, 
+                                        st.session_state.lang
+                                    )
+                                    # Mostra o resultado imediatamente
+                                    st.markdown(f"""
+                                    <div style='background-color: #f0f2f6; padding: 15px; border-radius: 8px; border-left: 5px solid #FF4B4B;'>
+                                        <small>🧠 <b>Análise Lemos Lambda:</b></small><br>
+                                        {resumo}
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                    
+                    with c_link:
+                        st.link_button("🔗 Abrir no PubMed", art['Link'], use_container_width=True)
 
 else:
     st.title(t["titulo_desk"]); st.caption(t["subtitulo"])
@@ -275,7 +299,7 @@ else:
                 todos = []
                 for lista in c.PRESETS_FRONTEIRA.values(): todos.extend(lista)
                 adicionar_termos_seguro(todos, t); st.rerun()
-            st.divider()
+            st.divider() 
             escolha = st.selectbox(t["label_categoria"], options=list(c.PRESETS_FRONTEIRA.keys()))
             if st.button(f"{t['btn_add_preset']} {escolha}", use_container_width=True):
                 adicionar_termos_seguro(c.PRESETS_FRONTEIRA[escolha], t); st.rerun()
@@ -309,4 +333,4 @@ with cf1:
 with cf2:
     st.caption(t["apoio_titulo"])
     st.text_input("Chave Pix:", value="960f3f16-06ce-4e71-9b5f-6915b2a10b5a", disabled=False)
-        
+    
