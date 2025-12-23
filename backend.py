@@ -83,30 +83,30 @@ def buscar_alvos_emergentes_pubmed(termo_base, email):
         dados = handle.read().upper(); handle.close()
         
         # --- BLACKLIST v4.0 (Agressiva: Limpeza Total) ---
+# --- BLACKLIST v5.0 (Filtro Farmacológico Puro) ---
         blacklist = {
-            # Conectivos e Verbos (Os que você citou + reforço)
-            "AND", "THE", "FOR", "WITH", "WAS", "WERE", "THAT", "THIS", "THESE", "THOSE", 
-            "FROM", "INTO", "UPON", "ONLY", "ALSO", "THAN", "BOTH", "WHICH", "WHEN", 
-            "WHERE", "BEEN", "SOME", "COULD", "WELL", "VERY", "HAS", "HAD", "ARE", 
-            "ALL", "BEING", "BUT", "NOT", "THROUGH", "BETWEEN", "UNDER", "ABOUT",
+            # Ruídos que você identificou (CBS, FAU, BRISTOL, etc.)
+            "CBS", "FAU", "AID", "BRISTOL", "COMPANY", "INC", "CORP", "LTD", "PHST", "AUID", "ORCID",
+            "CANCER", "UROLOGY", "ONCOLOGY", "CLINICAL", "RESEARCH", "MEDICAL", "MEDICINE", "HOSPITAL",
+            "UNIVERSITY", "INSTITUTE", "LABORATORY", "CENTER", "DEPT", "SCHOOL", "FOUNDATION",
             
-            # Institucional, Metadados e Localização
-            "CBS", "PHST", "CENTER", "HOSPITAL", "UNIVERSITY", "INSTITUTE", "MEDICAL", 
-            "MEDICINE", "CLINIC", "INC", "CORP", "LTD", "DEPT", "LAB", "GROUP",
-            "USA", "PRC", "UK", "EU", "CHINA", "NANJING", "FREIBURG", "UNIFESP",
-            "AUID", "ORCID", "AUTHOR", "AFFILIATION", "CORRESPONDENCE", "EMAIL", "E-MAIL",
-            "PUBLISHED", "COPYRIGHT", "LICENSE", "ONLINE", "PRINT", "DOI", "ISSN",
+            # Geográfico e Institucional
+            "USA", "PRC", "UK", "EU", "CHINA", "NANJING", "FREIBURG", "UNIFESP", "BRAZIL", "SHANGHAI",
             
-            # Metodológico e Geral (RESEARCH, CLINICAL...)
-            "RESEARCH", "CLINICAL", "STUDY", "DATA", "ANALYSIS", "RESULTS", "METHODS", 
-            "CONCLUSION", "AIMS", "SUMMARY", "REVIEW", "TRIAL", "CASE", "REPORT",
-            "SIGNIFICANT", "STATISTICAL", "VALUE", "MEAN", "RATE", "RATIO", "TOTAL",
-            "NORMAL", "POSITIVE", "NEGATIVE", "ACTIVE", "INACTIVE", "STABLE", "UNSTABLE",
-            "FIGURE", "TABLE", "TYPE", "CLASS", "LEVELS", "HIGH", "LOW", "INCREASED", "DECREASED",
+            # Conectivos e Verbos que a IA "pesca"
+            "WERE", "THAT", "THIS", "THESE", "THOSE", "WHICH", "WHEN", "WHERE", "ALSO", "THAN", "BOTH",
+            "UPON", "ONLY", "BEEN", "SOME", "COULD", "WELL", "VERY", "FROM", "INTO", "WITH", "NOT",
+            "BUT", "WAS", "ARE", "HAS", "HAD", "ALL", "BEING", "FOR", "AND", "THE", "ABOUT",
             
-            # Biológico Genérico (Filtro para sobrar apenas o ALVO real)
-            "RECEPTOR", "CHANNEL", "PROTEIN", "GENE", "FACTOR", "RESPONSE", "CELLS", 
-            "TISSUE", "MODEL", "USING", "MECHANISM", "SIGNALING", "NOVEL", "NEW", 
+            # Resíduos Metodológicos e Acadêmicos
+            "STUDY", "GROUP", "DATA", "ANALYSIS", "RESULTS", "METHODS", "CONCLUSION", "AIMS", "SUMMARY",
+            "PMID", "PMC", "DOI", "ISSN", "URL", "HTTP", "WWW", "PUBLISHED", "COPYRIGHT", "LICENSE",
+            "FIGURE", "TABLE", "TYPE", "CLASS", "NORMAL", "TOTAL", "CASE", "REPORT", "ONLINE", "PRINT",
+            "SIGNIFICANT", "STATISTICAL", "VALUE", "MEAN", "RATE", "RATIO", "STABLE", "UNSTABLE",
+            
+            # Termos Biológicos Genéricos (Para sobrar apenas os alvos específicos)
+            "RECEPTOR", "CHANNEL", "PROTEIN", "GENE", "FACTOR", "RESPONSE", "CELLS", "TISSUE", "MODEL",
+            "USING", "MECHANISM", "SIGNALING", "NOVEL", "NEW", "ACUTE", "CHRONIC", "HUMAN", "MOUSE",
             "EXPRESSION", "PATHWAY", "TARGET", "URINARY", "BLADDER", "URETHRA", "KIDNEY"
         }
         
@@ -156,4 +156,5 @@ def buscar_todas_noticias(lang='pt'):
                 })
         return news
     except: return []
+
 
