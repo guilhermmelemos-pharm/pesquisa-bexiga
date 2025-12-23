@@ -48,6 +48,10 @@ defaults = {
 for k, v in defaults.items():
     if k not in st.session_state: st.session_state[k] = v
 
+# Garante que a chave não suma ao recarregar
+if 'api_key_usuario' not in st.session_state:
+    st.session_state.api_key_usuario = ""
+
 def get_textos(): return c.TEXTOS.get(st.session_state.lang, c.TEXTOS["pt"])
 t = get_textos()
 
@@ -123,10 +127,7 @@ def ir_para_analise(email, contexto, alvo, y_ini, y_fim, textos):
     
     for i, item in enumerate(lista):
         time.sleep(0.01) 
-# Busca a molécula no "Mundo" (sem filtros)
         n_global = bk.consultar_pubmed_count(item, "", email, y_ini, y_fim)
-
-# Busca a molécula apenas no seu "Alvo" (ex: Bexiga)
         n_especifico = bk.consultar_pubmed_count(item, alvo, email, y_ini, y_fim)
         
         a, b, c_val = n_especifico, n_global - n_especifico, n_total_alvo - n_especifico
@@ -227,12 +228,16 @@ if st.session_state.pagina == 'resultados':
         
         if st.button(f"{t['btn_investigar']} {sel}", type="secondary"):
             with st.spinner(t["spinner_investigando"]):
+                # O backend buscar_resumos_detalhados agora captura Keywords
                 artigos_raw = bk.buscar_resumos_detalhados(sel, st.session_state.alvo_guardado, st.session_state.email_guardado, 2015, 2025)
                 st.session_state.artigos_detalhe = []
                 for i, art in enumerate(artigos_raw[:3]):
-                    resumo_ia = bk.analisar_abstract_com_ia(art['Title'], art['Resumo_Original'], st.session_state.api_key_usuario, st.session_state.lang)
+                    # Mudança Chave: Passamos 'Keywords' em vez de resumo longo
+                    resumo_ia = bk.analisar_abstract_com_ia(art['Title'], art['Keywords'], st.session_state.api_key_usuario, st.session_state.lang)
                     st.session_state.artigos_detalhe.append({"Title": art['Title'], "Resumo_IA": resumo_ia, "Link": art['Link']})
-                    if i < 2: time.sleep(10) # Delay de segurança
+                    if i < 2: 
+                        st.toast(f"Cadenciando IA: Artigo {i+1} pronto...", icon="⏳")
+                        time.sleep(10) # Delay anti-bloqueio
                 st.rerun()
 
         if st.session_state.artigos_detalhe:
@@ -271,6 +276,7 @@ else:
     with col_config:
         st.subheader(t["header_config"])
         with st.expander(t["expander_ia"], expanded=True):
+            # Widget de chave persistente
             st.session_state.api_key_usuario = st.text_input("Google API Key", type="password", value=st.session_state.api_key_usuario)
             st.markdown(f"[{t['link_key']}](https://aistudio.google.com/app/apikey)")
         st.divider()
@@ -296,6 +302,3 @@ with cf1:
 with cf2:
     st.caption(t["apoio_titulo"])
     st.text_input("Chave Pix:", value="960f3f16-06ce-4e71-9b5f-6915b2a10b5a", disabled=False)
-
-
-
