@@ -10,7 +10,7 @@ import time
 # --- CONFIGURAÇÃO ---
 Entrez.email = "pesquisador_guest@unifesp.br"
 
-# --- IA: CONEXÃO DIRETA COM FALLBACK DE MODELOS ---
+# --- IA: CONEXÃO DIRETA (MODELOS 2025) ---
 def analisar_abstract_com_ia(titulo, dados_curtos, api_key, lang='pt'):
     if not api_key:
         return "⚠️ IA não ativada"
@@ -22,11 +22,11 @@ FONTE: {titulo}. {dados_curtos}
 FORMATO: Alvo: [Sigla] | Fármaco: [Nome] | Efeito: [Ação funcional].
 REGRAS: Máximo 12 palavras. Seja técnico. Idioma: {idioma}."""
 
-    # Configuração do JSON para enviar ao Google
+    # Headers e Config JSON
     headers = {'Content-Type': 'application/json'}
     data = {
         "contents": [{"parts": [{"text": prompt_text}]}],
-        "safetySettings": [ # Desliga filtros de segurança
+        "safetySettings": [
             {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
             {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
             {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
@@ -35,55 +35,44 @@ REGRAS: Máximo 12 palavras. Seja técnico. Idioma: {idioma}."""
         "generationConfig": {"temperature": 0.1}
     }
 
-    # LISTA DE MODELOS PARA TENTAR (Do mais novo para o mais antigo)
-    # Se um der 404, ele tenta o próximo.
-    modelos_para_tentar = [
-        "gemini-1.5-flash",
-        "gemini-1.5-flash-latest",
-        "gemini-pro",     # Esse é o mais compatível de todos
-        "gemini-1.0-pro"
+    # LISTA ATUALIZADA COM SEUS MODELOS (Prioridade: 2.5 > 2.0 > Latest)
+    modelos_disponiveis = [
+        "gemini-2.5-flash",          # Prioridade máxima (Rápido e Novo)
+        "gemini-2.0-flash",          # Backup estável
+        "gemini-2.0-flash-exp",      # Experimental
+        "gemini-flash-latest",       # Genérico
+        "gemini-2.5-flash-lite"      # Super leve se tudo falhar
     ]
 
-    erros_log = []
-
-    for modelo in modelos_para_tentar:
+    for modelo in modelos_disponiveis:
         try:
-            # Constrói a URL para o modelo específico
+            # URL Direta v1beta (Padrão para modelos novos)
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={api_key}"
             
-            # Dispara a requisição
             response = requests.post(url, headers=headers, data=json.dumps(data), timeout=10)
             
             if response.status_code == 200:
-                # SUCESSO!
                 resultado = response.json()
                 try:
                     texto = resultado['candidates'][0]['content']['parts'][0]['text']
                     return texto.strip()
                 except:
-                    return "⚠️ IA respondeu vazio (Filtro rígido)."
+                    return "⚠️ IA respondeu vazio (Erro no parse)."
             
-            elif response.status_code == 404:
-                # Modelo não encontrado, tenta o próximo da lista silenciosamente
-                erros_log.append(f"{modelo}: 404")
-                continue
-                
             elif response.status_code == 429:
-                return "💡 IA Ocupada (Muitas requisições). Espere 1 min."
+                return "💡 IA Ocupada (Cota excedida). Aguarde..."
             
-            elif response.status_code == 400:
-                return "❌ Chave API Inválida."
-                
-            else:
-                erros_log.append(f"{modelo}: {response.status_code}")
-                continue
-
-        except Exception as e:
-            erros_log.append(f"{modelo}: Erro Conexão")
+            elif response.status_code == 400 or response.status_code == 403:
+                # Se a chave for inválida, para de tentar e avisa logo
+                return "❌ Chave API Inválida/Permissão Negada."
+            
+            # Se der 404, apenas continua o loop para o próximo modelo
             continue
 
-    # Se saiu do loop, nenhum funcionou
-    return f"❌ Falha em todos os modelos. ({'; '.join(erros_log)})"
+        except Exception:
+            continue
+
+    return f"❌ Falha técnica. Título: {titulo[:30]}..."
 
 # --- BUSCA PUBMED ---
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
