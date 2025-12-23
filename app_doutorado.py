@@ -232,7 +232,7 @@ if st.session_state.pagina == 'resultados':
                 for i, art in enumerate(artigos_raw[:3]):
                     resumo_ia = bk.analisar_abstract_com_ia(art['Title'], art['Resumo_Original'], st.session_state.api_key_usuario, st.session_state.lang)
                     st.session_state.artigos_detalhe.append({"Title": art['Title'], "Resumo_IA": resumo_ia, "Link": art['Link']})
-                    if i < 2: time.sleep(7) # Delay de segurança
+                    if i < 2: time.sleep(10) # Delay de segurança
                 st.rerun()
 
         if st.session_state.artigos_detalhe:
@@ -296,5 +296,6 @@ with cf1:
 with cf2:
     st.caption(t["apoio_titulo"])
     st.text_input("Chave Pix:", value="960f3f16-06ce-4e71-9b5f-6915b2a10b5a", disabled=False)
+
 
 
