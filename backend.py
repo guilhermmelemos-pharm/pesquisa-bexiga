@@ -1,6 +1,7 @@
 import streamlit as st
 from Bio import Entrez
-import google.generativeai as genai
+import requests # <--- MUDANÇA: Usaremos requisições web diretas
+import json
 from tenacity import retry, stop_after_attempt, wait_exponential
 import re
 from collections import Counter
@@ -9,57 +10,59 @@ import time
 # --- CONFIGURAÇÃO ---
 Entrez.email = "pesquisador_guest@unifesp.br"
 
-# --- IA: EXTRAÇÃO HÍBRIDA (CAMALEÃO) ---
+# --- IA: CONEXÃO DIRETA VIA API REST (INFALÍVEL) ---
 def analisar_abstract_com_ia(titulo, dados_curtos, api_key, lang='pt'):
     if not api_key:
         return "⚠️ IA não ativada"
     
-    try:
-        genai.configure(api_key=api_key)
-        idioma = "Português" if lang == 'pt' else "Inglês"
-        
-        prompt = f"""PhD em Farmacologia, analise:
+    # URL Direta do Google (Bypassa a biblioteca desatualizada)
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+    
+    idioma = "Português" if lang == 'pt' else "Inglês"
+    
+    prompt_text = f"""PhD em Farmacologia, analise:
 FONTE: {titulo}. {dados_curtos}
 FORMATO: Alvo: [Sigla] | Fármaco: [Nome] | Efeito: [Ação funcional].
 REGRAS: Máximo 12 palavras. Seja técnico. Idioma: {idioma}."""
 
-        # Lista de modelos do mais novo para o mais antigo (compatibilidade)
-        modelos = ['gemini-1.5-flash', 'gemini-pro', 'gemini-1.0-pro']
-        
-        # Configuração de segurança ideal (Libera termos médicos)
-        safety_ideal = [
+    # Payload JSON manual (Garante que as configs sejam enviadas)
+    headers = {'Content-Type': 'application/json'}
+    data = {
+        "contents": [{
+            "parts": [{"text": prompt_text}]
+        }],
+        "safetySettings": [
             {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
             {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
             {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-        ]
+            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
+        ],
+        "generationConfig": {
+            "temperature": 0.1,
+            "maxOutputTokens": 100
+        }
+    }
 
-        for mod in modelos:
-            # TENTATIVA 1: Modo Avançado (Filtros Desligados)
+    try:
+        # Envia a requisição direto para o servidor do Google
+        response = requests.post(url, headers=headers, data=json.dumps(data), timeout=10)
+        
+        if response.status_code == 200:
+            resultado = response.json()
             try:
-                model = genai.GenerativeModel(mod)
-                response = model.generate_content(
-                    prompt, 
-                    generation_config={"temperature": 0.1},
-                    safety_settings=safety_ideal
-                )
-                if response and response.text: return response.text.strip()
-            except Exception as e1:
-                # Se falhar (erro 404 ou incompatibilidade de biblioteca), tenta o Modo Legado
-                
-                # TENTATIVA 2: Modo Legado (Sem safety_settings explícito)
-                # Isso funciona em bibliotecas antigas do Google
-                try:
-                    time.sleep(1) # Pequena pausa
-                    response = model.generate_content(prompt, generation_config={"temperature": 0.1})
-                    if response and response.text: return response.text.strip()
-                except Exception as e2:
-                    continue # Tenta o próximo modelo da lista
+                texto = resultado['candidates'][0]['content']['parts'][0]['text']
+                return texto.strip()
+            except:
+                return "⚠️ IA respondeu vazio (Filtro rígido ou erro interno)."
+        elif response.status_code == 429:
+            return "💡 IA Ocupada (Muitas requisições). Tente em 1 min."
+        elif response.status_code == 400:
+            return "❌ Chave API Inválida ou Expirada."
+        else:
+            return f"❌ Erro Google ({response.status_code}): {response.text[:50]}"
 
-        return f"💡 IA Ocupada. Título: {titulo[:40]}..."
-    
     except Exception as e:
-        return f"❌ Erro Crítico: {str(e)[:30]}"
+        return f"❌ Erro Conexão: {str(e)[:30]}"
 
 # --- BUSCA PUBMED ---
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
@@ -98,19 +101,13 @@ def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
             for line in lines:
                 if line.strip().isdigit() and not pmid: pmid = line.strip()
                 if line.startswith("TI  - "): tit = line[6:].strip()
-                
-                # 1. Captura Keywords (OT/KW)
                 if line.startswith("OT  - ") or line.startswith("KW  - "):
                     keywords += line[6:].strip() + ", "
-                
-                # 2. Captura Início do Abstract (Backup)
                 if line.startswith("AB  - ") and not fallback_text:
                     fallback_text = line[6:500].strip()
             
             if tit:
-                # LÓGICA DE CRIAÇÃO DA CHAVE 'Info_IA'
                 info_final = keywords if len(keywords) > 5 else fallback_text
-                
                 artigos.append({
                     "Title": tit, 
                     "Info_IA": info_final if info_final else "Sem resumo disponível.",
