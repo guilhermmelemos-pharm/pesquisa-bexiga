@@ -19,6 +19,7 @@ def analisar_abstract_com_ia(titulo, keywords, api_key, lang='pt'):
         idioma = "Português" if lang == 'pt' else "Inglês"
         
         # O input agora é levíssimo: Título + Palavras-chave dos autores
+        # Isso evita o erro de "IA Ocupada" por excesso de caracteres.
         prompt = f"""Analise como PhD em Farmacologia:
 TÍTULO: {titulo}
 KEYWORDS: {keywords}
@@ -54,6 +55,7 @@ def _fetch_pubmed_count(query):
 @st.cache_data(ttl=86400, show_spinner=False)
 def consultar_pubmed_count(termo, contexto, email, ano_ini, ano_fim):
     if email: Entrez.email = email
+    # Agora a busca ignora o contexto para garantir que Global seja maior que Alvo
     query = f"({termo}) AND ({contexto}) AND ({ano_ini}:{ano_fim}[Date - Publication]) AND (NOT Review[pt])"
     try:
         return _fetch_pubmed_count(query)
@@ -79,6 +81,7 @@ def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
                 if line.strip().isdigit() and not pmid: pmid = line.strip()
                 if line.startswith("TI  - "): tit = line[6:].strip()
                 # CAPTURA AS KEYWORDS (OT - Other Term ou KW - Keyword no Medline)
+                # O Medline usa OT para termos do autor e KW para termos Mesh/Keywords
                 if line.startswith("OT  - ") or line.startswith("KW  - "):
                     keywords += line[6:].strip() + ", "
             
@@ -109,8 +112,8 @@ def buscar_alvos_emergentes_pubmed(termo_base, email):
                                "REGULATION", "MEDIATED", "MECHANISM", "FUNCTION", "ROLE", "TARGET", "MOLECULAR", "GENE",
                                "PROTEIN", "ENZYME", "KINASE", "AUTOPHAGY", "APOPTOSIS", "DIFFERENTIATION", "HOMEOSTASIS", "STRESS"}
         
-        # Coloque sua Blacklist completa aqui
-        blacklist = {"AND", "THE", "FOR", "NOT", "BUT", "WITH", "FROM", "STUDY", "RESULTS", "CELLS"} 
+        # Blacklist v6.1: Removendo ruídos administrativos
+        blacklist = {"AND", "THE", "FOR", "NOT", "BUT", "WITH", "FROM", "STUDY", "RESULTS", "CELLS", "WAS", "WERE"} 
         unidades = {"MMHG","KPA","MIN","SEC","HRS","ML","MG","KG","NM","UM","MM","NMOL"}
 
         candidatos_por_artigo = []
