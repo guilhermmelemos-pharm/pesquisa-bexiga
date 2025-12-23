@@ -88,7 +88,7 @@ def buscar_alvos_emergentes_pubmed(termo_base, email):
             # Ruídos que você identificou (CBS, FAU, BRISTOL, etc.)
             "CBS", "FAU", "AID", "BRISTOL", "COMPANY", "INC", "CORP", "LTD", "PHST", "AUID", "ORCID",
             "CANCER", "UROLOGY", "ONCOLOGY", "CLINICAL", "RESEARCH", "MEDICAL", "MEDICINE", "HOSPITAL",
-            "UNIVERSITY", "INSTITUTE", "LABORATORY", "CENTER", "DEPT", "SCHOOL", "FOUNDATION",
+            "UNIVERSITY", "INSTITUTE", "LABORATORY", "CENTER", "DEPT", "SCHOOL", "FOUNDATION", "CBS", "SCIENCES", "MEDLINE", "GERMANY", "MERCK", "DEC", "LID", "CELL",
             
             # Geográfico e Institucional
             "USA", "PRC", "UK", "EU", "CHINA", "NANJING", "FREIBURG", "UNIFESP", "BRAZIL", "SHANGHAI",
@@ -156,5 +156,6 @@ def buscar_todas_noticias(lang='pt'):
                 })
         return news
     except: return []
+
 
 
