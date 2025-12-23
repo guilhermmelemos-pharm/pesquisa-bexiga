@@ -124,10 +124,10 @@ def ir_para_analise(email, contexto, alvo, y_ini, y_fim, textos):
     for i, item in enumerate(lista):
         time.sleep(0.01) 
 # Busca a molécula no "Mundo" (sem filtros)
-n_global = bk.consultar_pubmed_count(item, "", email, y_ini, y_fim)
+        n_global = bk.consultar_pubmed_count(item, "", email, y_ini, y_fim)
 
 # Busca a molécula apenas no seu "Alvo" (ex: Bexiga)
-n_especifico = bk.consultar_pubmed_count(item, alvo, email, y_ini, y_fim)
+        n_especifico = bk.consultar_pubmed_count(item, alvo, email, y_ini, y_fim)
         
         a, b, c_val = n_especifico, n_global - n_especifico, n_total_alvo - n_especifico
         d = max(0, N_PUBMED - (a + max(0,b) + max(0,c_val)))
@@ -296,4 +296,5 @@ with cf1:
 with cf2:
     st.caption(t["apoio_titulo"])
     st.text_input("Chave Pix:", value="960f3f16-06ce-4e71-9b5f-6915b2a10b5a", disabled=False)
+
 
