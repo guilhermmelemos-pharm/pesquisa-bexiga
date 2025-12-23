@@ -6,8 +6,8 @@ authors:
   affiliation: "Universidade Federal de São Paulo (Unifesp)"
   orcid: "https://orcid.org/0000-0001-6382-227X"
 title: "Lemos Lambda: Deep Science Prospector"
-version: 1.0.0
-date-released: 2025-12-16
+version: 2.0.0
+date-released: 2025-12-23
 url: "https://github.com/guilhermelemos/lemos-lambda"
 keywords:
   - pharmacology

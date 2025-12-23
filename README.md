@@ -51,4 +51,4 @@ To enable the **Generative AI** features (preventing Error 404), follow these st
 
 If you use this software in your research, please cite:
 
-> Lemos, G. (2025). *Lemos Lambda: Deep Science Prospector* [Software]. Version 2.0. Unifesp.
+> Lemos, G. (2025). Lemos Lambda: Deep Science Prospector (v2.0). Zenodo. https://doi.org/10.5281/zenodo.18036690
