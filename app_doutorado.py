@@ -318,9 +318,9 @@ else:
                 tm = st.text_input("Termo", key="input_manual", placeholder=t["holder_manual"])
                 if st.button(t["btn_add_manual"]):
                     if tm: adicionar_termos_seguro(tm.split(","), t); st.rerun()
-
-            with col_config:
-        st.subheader(t["header_config"])
+        with col_config:
+        # 2. Tudo aqui dentro deve ter 4 espaços (Tab) para a direita
+        st.subheader(t["header_config"]) 
         with st.expander(t["expander_ia"], expanded=True):
             st.caption(t["caption_ia"])
             
@@ -334,38 +334,8 @@ else:
             )
             st.session_state.api_key_usuario = input_key
             st.markdown(f"[{t['link_key']}](https://aistudio.google.com/app/apikey)")
+        
         st.divider()
         anos = st.slider(t["slider_tempo"], 2000, datetime.now().year, (2015, datetime.now().year))
         st.text_input(t["label_contexto"], key="input_fonte")
         st.file_uploader(t["uploader_label"], type=["csv", "txt"], key="uploader_key", on_change=processar_upload, args=(t,))
-
-    st.divider()
-    if st.session_state.alvos_val:
-        msg = t.get("msg_alvos_ok", "alvos prontos.")
-        st.success(f"✅ **{len(st.session_state.alvos_val.split(','))} {msg}**")
-        
-        # --- CAIXA EDITÁVEL ---
-        with st.expander(t["expander_lista"]):
-             # Note o key="alvos_val". Isso liga a caixa diretamente à memória.
-             # O usuário pode editar e o app vai respeitar.
-             st.text_area("", key="alvos_val", height=150)
-             if st.button(t["btn_limpar"]): limpar_lista_total(); st.rerun()
-        
-        if st.button(t["btn_executar"], type="primary", use_container_width=True):
-            if not st.session_state.input_email: st.error(t["erro_email"])
-            else: ir_para_analise(st.session_state.input_email, st.session_state.input_fonte, st.session_state.input_alvo, anos[0], anos[1], t)
-
-# RODAPÉ
-st.markdown("---")
-cf1, cf2 = st.columns([2, 1])
-with cf1:
-    st.caption(t["footer_citar"])
-    with st.expander(t["citar_titulo"], expanded=False):
-        st.code(t["citar_texto"], language="text")
-with cf2:
-    st.caption(t["apoio_titulo"])
-    st.caption(t["apoio_desc"])
-    # ATENÇÃO: COLOQUE SUA CHAVE PIX ABAIXO
-
-    st.text_input("Chave Pix (Copia e Cola):", value="960f3f16-06ce-4e71-9b5f-6915b2a10b5a", disabled=False)
-
