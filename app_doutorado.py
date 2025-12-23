@@ -256,19 +256,22 @@ if st.session_state.pagina == 'resultados':
                 artigos_raw = bk.buscar_resumos_detalhados(sel, st.session_state.alvo_guardado, st.session_state.email_guardado, 2015, 2025)
                 st.session_state.artigos_detalhe = []
                 
-                # Analisa apenas os 3 primeiros para poupar a cota do Google
-                for art in artigos_raw[:3]:
-                    resumo_ia = bk.analisar_abstract_com_ia(
-                        art['Title'], 
-                        art['Resumo_Original'], 
-                        st.session_state.api_key_usuario,
-                        st.session_state.lang
-                    )
-                    st.session_state.artigos_detalhe.append({
-                        "Title": art['Title'], "Resumo_IA": resumo_ia, "Link": art['Link']
-                    })
-                    # PAUSA DE SEGURANÇA: 6 segundos para o Google não te bloquear
-                    time.sleep(6) 
+# No app_doutorado.py, dentro do botão de investigar:
+for i, art in enumerate(artigos_raw[:3]):
+    resumo_ia = bk.analisar_abstract_com_ia(
+        art['Title'], 
+        art['Resumo_Original'], 
+        st.session_state.api_key_usuario,
+        st.session_state.lang
+    )
+    st.session_state.artigos_detalhe.append({
+        "Title": art['Title'], "Resumo_IA": resumo_ia, "Link": art['Link']
+    })
+    
+    # ⏱️ DELAY DINÂMICO: 
+    # O primeiro artigo vai rápido, o segundo e terceiro esperam para não travar
+    if i < 2: 
+        time.sleep(7)
         
         # Exibição dos cards com os resumos gerados
         if st.session_state.artigos_detalhe:
@@ -365,6 +368,7 @@ with cf2:
     st.caption(t["apoio_titulo"])
     st.caption(t["apoio_desc"])
     st.text_input("Chave Pix (Copia e Cola):", value="960f3f16-06ce-4e71-9b5f-6915b2a10b5a", disabled=False)
+
 
 
 
