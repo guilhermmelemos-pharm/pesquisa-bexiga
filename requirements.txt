@@ -8,3 +8,4 @@ nltk
 google-generativeai
 scipy
 tenacity
+google-generativeai>=0.7.0
