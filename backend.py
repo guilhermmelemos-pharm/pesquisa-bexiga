@@ -16,7 +16,7 @@ def analisar_abstract_com_ia(titulo, abstract, api_key, lang='pt'):
     try:
         genai.configure(api_key=api_key)
         idioma_resp = "Português" if lang == 'pt' else "Inglês"
-        abstract_seguro = abstract[:8000] if abstract else "" # Aumentado
+        abstract_seguro = abstract[:8000] if abstract else "" 
         
         # --- PROMPT V2.10: SHERLOCK HOLMES ---
         prompt = f"""
@@ -56,8 +56,8 @@ def analisar_abstract_com_ia(titulo, abstract, api_key, lang='pt'):
                 erros_coletados.append(f"{nome_modelo}: {str(e)}")
                 continue 
         
-# Isso vai imprimir o erro técnico na tela (Ex: 400 Bad Request, 403 Forbidden)
-    return f"❌ ERRO TÉCNICO: {str(erros_coletados)}"
+        # Aqui ele retorna o erro real para sabermos o que houve
+        return f"❌ ERRO TÉCNICO: {str(erros_coletados)}"
         
     except Exception as e:
         return f"❌ Erro Crítico: {str(e)[:50]}..."
@@ -65,10 +65,13 @@ def analisar_abstract_com_ia(titulo, abstract, api_key, lang='pt'):
 # --- FUNÇÕES DE BUSCA ---
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
 def _fetch_pubmed_count(query):
-    handle = Entrez.esearch(db="pubmed", term=query, retmax=0)
-    record = Entrez.read(handle)
-    handle.close()
-    return int(record["Count"])
+    try:
+        handle = Entrez.esearch(db="pubmed", term=query, retmax=0)
+        record = Entrez.read(handle)
+        handle.close()
+        return int(record["Count"])
+    except:
+        return 0
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def consultar_pubmed_count(termo, contexto, email, ano_ini, ano_fim):
@@ -78,12 +81,9 @@ def consultar_pubmed_count(termo, contexto, email, ano_ini, ano_fim):
     query_parts.append(f"({ano_ini}:{ano_fim}[Date - Publication])")
     query_parts.append("(NOT Review[pt])") 
     query_final = " AND ".join(query_parts)
-    try:
-        return _fetch_pubmed_count(query_final)
-    except:
-        return 0
+    return _fetch_pubmed_count(query_final)
 
-# --- LEITOR CORRIGIDO (BUG FIX CRÍTICO) ---
+# --- LEITOR CORRIGIDO ---
 @st.cache_data(ttl=86400, show_spinner=False)
 def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
     if email and "@" in email: Entrez.email = email
@@ -110,28 +110,23 @@ def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
             link_id = ""
             lines = raw.split("\n")
             
-            # LÓGICA DE LEITURA REFINADA (Lê linhas quebradas)
             last_tag = ""
             for line in lines:
-                # Captura ID
                 if line.strip().isdigit(): 
                     link_id = line.strip()
                 
-                # Captura Título
                 if line.startswith("TI  - "): 
                     tit = line.replace("TI  - ", "").strip()
                     last_tag = "TI"
-                elif line.startswith("      ") and last_tag == "TI": # Continuação do título
+                elif line.startswith("      ") and last_tag == "TI":
                     tit += " " + line.strip()
 
-                # Captura Abstract (CORREÇÃO AQUI)
                 elif line.startswith("AB  - "): 
                     abs_txt = line.replace("AB  - ", "").strip()
                     last_tag = "AB"
-                elif line.startswith("      ") and last_tag == "AB": # Continuação do abstract
+                elif line.startswith("      ") and last_tag == "AB":
                     abs_txt += " " + line.strip()
                 
-                # Se começar outra tag (ex: AU -), para de concatenar
                 elif len(line) > 4 and line[4] == "-":
                     last_tag = ""
             
@@ -147,7 +142,7 @@ def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
         return artigos_finais
     except: return []
 
-# --- MINERAÇÃO INTELIGENTE (MANTIDA IGUAL) ---
+# --- MINERAÇÃO INTELIGENTE CORRIGIDA ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def buscar_alvos_emergentes_pubmed(termo_base, email):
     if email and "@" in email: Entrez.email = email
@@ -208,12 +203,18 @@ def buscar_alvos_emergentes_pubmed(termo_base, email):
         regex_pure = r'\b[A-Z]{3,8}\b'                           
 
         for artigo in artigos_raw:
+            # CORREÇÃO AQUI: Inicializando variáveis
+            tit = ""
+            abs_txt = ""
             texto_limpo = ""
+            
             lines = artigo.split("\n")
             for line in lines:
                 if line.startswith("TI  - "): tit = line.replace("TI  - ", "").strip()
                 if line.startswith("AB  - "): abs_txt += line.replace("AB  - ", "").strip() + " "
-                if line.strip().isdigit(): link_id = line.strip()
+            
+            # Constrói o texto limpo para análise
+            texto_limpo = f"{tit} {abs_txt}".strip()
             
             if not texto_limpo: continue
             
@@ -247,10 +248,8 @@ def buscar_alvos_emergentes_pubmed(termo_base, email):
 
 @st.cache_data(ttl=3600)
 def buscar_todas_noticias(lang='pt'):
-    # Notícias estáticas (mantidas)
     return [
         {"titulo": "New bladder targets identified in 2024 review", "fonte": "Nature Urology", "img": "https://images.unsplash.com/photo-1576086213369-97a306d36557?w=400", "link": "#", "bandeira": "🔬"},
         {"titulo": "H2S donors show promise in detrusor relaxation", "fonte": "ScienceDirect", "img": "https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=400", "link": "#", "bandeira": "💊"},
         {"titulo": "Piezo1 channels: The future of mechanotransduction", "fonte": "Cell", "img": "https://images.unsplash.com/photo-1530026405186-ed1f139313f8?w=400", "link": "#", "bandeira": "⚡"}
-
     ]
