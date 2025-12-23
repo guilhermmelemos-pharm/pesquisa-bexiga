@@ -244,8 +244,9 @@ if st.session_state.pagina == 'resultados':
         st.dataframe(df.drop(columns=["_sort"]), use_container_width=True, hide_index=True)
         csv = df.drop(columns=["_sort"]).to_csv(index=False).encode('utf-8')
         st.download_button(t["btn_baixar"], csv, "lemos_lambda_report.csv", "text/csv")
-        
-       st.divider()
+
+# --- SEÇÃO DE RESULTADOS (Dentro do if pagina == 'resultados') ---
+        st.divider()
         st.subheader(t["header_leitura"])
         sel = st.selectbox(t["label_investigar"], sorted(df[t["col_mol"]].unique().tolist()))
         
@@ -277,7 +278,7 @@ if st.session_state.pagina == 'resultados':
                     st.link_button(t["btn_pubmed"], a['Link'])
 
 else:
-    # HOME
+    # --- TELA HOME (Dentro do else) ---
     st.title(t["titulo_desk"]); st.caption(t["subtitulo"])
     exibir_radar_cientifico(st.session_state.lang, t)
     st.divider()
@@ -295,15 +296,12 @@ else:
         st.write(" ")
         st.markdown('<div class="big-button">', unsafe_allow_html=True)
         
-        # BOTÃO PRINCIPAL: AUTO-DETECT + CARREGA TUDO
         if st.button(t["btn_auto"], use_container_width=True):
              carregar_lista_dinamica_smart(t)
         st.markdown('</div>', unsafe_allow_html=True)
 
         st.write(" ")
         with st.expander(t["expander_presets"], expanded=False):
-            
-            # Botão "Adicionar Tudo" (Backup)
             if st.button(t["btn_add_all"], use_container_width=True):
                 todos_termos = []
                 for lista in c.PRESETS_FRONTEIRA.values():
@@ -313,7 +311,6 @@ else:
                 st.rerun()
 
             st.divider()
-            
             opcoes_fronteira = list(c.PRESETS_FRONTEIRA.keys())
             escolha = st.selectbox(t["label_categoria"], options=opcoes_fronteira, label_visibility="collapsed")
             if st.button(f"{t['btn_add_preset']} {escolha}", use_container_width=True):
@@ -325,15 +322,11 @@ else:
                 if st.button(t["btn_add_manual"]):
                     if tm: adicionar_termos_seguro(tm.split(","), t); st.rerun()
 
-    # --- COLUNA DA DIREITA (CONFIGURAÇÃO) CORRIGIDA ---
     with col_config:
         st.subheader(t["header_config"])
         with st.expander(t["expander_ia"], expanded=True):
             st.caption(t["caption_ia"])
-            
-            # --- MEMÓRIA DA CHAVE (Fix da Amnésia) ---
             val_atual = st.session_state.api_key_usuario
-            
             input_key = st.text_input(
                 "Google API Key", 
                 type="password", 
@@ -341,8 +334,6 @@ else:
                 value=val_atual 
             )
             st.session_state.api_key_usuario = input_key
-            # -----------------------------------------
-            
             st.markdown(f"[{t['link_key']}](https://aistudio.google.com/app/apikey)")
         
         st.divider()
@@ -355,7 +346,6 @@ else:
         msg = t.get("msg_alvos_ok", "alvos prontos.")
         st.success(f"✅ **{len(st.session_state.alvos_val.split(','))} {msg}**")
         
-        # --- CAIXA EDITÁVEL ---
         with st.expander(t["expander_lista"]):
              st.text_area("", key="alvos_val", height=150)
              if st.button(t["btn_limpar"]): limpar_lista_total(); st.rerun()
@@ -364,7 +354,7 @@ else:
             if not st.session_state.input_email: st.error(t["erro_email"])
             else: ir_para_analise(st.session_state.input_email, st.session_state.input_fonte, st.session_state.input_alvo, anos[0], anos[1], t)
 
-# --- RODAPÉ RESTAURADO ---
+# --- RODAPÉ (Fora de qualquer bloco, encostado na esquerda) ---
 st.markdown("---")
 cf1, cf2 = st.columns([2, 1])
 with cf1:
@@ -374,7 +364,7 @@ with cf1:
 with cf2:
     st.caption(t["apoio_titulo"])
     st.caption(t["apoio_desc"])
-    # Sua Chave Pix (Coloquei a do exemplo anterior, pode alterar se precisar)
     st.text_input("Chave Pix (Copia e Cola):", value="960f3f16-06ce-4e71-9b5f-6915b2a10b5a", disabled=False)
+
 
 
