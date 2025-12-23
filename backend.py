@@ -95,6 +95,7 @@ def buscar_alvos_emergentes_pubmed(termo_base, email):
             "USING", "REVIEW", "MECHANISM", "SIGNALING", "NOVEL", "NEW", "ACUTE", "CHRONIC", "HUMAN",
             "MOUSE", "RAT", "SIGNIFICANT", "STATISTICAL", "VALUE", "MEAN", "RATE", "RATIO", "NORMAL",
             "POSITIVE", "NEGATIVE", "ACTIVE", "INACTIVE", "STABLE", "UNSTABLE", "TOTAL", "CASE", "REPORT"
+            "HOSPITAL", "PHST", "UROLOGY", "MEDICAL", "MEDICINE", "CENTER"
         }
         
         # Filtro de Unidades e Termos Curtos Irrelevantes
@@ -128,3 +129,4 @@ def buscar_todas_noticias(lang='pt'):
             if tit: news.append({"titulo": tit, "fonte": "Science Frontier", "link": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"})
         return news
     except: return []
+
