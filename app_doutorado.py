@@ -319,14 +319,13 @@ else:
                 if st.button(t["btn_add_manual"]):
                     if tm: adicionar_termos_seguro(tm.split(","), t); st.rerun()
 
-    # --- CORREÇÃO DE INDENTAÇÃO AQUI ---
+    # --- COLUNA DA DIREITA (CONFIGURAÇÃO) CORRIGIDA ---
     with col_config:
-        # Note o espaço extra aqui na frente (TAB)
         st.subheader(t["header_config"])
         with st.expander(t["expander_ia"], expanded=True):
             st.caption(t["caption_ia"])
             
-            # Fix da Amnésia (Mantém a chave na memória)
+            # --- MEMÓRIA DA CHAVE (Fix da Amnésia) ---
             val_atual = st.session_state.api_key_usuario
             
             input_key = st.text_input(
@@ -336,6 +335,8 @@ else:
                 value=val_atual 
             )
             st.session_state.api_key_usuario = input_key
+            # -----------------------------------------
+            
             st.markdown(f"[{t['link_key']}](https://aistudio.google.com/app/apikey)")
         
         st.divider()
@@ -356,3 +357,17 @@ else:
         if st.button(t["btn_executar"], type="primary", use_container_width=True):
             if not st.session_state.input_email: st.error(t["erro_email"])
             else: ir_para_analise(st.session_state.input_email, st.session_state.input_fonte, st.session_state.input_alvo, anos[0], anos[1], t)
+
+# --- RODAPÉ RESTAURADO ---
+st.markdown("---")
+cf1, cf2 = st.columns([2, 1])
+with cf1:
+    st.caption(t["footer_citar"])
+    with st.expander(t["citar_titulo"], expanded=False):
+        st.code(t["citar_texto"], language="text")
+with cf2:
+    st.caption(t["apoio_titulo"])
+    st.caption(t["apoio_desc"])
+    # Sua Chave Pix (Coloquei a do exemplo anterior, pode alterar se precisar)
+    st.text_input("Chave Pix (Copia e Cola):", value="960f3f16-06ce-4e71-9b5f-6915b2a10b5a", disabled=False)
+
