@@ -18,7 +18,7 @@ def analisar_abstract_com_ia(titulo, dados_curtos, api_key, lang='pt'):
         genai.configure(api_key=api_key)
         idioma = "Português" if lang == 'pt' else "Inglês"
         
-        # O prompt agora processa apenas o "filé mignon" do paper (Keywords ou Início do Abstract)
+        # Prompt otimizado para ler Keywords ou Início do Abstract
         prompt = f"""Analise como PhD em Farmacologia:
 FONTE: {titulo}. {dados_curtos}
 FORMATO OBRIGATÓRIO: Alvo: [Sigla] | Fármaco: [Nome] | Efeito: [Ação funcional].
@@ -52,7 +52,6 @@ def _fetch_pubmed_count(query):
 @st.cache_data(ttl=86400, show_spinner=False)
 def consultar_pubmed_count(termo, contexto, email, ano_ini, ano_fim):
     if email: Entrez.email = email
-    # Busca global real ignorando o contexto se ele for vazio
     query = f"({termo})"
     if contexto: query += f" AND ({contexto})"
     query += f" AND ({ano_ini}:{ano_fim}[Date - Publication]) AND (NOT Review[pt])"
@@ -61,6 +60,7 @@ def consultar_pubmed_count(termo, contexto, email, ano_ini, ano_fim):
     except:
         return 0
 
+# --- AQUI ESTAVA O ERRO: Esta função PRECISA gerar o 'Info_IA' ---
 @st.cache_data(ttl=86400, show_spinner=False)
 def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
     if email: Entrez.email = email
@@ -79,25 +79,28 @@ def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
             for line in lines:
                 if line.strip().isdigit() and not pmid: pmid = line.strip()
                 if line.startswith("TI  - "): tit = line[6:].strip()
-                # 1. Captura Keywords (OT = Author Keywords, KW = Mesh Keywords)
+                
+                # 1. Captura Keywords (OT/KW)
                 if line.startswith("OT  - ") or line.startswith("KW  - "):
                     keywords += line[6:].strip() + ", "
-                # 2. Captura apenas o início do abstract como backup (primeiros 500 chars)
+                
+                # 2. Captura Início do Abstract (Backup)
                 if line.startswith("AB  - ") and not fallback_text:
                     fallback_text = line[6:500].strip()
             
             if tit:
-                # Prioriza Keywords (mais limpo); se não houver, usa o início do abstract
+                # LÓGICA DE CRIAÇÃO DA CHAVE 'Info_IA'
                 info_final = keywords if len(keywords) > 5 else fallback_text
+                
                 artigos.append({
                     "Title": tit, 
-                    "Info_IA": info_final if info_final else "Sem resumo disponível.", 
+                    "Info_IA": info_final if info_final else "Sem resumo disponível.", # <--- O ERRO SUMIRÁ AQUI
                     "Link": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
                 })
         return artigos
     except: return []
 
-# --- MOTOR DE MINERAÇÃO UNIVERSAL ---
+# --- MOTOR DE MINERAÇÃO ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def buscar_alvos_emergentes_pubmed(termo_base, email):
     if email: Entrez.email = email
@@ -115,7 +118,6 @@ def buscar_alvos_emergentes_pubmed(termo_base, email):
                                "REGULATION", "MEDIATED", "MECHANISM", "FUNCTION", "ROLE", "TARGET", "MOLECULAR", "GENE",
                                "PROTEIN", "ENZYME", "KINASE", "AUTOPHAGY", "APOPTOSIS", "DIFFERENTIATION", "HOMEOSTASIS", "STRESS"}
         
-        # Blacklist v6.1
         blacklist = {"AND", "THE", "FOR", "NOT", "BUT", "WITH", "FROM", "STUDY", "RESULTS", "CELLS", "WAS", "WERE", "CBS", "FAU", "AID"} 
         unidades = {"MMHG","KPA","MIN","SEC","HRS","ML","MG","KG","NM","UM","MM","NMOL"}
 
