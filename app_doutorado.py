@@ -319,11 +319,20 @@ else:
                 if st.button(t["btn_add_manual"]):
                     if tm: adicionar_termos_seguro(tm.split(","), t); st.rerun()
 
-    with col_config:
+            with col_config:
         st.subheader(t["header_config"])
         with st.expander(t["expander_ia"], expanded=True):
             st.caption(t["caption_ia"])
-            st.session_state.api_key_usuario = st.text_input("Google API Key", type="password", placeholder=t["placeholder_key"])
+            
+            val_atual = st.session_state.api_key_usuario
+            
+            input_key = st.text_input(
+                "Google API Key", 
+                type="password", 
+                placeholder=t["placeholder_key"],
+                value=val_atual 
+            )
+            st.session_state.api_key_usuario = input_key
             st.markdown(f"[{t['link_key']}](https://aistudio.google.com/app/apikey)")
         st.divider()
         anos = st.slider(t["slider_tempo"], 2000, datetime.now().year, (2015, datetime.now().year))
@@ -359,3 +368,4 @@ with cf2:
     # ATENÇÃO: COLOQUE SUA CHAVE PIX ABAIXO
 
     st.text_input("Chave Pix (Copia e Cola):", value="960f3f16-06ce-4e71-9b5f-6915b2a10b5a", disabled=False)
+
