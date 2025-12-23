@@ -1,51 +1,63 @@
 # λ Lemos Lambda: Deep Science Prospector
 
-> **Version:** 2.0 (Stable)  
+> **Version:** 2.0 (Stable - 2025 Edition)  
 > **Author:** Guilherme Lemos (Unifesp)  
+> **Field:** Pharmacology & Molecular Urology  
 > **License:** MIT  
 
 ## 🧬 Overview
-**Lemos Lambda** is a pharmacological prospecting tool designed to identify emerging molecular targets in biomedical literature. Integrating **Generative AI (Google Gemini)** with inferential statistics (**Fisher's Exact Test**), it goes beyond standard search engines.
+**Lemos Lambda** is a high-performance prospecting system designed to navigate the "infodemic" of biomedical literature. It identifies emerging molecular targets (receptors, ion channels, enzymes) by crossing **PubMed Big Data** with **Generative AI (Google Gemini 2.5/2.0)** and **Fisher's Exact Test** inferential statistics.
 
-It employs a heuristic **"Semantic Wall"** architecture to filter out 99% of structural noise (administrative metadata, clinical acronyms, grant codes) and isolate high-value biological signals, classifying them into strategic zones (e.g., "Blue Ocean", "Saturated").
+Unlike traditional keyword searches, Lemos Lambda quantifies the **Enrichment Ratio**, allowing researchers to distinguish between "Saturated Fields" and "Blue Ocean Opportunities" in pharmacology.
 
-## 🚀 Key Features
 
-* **Deep Mining:** Real-time extraction from PubMed (Title/Abstract) using Biopython.
-* **Generative Pharmacology (New in v2.0):** Uses LLMs (Gemini 2.5/1.5) to read abstracts and extract: *Target -> Drug -> Physiological Effect*.
-* **Sherlock Holmes Mode:** Capable of inferring pharmacological targets even from incomplete or truncated abstracts.
-* **Fisher's Enrichment Score:** A statistical metric that highlights "Opportunity vs. Saturation" with p-value validation.
-* **Architecture of Silence:** A multi-layer filtration pipeline to ensure clean data.
 
-## 🛠️ Filtration Pipeline (The Semantic Wall)
+## 🚀 Key Features (v2.0 Updates)
 
-1.  **Query Restriction:** Limits search to `[Title/Abstract]` to avoid affiliation/grant noise.
-2.  **Type Exclusion:** `NOT (Review OR Editorial OR Comment)`.
-3.  **Functional Context Filter:** Articles must contain mechanistic vocabulary (e.g., *signaling, pathway, activation*).
-4.  **Structural Regex:** Captures only alphanumeric patterns typical of gene symbols (e.g., *TRPV1, HO-1*).
-5.  **Semantic Blacklist:** Blocks clinical acronyms (OAB, UTI), statistics (ANOVA, CI), and geography (USA, NSW).
-6.  **Biological Whitelist:** Rescues short chemical entities (NO, H2S, CO) often missed by regex.
+* **RESTful Core:** Bypasses library dependencies by using direct HTTP/REST calls to Google’s servers, ensuring 100% uptime regardless of server environment.
+* **Pharmacological On-Demand Analysis:** Surgically analyze high-potential papers: *Target → Drug → Functional Effect*.
+* **Safety-Off Protocol:** Specifically tuned for Pharmacology. It bypasses standard AI medical filters to allow deep analysis of terms like "toxicity," "bladder dysfunction," and "cystitis."
+* **Fisher’s Enrichment Score ($P < 0.05$):** Validates the significance of a target's appearance within a specific context (e.g., Piezo2 in Bladder) vs. the global literature.
 
-## 📦 Installation
+## 🛠️ The Semantic Wall (Pipeline v2.0)
 
-1.  Clone this repository or extract the files.
-2.  Install dependencies:
+To ensure a clean signal, the system employs a 6-layer filtration architecture:
+
+1.  **Query Precision:** Metadata isolation in `[Title/Abstract]`.
+2.  **Mechanistic Bias:** Only articles with functional keywords (*pathway, signaling, activation*) are analyzed.
+3.  **Denoising Regex:** Dynamic capture of biological entities (e.g., *TRPV1, P2X7, FAAH*).
+4.  **Blacklist 2.0:** Blocks "False Positives" like ANOVA, CI, USA, and clinical acronyms (UTI, OAB).
+5.  **Dynamic Whitelist:** Rescues essential gasotransmitters (NO, $H_{2}S$, CO).
+
+
+
+## 📦 Installation & Setup
+
+1.  **Environment:**
     ```bash
-    pip install streamlit pandas plotly scipy biopython google-generativeai tenacity
+    pip install streamlit pandas plotly scipy biopython requests tenacity
     ```
-3.  Run the application:
+2.  **Execution:**
     ```bash
     streamlit run app_doutorado.py
     ```
 
-## 🔑 AI Configuration (Essential)
+## 🔑 AI Configuration (The "2025 Protocol")
 
-To enable the **Generative AI** features (preventing Error 404), follow these steps:
+If you encounter **Error 404** or **Incompatibility**, ensure your API Key is generated correctly:
 
-1.  Go to [Google AI Studio](https://aistudio.google.com/app/apikey).
-2.  Click **"Create API Key"**.
-3.  **IMPORTANT:** Select **"Create API key in NEW project"**.
-4.  Copy the key and paste it into the Lemos Lambda settings sidebar.
+1.  Access [Google AI Studio](https://aistudio.google.com/app/apikey).
+2.  Click **"Create API Key"** and select a **New Project**.
+3.  Copy the key and paste it into the Lemos Lambda settings. The system will automatically detect the best available model (e.g., **Gemini 2.5 Flash**).
+
+## 📊 Mathematical Logic
+The system calculates the **Enrichment Ratio ($ER$)** as:
+
+$$ER = \frac{\text{Observed specific hits}}{\text{Expected global hits}}$$
+
+Where $p$-values are derived from a contingency table (Fisher’s Exact Test) comparing target hits within the user-defined context vs. the total PubMed database ($N \approx 36,000,000$).
+
+
 
 ## 📄 Citation
 
