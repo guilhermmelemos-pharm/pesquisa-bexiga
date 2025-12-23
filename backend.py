@@ -9,16 +9,17 @@ import time
 # --- CONFIGURAÇÃO ---
 Entrez.email = "pesquisador_guest@unifesp.br"
 
-# --- IA: EXTRAÇÃO VIA DADOS CURTOS (MODO DEBUG ATIVADO) ---
+# --- IA: EXTRAÇÃO VIA DADOS CURTOS (COMPATIBILIDADE MÁXIMA) ---
 def analisar_abstract_com_ia(titulo, dados_curtos, api_key, lang='pt'):
     if not api_key:
-        return "⚠️ Erro: Nenhuma API Key inserida."
+        return "⚠️ IA não ativada"
     
     try:
         genai.configure(api_key=api_key)
         idioma = "Português" if lang == 'pt' else "Inglês"
         
-        # Travas de segurança desligadas
+        # 1. Configuração de Segurança (Safety Settings)
+        # Define BLOCK_NONE para evitar bloqueios em temas médicos
         safety_settings = [
             {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
             {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
@@ -28,13 +29,12 @@ def analisar_abstract_com_ia(titulo, dados_curtos, api_key, lang='pt'):
         
         prompt = f"""PhD em Farmacologia, analise:
 FONTE: {titulo}. {dados_curtos}
-FORMATO: Alvo: [Sigla] | Fármaco: [Nome] | Efeito: [Ação].
+FORMATO: Alvo: [Sigla] | Fármaco: [Nome] | Efeito: [Ação funcional].
 REGRAS: Máximo 12 palavras. Seja técnico. Idioma: {idioma}."""
 
-        # Tenta apenas o modelo mais básico e estável primeiro
-        modelos = ['gemini-1.5-flash'] 
-        
-        erros_coletados = []
+        # 2. LISTA DE MODELOS ATUALIZADA (A CORREÇÃO ESTÁ AQUI)
+        # Adicionamos 'gemini-pro' que funciona em bibliotecas antigas.
+        modelos = ['gemini-1.5-flash', 'gemini-pro', 'gemini-1.0-pro']
 
         for mod in modelos:
             try:
@@ -44,23 +44,18 @@ REGRAS: Máximo 12 palavras. Seja técnico. Idioma: {idioma}."""
                     generation_config={"temperature": 0.1},
                     safety_settings=safety_settings
                 )
-                
-                # Se a IA retornou algo, sucesso
                 if response and response.text:
                     return response.text.strip()
-                else:
-                    erros_coletados.append(f"{mod}: Resposta Vazia (Bloqueio?)")
-                    
             except Exception as e:
-                # AQUI ESTÁ A MUDANÇA: Guardamos o erro real
-                erros_coletados.append(f"{mod}: {str(e)}")
+                # Se der erro 404 (modelo não existe), ele pula silenciosamente pro próximo
+                # Se der erro 429 (cota), espera um pouco
+                if "429" in str(e): time.sleep(1)
                 continue
 
-        # Se chegou aqui, falhou. Retorna o erro real para você ler na tela.
-        return f"❌ DIAGNÓSTICO: {'; '.join(erros_coletados)}"
+        return f"💡 IA Ocupada/Incompatível. Título: {titulo[:30]}..."
     
-    except Exception as e_geral:
-        return f"❌ ERRO CRÍTICO: {str(e_geral)}"
+    except Exception as e:
+        return f"❌ Erro de Conexão: {str(e)[:20]}"
 
 # --- BUSCA PUBMED ---
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
