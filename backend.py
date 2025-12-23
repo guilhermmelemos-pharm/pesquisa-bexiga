@@ -56,7 +56,8 @@ def analisar_abstract_com_ia(titulo, abstract, api_key, lang='pt'):
                 erros_coletados.append(f"{nome_modelo}: {str(e)}")
                 continue 
         
-        return f"❌ Erro de Chave: Nenhuma versão do Gemini funcionou."
+# Isso vai imprimir o erro técnico na tela (Ex: 400 Bad Request, 403 Forbidden)
+    return f"❌ ERRO TÉCNICO: {str(erros_coletados)}"
         
     except Exception as e:
         return f"❌ Erro Crítico: {str(e)[:50]}..."
@@ -251,4 +252,5 @@ def buscar_todas_noticias(lang='pt'):
         {"titulo": "New bladder targets identified in 2024 review", "fonte": "Nature Urology", "img": "https://images.unsplash.com/photo-1576086213369-97a306d36557?w=400", "link": "#", "bandeira": "🔬"},
         {"titulo": "H2S donors show promise in detrusor relaxation", "fonte": "ScienceDirect", "img": "https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=400", "link": "#", "bandeira": "💊"},
         {"titulo": "Piezo1 channels: The future of mechanotransduction", "fonte": "Cell", "img": "https://images.unsplash.com/photo-1530026405186-ed1f139313f8?w=400", "link": "#", "bandeira": "⚡"}
+
     ]
