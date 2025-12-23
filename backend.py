@@ -9,7 +9,7 @@ import time
 # --- CONFIGURAÇÃO ---
 Entrez.email = "pesquisador_guest@unifesp.br"
 
-# --- IA: EXTRAÇÃO VIA DADOS CURTOS (ANTI-COOLDOWN) ---
+# --- IA: EXTRAÇÃO VIA DADOS CURTOS (ANTI-COOLDOWN + SAFETY OFF) ---
 def analisar_abstract_com_ia(titulo, dados_curtos, api_key, lang='pt'):
     if not api_key:
         return "⚠️ IA não ativada"
@@ -18,18 +18,32 @@ def analisar_abstract_com_ia(titulo, dados_curtos, api_key, lang='pt'):
         genai.configure(api_key=api_key)
         idioma = "Português" if lang == 'pt' else "Inglês"
         
+        # 1. Configuração de Segurança (Safety Settings)
+        # Define BLOCK_NONE para evitar que o Google bloqueie termos farmacológicos/médicos
+        safety_settings = [
+            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+        ]
+        
         # Prompt otimizado para ler Keywords ou Início do Abstract
         prompt = f"""Analise como PhD em Farmacologia:
 FONTE: {titulo}. {dados_curtos}
 FORMATO OBRIGATÓRIO: Alvo: [Sigla] | Fármaco: [Nome] | Efeito: [Ação funcional].
 REGRAS: Máximo 12 palavras. Seja técnico e direto. Idioma: {idioma}."""
 
-        modelos = ['gemini-2.0-flash-exp', 'gemini-1.5-flash-8b', 'gemini-1.5-flash']
+        # 2. Prioridade de Modelos Alterada: Flash 1.5 primeiro (mais estável)
+        modelos = ['gemini-1.5-flash', 'gemini-1.5-flash-8b', 'gemini-2.0-flash-exp']
 
         for mod in modelos:
             try:
                 model = genai.GenerativeModel(mod)
-                response = model.generate_content(prompt, generation_config={"temperature": 0.1})
+                response = model.generate_content(
+                    prompt, 
+                    generation_config={"temperature": 0.1},
+                    safety_settings=safety_settings # Aplica a liberação de conteúdo
+                )
                 if response and response.text:
                     return response.text.strip()
             except:
