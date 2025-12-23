@@ -19,11 +19,11 @@ def analisar_abstract_com_ia(titulo, abstract, api_key, lang='pt'):
         idioma = "Português" if lang == 'pt' else "Inglês"
         abs_input = abstract[:3000] if (abstract and len(abstract) > 30) else "Resumo incompleto."
 
-        prompt = f"""Como PhD em Farmacologia, analise o seguinte paper de forma individualizada:
-TÍTULO: {titulo} | RESUMO: {abs_input}
-TAREFA: Identifique o Alvo Molecular e o Fármaco/Substância. Descreva o efeito funcional.
-FORMATO: Alvo → Fármaco → Efeito (Contextualizado ao Título).
-REGRAS: Máx 25 palavras. Resposta técnica e única. Idioma: {idioma}."""
+        prompt = f"""Analise como PhD em Farmacologia:
+        TEXTO: {titulo}. {abs_input}
+        OBJETIVO: Resumo executivo ultra-curto.
+        FORMATO OBRIGATÓRIO: Alvo: [Sigla] | Fármaco: [Nome] | Efeito: [Ação funcional].
+        REGRAS: Máximo 15 palavras. Proibido introduções. Idioma: {idioma}."""
 
         # Inverti a ordem: Começar pelo modelo 2.0 que costuma ter cota separada e mais livre
         modelos = ['gemini-2.0-flash-exp', 'gemini-1.5-flash-8b', 'gemini-1.5-flash']
@@ -159,4 +159,5 @@ def buscar_todas_noticias(lang='pt'):
                              "img":"https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=400"})
         return news
     except: return []
+
 
