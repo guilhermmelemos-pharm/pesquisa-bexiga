@@ -267,8 +267,8 @@ if st.session_state.pagina == 'resultados':
                     st.session_state.artigos_detalhe.append({
                         "Title": art['Title'], "Resumo_IA": resumo_ia, "Link": art['Link']
                     })
-                    # PAUSA DE SEGURANÇA: 3 segundos para o Google não te bloquear
-                    time.sleep(3) 
+                    # PAUSA DE SEGURANÇA: 6 segundos para o Google não te bloquear
+                    time.sleep(6) 
         
         # Exibição dos cards com os resumos gerados
         if st.session_state.artigos_detalhe:
@@ -365,6 +365,7 @@ with cf2:
     st.caption(t["apoio_titulo"])
     st.caption(t["apoio_desc"])
     st.text_input("Chave Pix (Copia e Cola):", value="960f3f16-06ce-4e71-9b5f-6915b2a10b5a", disabled=False)
+
 
 
 
