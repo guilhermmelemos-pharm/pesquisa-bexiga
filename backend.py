@@ -1,6 +1,6 @@
 import streamlit as st
 from Bio import Entrez
-import requests # <--- MUDANÇA: Usaremos requisições web diretas
+import requests
 import json
 from tenacity import retry, stop_after_attempt, wait_exponential
 import re
@@ -10,13 +10,10 @@ import time
 # --- CONFIGURAÇÃO ---
 Entrez.email = "pesquisador_guest@unifesp.br"
 
-# --- IA: CONEXÃO DIRETA VIA API REST (INFALÍVEL) ---
+# --- IA: CONEXÃO DIRETA COM FALLBACK DE MODELOS ---
 def analisar_abstract_com_ia(titulo, dados_curtos, api_key, lang='pt'):
     if not api_key:
         return "⚠️ IA não ativada"
-    
-    # URL Direta do Google (Bypassa a biblioteca desatualizada)
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
     
     idioma = "Português" if lang == 'pt' else "Inglês"
     
@@ -25,44 +22,68 @@ FONTE: {titulo}. {dados_curtos}
 FORMATO: Alvo: [Sigla] | Fármaco: [Nome] | Efeito: [Ação funcional].
 REGRAS: Máximo 12 palavras. Seja técnico. Idioma: {idioma}."""
 
-    # Payload JSON manual (Garante que as configs sejam enviadas)
+    # Configuração do JSON para enviar ao Google
     headers = {'Content-Type': 'application/json'}
     data = {
-        "contents": [{
-            "parts": [{"text": prompt_text}]
-        }],
-        "safetySettings": [
+        "contents": [{"parts": [{"text": prompt_text}]}],
+        "safetySettings": [ # Desliga filtros de segurança
             {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
             {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
             {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
             {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
         ],
-        "generationConfig": {
-            "temperature": 0.1,
-            "maxOutputTokens": 100
-        }
+        "generationConfig": {"temperature": 0.1}
     }
 
-    try:
-        # Envia a requisição direto para o servidor do Google
-        response = requests.post(url, headers=headers, data=json.dumps(data), timeout=10)
-        
-        if response.status_code == 200:
-            resultado = response.json()
-            try:
-                texto = resultado['candidates'][0]['content']['parts'][0]['text']
-                return texto.strip()
-            except:
-                return "⚠️ IA respondeu vazio (Filtro rígido ou erro interno)."
-        elif response.status_code == 429:
-            return "💡 IA Ocupada (Muitas requisições). Tente em 1 min."
-        elif response.status_code == 400:
-            return "❌ Chave API Inválida ou Expirada."
-        else:
-            return f"❌ Erro Google ({response.status_code}): {response.text[:50]}"
+    # LISTA DE MODELOS PARA TENTAR (Do mais novo para o mais antigo)
+    # Se um der 404, ele tenta o próximo.
+    modelos_para_tentar = [
+        "gemini-1.5-flash",
+        "gemini-1.5-flash-latest",
+        "gemini-pro",     # Esse é o mais compatível de todos
+        "gemini-1.0-pro"
+    ]
 
-    except Exception as e:
-        return f"❌ Erro Conexão: {str(e)[:30]}"
+    erros_log = []
+
+    for modelo in modelos_para_tentar:
+        try:
+            # Constrói a URL para o modelo específico
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={api_key}"
+            
+            # Dispara a requisição
+            response = requests.post(url, headers=headers, data=json.dumps(data), timeout=10)
+            
+            if response.status_code == 200:
+                # SUCESSO!
+                resultado = response.json()
+                try:
+                    texto = resultado['candidates'][0]['content']['parts'][0]['text']
+                    return texto.strip()
+                except:
+                    return "⚠️ IA respondeu vazio (Filtro rígido)."
+            
+            elif response.status_code == 404:
+                # Modelo não encontrado, tenta o próximo da lista silenciosamente
+                erros_log.append(f"{modelo}: 404")
+                continue
+                
+            elif response.status_code == 429:
+                return "💡 IA Ocupada (Muitas requisições). Espere 1 min."
+            
+            elif response.status_code == 400:
+                return "❌ Chave API Inválida."
+                
+            else:
+                erros_log.append(f"{modelo}: {response.status_code}")
+                continue
+
+        except Exception as e:
+            erros_log.append(f"{modelo}: Erro Conexão")
+            continue
+
+    # Se saiu do loop, nenhum funcionou
+    return f"❌ Falha em todos os modelos. ({'; '.join(erros_log)})"
 
 # --- BUSCA PUBMED ---
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
