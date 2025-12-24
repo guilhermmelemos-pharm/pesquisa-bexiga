@@ -35,33 +35,36 @@ MODELOS_ATIVOS = [
     "gemini-flash-latest"
 ]
 
-# --- 2. FAXINEIRO IA (MODO "BANCADA OU NADA") ---
+# --- 2. FAXINEIRO IA (SEU PROMPT CIENTÍFICO) ---
 def _faxina_ia(lista_suja):
     api_key = st.session_state.get('api_key_usuario', '').strip()
     if not api_key: return lista_suja[:30] 
 
     lista_str = ", ".join(lista_suja)
     
-    # Prompt agressivo contra termos clínicos e abstratos
+    # SEU PROMPT TRANSFORMADO EM INSTRUÇÃO TÉCNICA
     prompt = f"""
-    ACT AS: Senior Pharmacologist & Molecular Biologist.
-    CONTEXT: We are filtering terms from PubMed titles to find specific molecular targets.
+    ROLE: Senior Scientist in Pharmacology & Physiopathology (Organ Bath & Molecular Biology focus).
+    
     INPUT LIST: {lista_str}
     
-    TASK: STRICTLY Filter this list. Keep ONLY concrete molecular entities.
+    TASK: You received these files from PubMed. You need to analyze them for organ bath tests and molecular biology.
     
-    ✅ KEEP (Physical Entities you can pipet, sequence, or bind to):
-    - Specific Receptors/Channels (TRPV1, P2X3, Beta-3-AR)
-    - Enzymes/Kinases (mTOR, ROCK, COX-2)
-    - Signaling Molecules (cAMP, ATP, NO, PGE2)
-    - Genes/RNAs (miRNA-132, GATA3)
-    - Specific Drugs/Compounds (Mirabegron, Trehalose, Resveratrol, TMAO)
+    STRICT FILTERING RULES:
+    1. IGNORE medical/daily terms. Focus ONLY on Pharmacology and Physiopathology.
+    2. FOCUS HEAVILY on Specific Pharmacological Targets (Receptors, Channels, Enzymes) and Specific Drugs.
+    3. REMOVE standard clinical treatments (Botox/BCG) and general biology (Microbiome, Stem Cells) that are not direct targets for contractility/signaling.
     
-    ❌ DELETE (Concepts, Anatomy, Clinical words, Academic Filler):
-    - NO ANATOMY: Bladder, Detrusor, Urothelium, Nerve, Pelvic, Tract, Lower, Urinary.
-    - NO CLINICAL TERMS: Incontinence, Overactive, Syndrome, Dysfunction, Neurogenic, Benign, Chronic.
-    - NO PROCEDURES: Treatment, Management, Diagnosis, Imaging, Botox, Neuromodulation, Surgical.
-    - NO ACADEMIC FLUFF: Role, Current, Systemic, What, Case, Clinical, Efficacy, Potential, Novel.
+    ✅ KEEP EXAMPLES:
+    - Targets: TRPV1, P2X3, Beta-3-AR, ROCK, mTOR, PI3K, PDE5.
+    - Molecules: ATP, NO, PGE2, Acetylcholine (if relevant mechanism).
+    - Drugs: Mirabegron, Solifenacin, Trehalose, Resveratrol, Tadalafil.
+    
+    ❌ DELETE EXAMPLES:
+    - Bacteriology/BCG: Bacillus, Calmette, Guerin, Microbiome, Microbiota, UPEC.
+    - General Biology: Stem, Cells, Organoids, Toxin, Checkpoint, Immune.
+    - Drug Classes/General: Anticholinergics, Adrenoceptor, Antimuscarinics.
+    - Clinical: Onabotulinum, Vibegron (if too common), Treatment, Placebo.
     
     OUTPUT: Return strictly a Python list of strings.
     """
@@ -73,6 +76,7 @@ def _faxina_ia(lista_suja):
         "generationConfig": {"temperature": 0.0}
     }
     
+    # URL BLINDADA
     base_url = "https://generativelanguage.googleapis.com/v1beta/models"
 
     for m in MODELOS_ATIVOS:
@@ -165,14 +169,14 @@ def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
         return artigos
     except: return []
 
-# --- 5. MINERAÇÃO (AGRESSIVA + FILTRO NUCLEAR) ---
+# --- 5. MINERAÇÃO (CORE) ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
     if email: Entrez.email = email
     termo_upper = termo_base.upper().strip()
     query_string = MAPA_SINONIMOS.get(termo_upper, f"{termo_base}[Title/Abstract]")
     
-    # Busca 2000 abstracts para garantir volume
+    # 2000 Abstracts para garantir que Trehalose e novos alvos apareçam
     final_query = f"({query_string}) AND (2018:2030[Date - Publication]) AND (NOT Review[pt])"
     
     try:
@@ -184,36 +188,36 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
         full_data = handle.read(); handle.close()
         artigos_raw = full_data.split("\n\nPMID-")
 
-        # --- BLACKLIST NUCLEAR (A LISTA DA MORTE) ---
-        # Aqui morrem todos os termos genéricos, clínicos e acadêmicos.
+        # --- BLACKLIST DE "LIXO CIENTÍFICO" ---
         blacklist_exterminio = {
-            # Anatomia e Tecidos (O que não é alvo molecular)
-            "DETRUSOR", "UROTHELIUM", "NERVE", "IMMUNE", "AUTONOMIC", "SENSORY", "MUCOSA", "SMOOTH", "MUSCLE",
-            "GANGLION", "EPITHELIUM", "TISSUE", "CELL", "VESICAL", "URETHRA", "URINARY", "TRACT", "PELVIC",
-            "SACRAL", "INTERSTITIAL", "FEMALE", "MALE", "HUMAN", "RAT", "MOUSE", "BLADDER", "BODY", "LOWER",
-            "UROTHELIAL", "URETHRAL", "SYSTEMATIC", "SYSTEMIC",
+            # O que você pediu pra tirar (Ruído Biológico/Clinico)
+            "MICROBIOME", "MICROBIOTA", "BACILLUS", "CALMETTE", "GUERIN", "BCG", "UPEC",
+            "STEM", "CELLS", "CELL", "ORGANOIDS", "TOXIN", "BOTULINUM", "ONABOTULINUM", "BTX",
+            "CHECKPOINT", "IMMUNE", "ANTIBODIES", "NEUTRALIZING", "VACCINE",
+            "ANTICHOLINERGIC", "ANTICHOLINERGICS", "ANTIMUSCARINIC", "ANTIMUSCARINICS", "ADRENOCEPTOR",
+            "PLACEBO", "CLINICAL", "TRIAL", "PATIENT", "HUMAN", "MALE", "FEMALE",
             
-            # Palavras Acadêmicas/Genéricas (O "Lixo de Título")
-            "CURRENT", "ROLE", "WHAT", "CASE", "SYSTEMATIC", "CLINICAL", "EFFICACY", "SYMPTOMS", "MOLECULAR",
+            # Anatomia Genérica
+            "DETRUSOR", "UROTHELIUM", "NERVE", "AUTONOMIC", "SENSORY", "MUCOSA", "SMOOTH", "MUSCLE",
+            "GANGLION", "EPITHELIUM", "TISSUE", "VESICAL", "URETHRA", "URINARY", "TRACT", "PELVIC",
+            "SACRAL", "INTERSTITIAL", "BLADDER", "BODY", "LOWER", "UROTHELIAL", "URETHRAL",
+            
+            # Palavras Acadêmicas (Lixo de Título)
+            "CURRENT", "ROLE", "WHAT", "CASE", "SYSTEMATIC", "SYSTEMIC", "EFFICACY", "SYMPTOMS", "MOLECULAR",
             "RADICAL", "NOVEL", "NEW", "POTENTIAL", "EFFECT", "EFFECTS", "STUDY", "ANALYSIS", "REVIEW", "META",
             "DATA", "RESULTS", "CONCLUSION", "BACKGROUND", "METHODS", "OBJECTIVE", "AIM", "PURPOSE", "HYPOTHESIS",
             "INVESTIGATION", "EVALUATION", "ASSESSMENT", "COMPARISON", "DURING", "AFTER", "BEFORE", "WITHIN",
             "HIGH", "LOW", "LEVEL", "INCREASED", "DECREASED", "EXPRESSION", "PATHWAY", "MECHANISM", "ACTIVITY", "ACTION", "FUNCTION",
             
-            # Termos Clínicos, Diagnósticos e Procedimentos
+            # Clínico
             "TREATMENT", "MANAGEMENT", "DIAGNOSIS", "IMAGING", "DYSFUNCTION", "SURGICAL", "INCONTINENCE",
             "NEUROMODULATION", "TRANSURETHRAL", "CARCINOMA", "UROLOGY", "THERAPY", "CHRONIC", "BENIGN", "SYNDROME",
-            "OVERACTIVE", "NEUROGENIC", "BOTULINUM", "CYSTITIS", "LUTS", "OAB", "BPH", "UTI", "IC", "BPS",
-            "BCG", "TURBT", "TURP", "SNM", "PTNS", "BOTOX", "INJECTION", "STENT", "CATHETER", "MRI", "CT", "PET",
+            "OVERACTIVE", "NEUROGENIC", "CYSTITIS", "LUTS", "OAB", "BPH", "UTI", "IC", "BPS",
+            "TURBT", "TURP", "SNM", "PTNS", "INJECTION", "STENT", "CATHETER", "MRI", "CT", "PET",
             "VIRADS", "PIRADS", "CEUS", "ULTRASOUND", "EMG", "URODYNAMICS", "ACR", "AUC", "ROC", "CI", "OR",
             
-            # Classes Farmacológicas Genéricas (Não são alvos específicos)
-            "ANTICHOLINERGIC", "ANTIMUSCARINIC", "ANTIMUSCARINICS", "AGONIST", "ANTAGONIST", "INHIBITOR", "BLOCKER",
-            "AGENT", "DRUG", "COMPOUND", "MEDICATION", "PLACEBO",
-            
-            # Genéricos Biológicos "Feijão com Arroz"
-            "ATP", "DNA", "RNA", "NO", "ROS", "CO2", "H2O", "PGE", "VEGF", "CALCIUM", "PROTEIN", "GENE",
-            "THE", "AND", "WITH", "FOR", "BUT", "NOT", "FROM", "USED", "USING"
+            # "Feijão com Arroz" (Moléculas muito comuns que escondem as novidades)
+            "DNA", "RNA", "ROS", "CO2", "H2O", "VEGF", "CALCIUM", "PROTEIN", "GENE"
         }
 
         candidatos_por_artigo = []
@@ -225,9 +229,7 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
             
             if not texto_focado: continue
 
-            # REGEX HÍBRIDO: 
-            # 1. Siglas (TRPV1, P2X3)
-            # 2. Nomes Químicos/Próprios (Trehalose, Mirabegron - Capitalized)
+            # REGEX HÍBRIDO (Siglas + Químicos com Letra Maiúscula)
             encontrados = re.findall(r'\b(?:[A-Z]{2,}[A-Z0-9-]*|[A-Z][a-z]{3,}[a-z0-9-]*)\b', texto_focado)
             
             for t in encontrados:
@@ -237,7 +239,7 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
                 # Regra 1: Tamanho mínimo
                 if len(t_clean) < 3: continue 
                 
-                # Regra 2: Blacklist (A mais rigorosa até agora)
+                # Regra 2: Blacklist (A mais rigorosa)
                 if t_upper in blacklist_exterminio: continue
                 if t_upper == termo_upper.replace(" ", ""): continue
                 
@@ -249,8 +251,8 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
         contagem = Counter(candidatos_por_artigo)
         total_docs = max(1, len(artigos_raw))
         
-        # Pega Top 200 para a IA refinar
-        top_candidatos = [termo for termo,freq in contagem.most_common(200) if (freq/total_docs)<0.90]
+        # Pega Top 150 para a IA refinar
+        top_candidatos = [termo for termo,freq in contagem.most_common(150) if (freq/total_docs)<0.90]
         
         # Filtro de Segurança
         lista_para_ia = [t for t in top_candidatos if t.upper() not in blacklist_exterminio]
