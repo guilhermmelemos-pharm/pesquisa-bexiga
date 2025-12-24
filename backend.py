@@ -10,82 +10,87 @@ import ast
 # --- CONFIGURAÇÃO ---
 Entrez.email = "pesquisador_guest@unifesp.br"
 
-# --- 1. SEUS MODELOS (PAID TIER) ---
 MODELOS_ATIVOS = [
     "gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-exp", 
     "gemini-flash-latest", "gemini-2.5-flash-lite"
 ]
 
-# --- 3. A DOUTORA EM FARMACOLOGIA (CURADORIA DE ELITE) ---
-def _faxina_ia(lista_suja):
+# --- A DOUTORA INVESTIGADORA (PENSAMENTO PRÉVIO E CRUZAMENTO) ---
+def _doutora_investigadora(termo_base, lista_pubmed=None, fase="brainstorming"):
     api_key = st.session_state.get('api_key_usuario', '')
-    if not api_key: return lista_suja[:40] 
+    if not api_key: return []
 
-    lista_str = ", ".join(lista_suja)
-    prompt = f"""
-    Amiga, tu é uma doutora em farmacologia e fisiologia experiente. 
-    Lembre-se: FOCO EM BANCADA E PROMISSOR.
-    
-    REGRAS:
-    1. DELETE: Animais, termos médicos (Diabetes, Incontinence, BPH), e lixo metodológico (Cystometrography, Experimental).
-    2. MANTENHA: Alvos (TRPV4, NLRP3, PIEZO), Fármacos (GSK1016790A, Ouabain) e Isoformas/miRNAs.
-    3. Tu não é médica, vacilão.
-    
-    LISTA: {lista_str}
-    OUTPUT: Retorne APENAS a lista Python limpa.
-    """
-    
+    if fase == "brainstorming":
+        prompt = f"""
+        Tu é uma doutora em farmacologia molecular. 
+        MISSÃO: Gerar uma lista de 50 alvos, fármacos, micro-RNAs e sinalizadores celulares que são a "fronteira" da ciência para {termo_base}.
+        FOCO: Bancada, banho de órgãos e biologia molecular. 
+        EXEMPLOS DE PADRÃO: TRPV4, GSK1016790A, SPHK1, NLRP3, miR-132, SNARE, PIEZO1.
+        OUTPUT: Retorne APENAS uma lista Python de strings.
+        """
+    else:
+        lista_str = ", ".join(lista_pubmed)
+        prompt = f"""
+        Tu é a doutora investigadora. 
+        CRUZAMENTO DE DADOS:
+        1. Meus alvos previstos (brainstorming).
+        2. Evidência real do PubMed: {lista_str}.
+        
+        MISSÃO: Criar a lista final (60-100 itens). 
+        Priorize siglas técnicas e fármacos específicos. 
+        Delete lixo clínico (Diabetes, Incontinence, BPH), lixo acadêmico (Role, Effect, Study) e animais (Toad, Rabbit).
+        OUTPUT: Retorne APENAS a lista Python final.
+        """
+
     headers = {'Content-Type': 'application/json'}
-    data = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"temperature": 0.1}}
+    data = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"temperature": 0.5 if fase=="brainstorming" else 0.2}}
     
     for m in MODELOS_ATIVOS:
         try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={api_key}"
-            resp = requests.post(url, headers=headers, data=json.dumps(data), timeout=12)
+            resp = requests.post(url, headers=headers, data=json.dumps(data), timeout=20)
             if resp.status_code == 200:
                 texto = resp.json()['candidates'][0]['content']['parts'][0]['text']
-                texto = texto.replace("```python", "").replace("```", "").strip()
-                return ast.literal_eval(texto)
+                return ast.literal_eval(texto.replace("```python", "").replace("```", "").strip())
         except: continue
-    return lista_suja[:35]
+    return []
 
-# --- 6. MINERAÇÃO MASSIVA COM PRÉ-FILTRO RÍGIDO ---
+# --- MINERAÇÃO MASSIVA COM FLUXO TRIPLO ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
     if email: Entrez.email = email
-    query = f"({termo_base} AND (Physiology OR Pharmacology OR Molecular)) AND (2018:2026[Date])"
+    
+    # PASSO 1: IA PENSA PRIMEIRO (Brainstorming)
+    alvos_previstos = []
+    if usar_ia:
+        alvos_previstos = _doutora_investigadora(termo_base, fase="brainstorming")
+    
+    # PASSO 2: BUSCA REAL NO PUBMED
+    query = f"({termo_base} AND (Pharmacology OR Molecular)) AND (2018:2026[Date])"
     try:
-        handle = Entrez.esearch(db="pubmed", term=query, retmax=1500, sort="relevance")
+        handle = Entrez.esearch(db="pubmed", term=query, retmax=1500)
         record = Entrez.read(handle); handle.close()
         handle = Entrez.efetch(db="pubmed", id=record["IdList"], rettype="medline", retmode="text")
         full_data = handle.read(); handle.close()
         
-        # FILTRO DE EXTERMÍNIO IMEDIATO (Para não poluir os resultados se a IA falhar)
-        blacklist_hard = {
-            "THE", "AND", "ROLE", "EFFECT", "STUDIES", "STUDY", "RESULTS", "DURING", "AFTER",
-            "PRELIMINARY", "EXPERIMENTAL", "BIOLOGICAL", "TECHNIQUE", "MEASUREMENT", "RESPONSES",
-            "RESPONSE", "PROPERTIES", "MEANS", "DIABETES", "INCONTINENCE", "REFLUX", "BPH", 
-            "CYSTOMETROGRAPHY", "EMG", "FEMALE", "SLEEP", "HEALING", "SITE", "CLOSURE"
-        }
+        blacklist_hard = {"THE", "AND", "WITH", "ROLE", "EFFECT", "STUDY", "RESULTS", "DURING", "TOAD", "RABBIT"}
         
-        candidatos = []
+        candidatos_pubmed = []
         for artigo in full_data.split("\n\nPMID-"):
             texto = ""
             for line in artigo.split("\n"):
                 if line.startswith("TI  - ") or line.startswith("KW  - "): texto += line[6:].strip() + " "
-            
             encontrados = re.findall(r'\b(?:[A-Z0-9-]{2,}|[a-z]{1,2}-[A-Z0-9]{2,}|[a-z]{1,2}[A-Z][a-zA-Z0-9-]*)\b', texto)
-            for t in encontrados:
-                t_clean = t.strip("-").upper()
-                # Só passa se não estiver na blacklist e tiver relevância molecular
-                if len(t_clean) >= 3 and t_clean not in blacklist_hard:
-                    candidatos.append(t_clean)
+            candidatos_pubmed.extend([t.upper() for t in encontrados if t.upper() not in blacklist_hard])
 
-        contagem = Counter(candidatos)
-        top = [termo for termo,freq in contagem.most_common(150)]
+        contagem = Counter(candidatos_pubmed)
+        top_pubmed = [termo for termo, freq in contagem.most_common(200)]
         
-        if usar_ia and st.session_state.get('api_key_usuario'):
-            return _faxina_ia(top)
+        # PASSO 3: CRUZAMENTO FINAL
+        if usar_ia:
+            # Mistura o brainstorming com os 200 do PubMed para a IA validar
+            lista_para_cruzamento = list(set(alvos_previstos + top_pubmed))
+            return _doutora_investigadora(termo_base, lista_pubmed=lista_para_cruzamento, fase="cruzamento")
         else:
-            return top[:30] # Se a IA não estiver ativa, entrega o top 30 já sem o lixo da blacklist
+            return top_pubmed[:40]
     except: return []
