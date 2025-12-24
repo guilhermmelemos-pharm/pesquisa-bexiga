@@ -17,27 +17,33 @@ MODELOS_ATIVOS = [
     "gemini-1.5-flash"
 ]
 
-# LISTA NEGRA: Anatomia e Termos Clínicos (O que estava sujando sua lista)
+# LISTA NEGRA ATUALIZADA: Bloqueia o "Lixo" específico que você encontrou
 BLACKLIST_MONSTRO = {
-    # Anatomia e Doença (O que você viu e não gostou)
-    "BLADDER", "CANCER", "URINARY", "UROTHELIAL", "MUSCLE", "OVERACTIVE", "TUMOR",
-    "CARCINOMA", "PELVIC", "URETHRAL", "UROLOGIC", "NEUROGENIC", "DIABETES",
-    "SJOGREN", "INTRAVESICAL", "VOID", "VOIDING", "DETRUSOR", "KIDNEY", "RENAL",
+    # 1. Termos de Imagem e Física (Lixo Técnico)
+    "MRI", "CT", "PET", "RBE", "IMPT", "RBE", "VIII",
     
-    # Metodologia e Tipos de Estudo
-    "NOVEL", "DIAGNOSTIC", "ARTIFICIAL", "MANAGEMENT", "LAPAROSCOPIC", "PROGNOSTIC",
-    "FACTORS", "NEOADJUVANT", "RANDOMIZED", "TYPE", "COHORT", "SURGICAL", 
-    "ASSOCIATIONS", "SYMPTOMS", "IMPLICATIONS", "ONCOLOGY", "TRIAL", "RETROSPECTIVE",
-    "EVALUATION", "REVIEW", "STUDY", "ANALYSIS", "DATA", "RESULTS", "CONCLUSION",
+    # 2. Termos Metodológicos Genéricos (Lixo de Procedimento)
+    "ASSOCIATION", "EVALUATION", "UNCOMMON", "DISEASE", "BACKGROUND", 
+    "OBJECTIVE", "METHODS", "RESULTS", "CONCLUSION", "ABSTRACT", 
+    "INTRODUCTION", "STUDY", "ANALYSIS", "DATA", "STATISTICS", 
+    "SIGNIFICANT", "DIFFERENCE", "BETWEEN", "AMONG", "WITHIN", 
+    "DURING", "PREVALENCE", "INCIDENCE", "RISK", "FACTOR", "ROLE", 
+    "POTENTIAL", "NOVEL", "DIAGNOSTIC", "ARTIFICIAL", "MANAGEMENT",
+    "PROGNOSTIC", "FACTORS", "NEUROMODULATION", "IMPLICATIONS",
     
-    # Grupos e Demografia
-    "CHILDREN", "PATIENT", "PATIENTS", "WOMEN", "MEN", "ADULT", "NHANES",
+    # 3. Contexto Clínico/Anatomia (Lixo de Contexto)
+    "INTRAUTERINE", "GERMLINE", "BLADDER", "CANCER", "URINARY", 
+    "UROTHELIAL", "MUSCLE", "OVERACTIVE", "TUMOR", "CARCINOMA", 
+    "PELVIC", "URETHRAL", "UROLOGIC", "NEUROGENIC", "DIABETES", 
+    "SJOGREN", "INTRAVESICAL", "VOID", "VOIDING", "DETRUSOR", 
+    "PATIENT", "PATIENTS", "CHILDREN", "ADULT", "NHANES",
     
-    # Nomes Próprios/Históricos (Que não são alvos moleculares)
-    "GUERIN", "CALMETTE", "BACILLUS", "BCG", 
+    # 4. Biologia Genérica e Imunologia Ampla (Lixo Biológico)
+    "DNA", "RNA", "ATP", "GENE", "PROTEIN", "CELL", "EXPRESSION",
+    "BCG", "GUERIN", "CALMETTE", "BACILLUS", "HLA", "CAR",
     
-    # Biologia Genérica
-    "DNA", "RNA", "ATP", "GENE", "PROTEIN", "CELL", "EXPRESSION"
+    # 5. Stop Words (Inglês comum)
+    "THE", "AND", "FOR", "NOT", "BUT", "VIA", "ALL", "WITH"
 }
 
 MAPA_SINONIMOS_BASE = {
@@ -97,27 +103,28 @@ def simple_gemini_text(prompt: str, api_key: str) -> str:
 # ================= MINERAÇÃO ESTRUTURADA =================
 
 def ner_extraction_batch(titulos_keywords: List[str], api_key: str) -> List[str]:
-    """Prompt específico para separar o joio do trigo."""
     if not titulos_keywords: return []
     
-    # Enviamos lotes pequenos de títulos
     texto_input = "\n".join([f"- {t}" for t in titulos_keywords[:60]])
     
+    # Prompt reforçado para ignorar explicitamente o que você não quer
     prompt = f"""
-    You are a Pharmacologist. Analyze these paper titles.
+    Role: Molecular Pharmacologist.
+    Task: Extract strictly MOLECULAR TARGETS (Receptors, Enzymes, Genes) and DRUGS.
     
-    TASK: Extract strictly MOLECULAR TARGETS (Receptors, Enzymes, Channels, Genes) and DRUGS/COMPOUNDS.
+    STRICT EXCLUSIONS (Do NOT extract):
+    - Methods: "Association", "Evaluation", "MRI", "Analysis".
+    - Context: "Disease", "Intrauterine", "Germline", "Neuromodulation".
+    - General: "Patient", "Bladder", "Cancer".
     
-    STRICT RULES:
-    1. IGNORE Anatomy (Bladder, Muscle, Urothelial).
-    2. IGNORE Disease types (Cancer, Carcinoma, Tumor).
-    3. IGNORE Study types (Cohort, Trial, Analysis).
-    4. EXTRACT ONLY Specific Targets (e.g., "HSP90", "P2X3", "mTOR") and Drugs (e.g., "Cisplatin", "Mirabegron").
+    EXTRACT ONLY:
+    - Specific Targets: "HSP90", "P2X3", "SGLT2", "LRP5".
+    - Drugs/Compounds: "Alantolactone", "Mirabegron", "Cisplatin".
     
     INPUT:
     {texto_input}
     
-    OUTPUT: JSON list of strings (Target/Drug names only).
+    OUTPUT: JSON list of strings.
     """
     return call_gemini_json(prompt, api_key)
 
@@ -152,12 +159,11 @@ def minerar_pubmed(termo_base: str, email: str, usar_ia: bool = True) -> Dict:
         
         entidades = []
         
-        # 1. IA (Primeira linha de defesa)
+        # 1. IA (Principal)
         if api_key and usar_ia:
             entidades = ner_extraction_batch(raw_texts, api_key)
         
-        # 2. Regex Seguro (Só entra se a IA falhar ou para complementar)
-        # REMOVIDO: O regex genérico que pegava "Bladder" e "Cancer"
+        # 2. Regex Fallback (Se IA falhar ou para complementar)
         if True:
             texto_full = " ".join(raw_texts)
             
@@ -165,13 +171,13 @@ def minerar_pubmed(termo_base: str, email: str, usar_ia: bool = True) -> Dict:
             regex_codigos = r'\b[A-Z]{2,}[0-9]+[A-Z0-9-]*\b'
             candidatos_codigos = re.findall(regex_codigos, texto_full)
             
-            # B: Fármacos via Sufixos Químicos (Segurança total)
-            # Pega palavras PascalCase que terminam com sufixos de drogas
+            # B: Fármacos (PascalCase + Sufixos Químicos)
+            # Isso evita que "Association" entre, pois não tem sufixo de droga
             sufixos = r'(?:ine|in|mab|ib|ol|on|one|il|ide|ate|ase)\b'
             regex_farmacos = r'\b[A-Z][a-z]{3,}' + sufixos
             candidatos_farmacos = re.findall(regex_farmacos, texto_full)
             
-            # C: Acrônimos de Vias (mTOR, VEGF) - 3+ Letras Maiúsculas
+            # C: Acrônimos (3+ Letras Maiúsculas)
             regex_acronimos = r'\b[A-Z]{3,}\b'
             candidatos_acronimos = re.findall(regex_acronimos, texto_full)
 
@@ -179,29 +185,25 @@ def minerar_pubmed(termo_base: str, email: str, usar_ia: bool = True) -> Dict:
             entidades.extend(candidatos_farmacos)
             entidades.extend(candidatos_acronimos)
 
-        # 3. Filtragem Final
+        # 3. Filtragem Final (Onde eliminamos o "Lixo")
         entidades_limpas = []
         for e in entidades:
             e = e.strip(".,-;:()[] ")
             if len(e) < 3: continue 
             if e.isdigit(): continue
             
-            # Blacklist reforçada
+            # Verifica Blacklist
             if e.upper() in BLACKLIST_MONSTRO: continue
-            
-            # Filtro extra para preposições
-            if e.upper() in ["THE", "AND", "FOR", "NOT", "BUT", "VIA", "ALL"]: continue
             
             entidades_limpas.append(e)
 
         # 4. Contagem
         counts = Counter(entidades_limpas)
         
-        # Exigimos pelo menos 2 ocorrências para limpar ruído (exceto se a lista for muito curta)
+        # Se tiver muito pouco resultado, aceita termo único. Senão, exige 2.
         limit = 2 if len(counts) > 20 else 1
         recorrentes = [e for e, c in counts.items() if c >= limit]
         
-        # Ordenar por frequência
         recorrentes = sorted(recorrentes, key=lambda x: counts[x], reverse=True)
         
         # Deduplicação
@@ -259,9 +261,7 @@ def buscar_resumos_detalhados(termo: str, orgao: str, email: str, ano_ini: int, 
     except: return []
 
 def analisar_abstract_com_ia(titulo: str, dados_curtos: str, api_key: str, lang: str = 'pt') -> str:
-    """Aqui é onde entra a 'Função' que você pediu, sob demanda."""
     if not api_key: return "Chave API necessária."
-    # Prompt explícito para categorizar
     prompt = f"Analyze: {titulo}\nOutput format: [TARGET/DRUG] | [MECHANISM/FUNCTION]"
     return simple_gemini_text(prompt, api_key).replace("\n", " ")
 
