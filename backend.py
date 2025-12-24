@@ -35,7 +35,6 @@ def buscar_todas_noticias(lang='pt'):
         handle = Entrez.esearch(db="pubmed", term=query, retmax=6, sort="pub_date")
         record = Entrez.read(handle); handle.close()
         if not record["IdList"]: return []
-        
         handle = Entrez.efetch(db="pubmed", id=record["IdList"], rettype="medline", retmode="text")
         dados = handle.read(); handle.close()
         news = []
@@ -43,7 +42,7 @@ def buscar_todas_noticias(lang='pt'):
             tit, journal, pmid = "", "", ""
             for line in art.split("\n"):
                 if line.startswith("TI  - "): tit = line[6:].strip()
-                if line.startswith("JT  - "): journal = line[6:].strip()
+                if line.startswith("JT  - "): journal = line[3:].strip()
                 if line.strip().isdigit() and not pmid: pmid = line.strip()
             if tit and pmid:
                 news.append({"titulo": tit, "fonte": journal[:40], "link": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"})
@@ -62,10 +61,9 @@ def consultar_pubmed_count(termo, contexto, email, ano_ini, ano_fim):
         handle = Entrez.esearch(db="pubmed", term=query, retmax=0)
         record = Entrez.read(handle); handle.close()
         return int(record["Count"])
-    except:
-        return 0
+    except: return 0
 
-# --- 5. DOUTORA INVESTIGADORA (STRICT PHARMACOLOGY) ---
+# --- 5. DOUTORA INVESTIGADORA (STRICT BENCH RESEARCH) ---
 def _doutora_investigadora(termo_base, lista_pubmed=None, fase="brainstorming"):
     api_key = st.session_state.get('api_key_usuario', '')
     if not api_key: return []
@@ -73,18 +71,21 @@ def _doutora_investigadora(termo_base, lista_pubmed=None, fase="brainstorming"):
     if fase == "brainstorming":
         prompt = f"""
         Role: PhD Senior Scientist in Pharmacology.
-        Task: Provide a Python list of 50 high-potential molecular targets (channels, receptors, enzymes), specific drugs, and miRNAs for research on "{termo_base}".
-        Focus: Bench research, organ bath, and molecular biology.
-        Examples: TRPV4, GSK1016790A, SPHK1, NLRP3, miR-132, SNARE, PIEZO1, P2X3.
-        Output: ONLY a Python list of strings. No conversation.
+        Task: Provide a Python list of 50 molecular targets (channels, receptors, enzymes) and specific drugs for "{termo_base}".
+        Focus: Bench research and molecular biology.
+        Examples: TRPV4, GSK1016790A, SPHK1, NLRP3, miR-132, PIEZO1, P2X3.
+        Output: ONLY a Python list of strings.
         """
     else:
-        lista_str = ", ".join(lista_pubmed[:120])
+        lista_str = ", ".join(lista_pubmed[:150])
         prompt = f"""
-        Role: Senior Investigating Scientist. Cruze seus conhecimentos com estes dados do PubMed: {lista_str}.
-        Instructions: 
-        1. Deleta lixo técnico (FAU, PMID, JID) e termos burros (Sodium, Water, Toad, Dogs, Study, Effect).
-        2. Mantém apenas alvos (ex: Nav1.7, Piezo1) e fármacos (ex: Solifenacin, GSK101).
+        Role: Senior Investigating Scientist.
+        Task: Cross-reference knowledge with this PubMed data: {lista_str}.
+        STRICT RULES:
+        1. DELETE academic fillers: (Background, Objective, Aims, Results, Introduction, Method, Study).
+        2. DELETE animal models: (Toad, Frog, Dog, Rabbit, Mammalian).
+        3. DELETE generic biology: (Cell, Membrane, Hormones, Muscle, System, Acid).
+        4. KEEP ONLY: Specific targets (ex: TRPV4, Nav1.8) and pharmacological compounds (ex: Atropine, GSK101).
         Output: ONLY a Python list of strings [].
         """
 
@@ -102,38 +103,44 @@ def _doutora_investigadora(termo_base, lista_pubmed=None, fase="brainstorming"):
         except: continue
     return []
 
-# --- 6. MINERAÇÃO E CRUZAMENTO (ANTI-METADATA) ---
+# --- 6. MINERAÇÃO E CRUZAMENTO (PENEIRA DE ELITE) ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
     if email: Entrez.email = email
+    
     alvos_previstos = []
     if usar_ia: alvos_previstos = _doutora_investigadora(termo_base, fase="brainstorming")
     
-    query = f"({termo_base} AND (Pharmacology OR Molecular)) AND (2018:2026[Date])"
+    query = f"({termo_base} AND (Pharmacology OR Molecular OR Physiology)) AND (2018:2026[Date])"
     try:
-        handle = Entrez.esearch(db="pubmed", term=query, retmax=1000, sort="relevance")
+        handle = Entrez.esearch(db="pubmed", term=query, retmax=1200, sort="relevance")
         record = Entrez.read(handle); handle.close()
         total_docs = int(record["Count"])
         handle = Entrez.efetch(db="pubmed", id=record["IdList"], rettype="medline", retmode="text")
         full_data = handle.read(); handle.close()
         
-        # Blacklist de termos burros e metadados
-        blacklist = {'FAU', 'PMID', 'NLM', 'DCOM', 'JID', 'EDAT', 'HHS', 'NIH', 'SODIUM', 'WATER', 'EFFECT', 'STUDY', 'ROLE', 'PURPOSE'}
+        # PENEIRA RÍGIDA: Deleta metadados e "termos burros"
+        blacklist = {
+            'FAU', 'PMID', 'NLM', 'DCOM', 'JID', 'EDAT', 'BACKGROUND', 'OBJECTIVE', 'AIMS', 
+            'RESULTS', 'INTRODUCTION', 'STUDY', 'THE', 'AND', 'TOAD', 'FROG', 'DOG', 'RABBIT',
+            'CELL', 'MEMBRANE', 'EFFECT', 'ACTION', 'SYSTEM', 'BIOLOGICAL', 'EXPERIMENTAL'
+        }
         
         candidatos_pubmed = []
         for artigo in full_data.split("\n\nPMID-"):
             texto_util = ""
             for line in artigo.split("\n"):
-                if line.startswith("TI  - ") or line.startswith("AB  - ") or line.startswith("KW  - ") or line.startswith("OT  - "):
+                if line.startswith("TI  - ") or line.startswith("KW  - ") or line.startswith("OT  - "):
                     texto_util += line[6:].strip() + " "
             
+            # Captura siglas técnicas e fármacos (3+ letras)
             encontrados = re.findall(r'\b[A-Z0-9-]{3,}\b', texto_util)
             for t in encontrados:
                 if t.upper() not in blacklist:
                     candidatos_pubmed.append(t.upper())
 
         contagem = Counter(candidatos_pubmed)
-        top_pubmed = [termo for termo, freq in contagem.most_common(180)]
+        top_pubmed = [termo for termo, freq in contagem.most_common(200)]
         
         nomes_finais = []
         if usar_ia:
@@ -145,6 +152,7 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
         res_finais = []
         for nome in nomes_finais:
             n_limpo = limpar_termo_para_pubmed(nome)
+            if n_limpo.upper() in blacklist: continue # Filtro duplo
             freq = contagem.get(n_limpo.upper(), 1)
             l_score, p_val, b_ocean, status = calcular_metricas_originais(freq, total_docs, freq * 10)
             res_finais.append({"Alvo": n_limpo, "Lambda": round(l_score, 2), "P-value": round(p_val, 4), "Blue Ocean": round(b_ocean, 1), "Status": status})
@@ -154,7 +162,7 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
 # --- 7. ANÁLISE IA ---
 def analisar_abstract_com_ia(titulo, dados, api_key, lang='pt'):
     if not api_key: return "API Key Required."
-    prompt = f"Summarize Target, Drug, and Functional Effect for: {titulo}. Context: {dados}. Limit: 20 words."
+    prompt = f"Summarize Target, Drug, and Functional Effect for: {titulo}. Context: {dados}. Max 20 words."
     headers = {'Content-Type': 'application/json'}
     data = {"contents": [{"parts": [{"text": prompt}]}]}
     for m in MODELOS_ATIVOS:
