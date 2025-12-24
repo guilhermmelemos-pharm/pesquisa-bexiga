@@ -189,7 +189,7 @@ def buscar_alvos_emergentes_pubmed(termo_base, email):
         total_docs = max(1, len(artigos_raw))
         
         # Filtro de corte mantido
-        return [termo for termo,freq in contagem.most_common(15) if (freq/total_docs)<0.50][:10]
+        return [termo for termo,freq in contagem.most_common(30) if (freq/total_docs)<0.60][:10]
     except: return []
 
 # --- RADAR DE NOTÍCIAS ---
@@ -213,3 +213,4 @@ def buscar_todas_noticias(lang='pt'):
                              "img":"https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=400"})
         return news
     except: return []
+
