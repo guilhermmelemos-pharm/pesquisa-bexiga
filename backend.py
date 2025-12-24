@@ -10,53 +10,49 @@ import time
 # --- CONFIGURAÇÃO ---
 Entrez.email = "pesquisador_guest@unifesp.br"
 
+# --- 1. MAPA DE EXPANSÃO SEMÂNTICA (O "CÉREBRO" ANATÔMICO) ---
+# Isso expande a busca para termos técnicos da área automaticamente
+MAPA_SINONIMOS = {
+    "HEART": "Heart OR Cardiac OR Myocardium OR Cardiomyocyte OR Coronary OR Artery OR Blood Pressure OR Hypertension",
+    "BLADDER": "Bladder OR Urothelium OR Detrusor OR Vesical OR Urethra OR Micturition OR LUTS OR Cystitis",
+    "KIDNEY": "Kidney OR Renal OR Nephron OR Glomerulus OR Tubular OR Podocyte",
+    "BRAIN": "Brain OR CNS OR Neuron OR Glia OR Cortex OR Hippocampus OR Synaptic OR Neurotransmitter",
+    "LIVER": "Liver OR Hepatic OR Hepatocyte OR Steatosis OR Fibrosis",
+    "LUNG": "Lung OR Pulmonary OR Alveolar OR Bronchial OR Respiratory OR Asthma",
+    "INTESTINE": "Intestine OR Gut OR Colon OR Bowel OR Enteric OR Colitis",
+    "PAIN": "Pain OR Nociception OR Analgesia OR Neuropathic OR Hyperalgesia OR Dorsal Root Ganglion",
+    "INFLAMMATION": "Inflammation OR Cytokine OR Macrophage OR Neutrophil OR Immune OR Sepsis",
+    "METABOLISM": "Metabolism OR Obesity OR Diabetes OR Insulin OR Glucose OR Adipose",
+    "CANCER": "Cancer OR Tumor OR Oncology OR Carcinoma OR Metastasis OR Proliferation"
+}
+
 # --- IA: CONEXÃO DIRETA (MODELOS 2025) ---
 def analisar_abstract_com_ia(titulo, dados_curtos, api_key, lang='pt'):
-    if not api_key:
-        return "⚠️ IA não ativada"
-    
+    if not api_key: return "⚠️ IA não ativada"
     idioma = "Português" if lang == 'pt' else "Inglês"
-    
     prompt_text = f"""PhD em Farmacologia, analise:
 FONTE: {titulo}. {dados_curtos}
 FORMATO: Alvo: [Sigla] | Fármaco: [Nome] | Efeito: [Ação funcional].
 REGRAS: Máximo 12 palavras. Seja técnico. Idioma: {idioma}."""
-
-    # Headers e Config JSON
+    
     headers = {'Content-Type': 'application/json'}
     data = {
         "contents": [{"parts": [{"text": prompt_text}]}],
-        "safetySettings": [
-            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
-        ],
+        "safetySettings": [{"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}],
         "generationConfig": {"temperature": 0.1}
     }
-
-    modelos_disponiveis = [
-        "gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-exp", 
-        "gemini-flash-latest", "gemini-2.5-flash-lite"
-    ]
-
-    for modelo in modelos_disponiveis:
+    modelos = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"]
+    
+    for m in modelos:
         try:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={api_key}"
-            response = requests.post(url, headers=headers, data=json.dumps(data), timeout=10)
-            if response.status_code == 200:
-                resultado = response.json()
-                try:
-                    texto = resultado['candidates'][0]['content']['parts'][0]['text']
-                    return texto.strip()
-                except: return "⚠️ IA respondeu vazio."
-            elif response.status_code == 429: return "💡 IA Ocupada. Aguarde..."
-            elif response.status_code in [400, 403]: return "❌ Chave Inválida."
-            continue
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={api_key}"
+            resp = requests.post(url, headers=headers, data=json.dumps(data), timeout=8)
+            if resp.status_code == 200:
+                return resp.json()['candidates'][0]['content']['parts'][0]['text'].strip()
         except: continue
     return f"❌ Falha técnica. Título: {titulo[:30]}..."
 
-# --- BUSCA PUBMED ---
+# --- BUSCA PUBMED COUNTS (Para Estatística) ---
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
 def _fetch_pubmed_count(query):
     handle = Entrez.esearch(db="pubmed", term=query, retmax=0)
@@ -67,16 +63,23 @@ def _fetch_pubmed_count(query):
 @st.cache_data(ttl=86400, show_spinner=False)
 def consultar_pubmed_count(termo, contexto, email, ano_ini, ano_fim):
     if email: Entrez.email = email
+    # Aqui usamos o termo expandido se houver contexto
+    q_contexto = MAPA_SINONIMOS.get(contexto.upper(), contexto) if contexto else ""
+    
     query = f"({termo})"
-    if contexto: query += f" AND ({contexto})"
+    if q_contexto: query += f" AND ({q_contexto})"
     query += f" AND ({ano_ini}:{ano_fim}[Date - Publication]) AND (NOT Review[pt])"
     try: return _fetch_pubmed_count(query)
     except: return 0
 
+# --- BUSCA DE ARTIGOS PARA LEITURA ---
 @st.cache_data(ttl=86400, show_spinner=False)
 def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
     if email: Entrez.email = email
-    query = f"({termo}[Title/Abstract]) AND ({orgao}[Title/Abstract]) AND ({ano_ini}:{ano_fim}[Date - Publication])"
+    # Expande o órgão também na busca de leitura
+    q_orgao = MAPA_SINONIMOS.get(orgao.upper(), orgao)
+    
+    query = f"({termo}) AND ({q_orgao}) AND ({ano_ini}:{ano_fim}[Date - Publication])"
     try:
         handle = Entrez.esearch(db="pubmed", term=query, retmax=5, sort="relevance")
         record = Entrez.read(handle); handle.close()
@@ -86,29 +89,37 @@ def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
         dados = handle.read(); handle.close()
         artigos = []
         for raw in dados.split("\n\nPMID-"):
-            tit, pmid, keywords, fallback_text = "", "", "", ""
-            lines = raw.split("\n")
-            for line in lines:
+            tit, pmid, keywords, abstract = "", "", "", ""
+            for line in raw.split("\n"):
                 if line.strip().isdigit() and not pmid: pmid = line.strip()
                 if line.startswith("TI  - "): tit = line[6:].strip()
+                if line.startswith("AB  - "): abstract = line[6:500].strip() # Aqui lemos abstract só para exibir pro usuário
                 if line.startswith("OT  - ") or line.startswith("KW  - "): keywords += line[6:].strip() + ", "
-                if line.startswith("AB  - ") and not fallback_text: fallback_text = line[6:500].strip()
+            
             if tit:
-                info_final = keywords if len(keywords) > 5 else fallback_text
-                artigos.append({"Title": tit, "Info_IA": info_final if info_final else "Sem resumo.", "Link": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"})
+                artigos.append({
+                    "Title": tit, 
+                    "Info_IA": f"{keywords} {abstract}", # Para IA ler, mandamos tudo
+                    "Link": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
+                })
         return artigos
     except: return []
 
-# --- MOTOR DE MINERAÇÃO (CALIBRADO V4.0 - FILTRO DE INGLÊS E MAIÚSCULAS) ---
+# --- MOTOR DE MINERAÇÃO: ALTA PRECISÃO (TITULO + KEYWORDS) ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def buscar_alvos_emergentes_pubmed(termo_base, email):
     if email: Entrez.email = email
     
-    # Busca 150 artigos (equilibrio velocidade/precisao)
-    query = f"({termo_base}[Title/Abstract]) AND (2018:2030[Date - Publication]) AND (NOT Review[pt])"
+    # 1. VERIFICA SE EXISTE EXPANSÃO NO DICIONÁRIO
+    termo_upper = termo_base.upper().strip()
+    query_string = MAPA_SINONIMOS.get(termo_upper, f"{termo_base}[Title/Abstract]")
+    
+    # 2. BUSCA NO PUBMED (Janela 2018-2030)
+    final_query = f"({query_string}) AND (2018:2030[Date - Publication]) AND (NOT Review[pt])"
     
     try:
-        handle = Entrez.esearch(db="pubmed", term=query, retmax=150, sort="relevance")
+        # Buscamos 300 artigos para ter volume, já que vamos descartar o Abstract
+        handle = Entrez.esearch(db="pubmed", term=final_query, retmax=300, sort="relevance")
         record = Entrez.read(handle); handle.close()
         if not record["IdList"]: return []
 
@@ -116,55 +127,47 @@ def buscar_alvos_emergentes_pubmed(termo_base, email):
         full_data = handle.read(); handle.close()
         artigos_raw = full_data.split("\n\nPMID-")
 
-        # BLACKLIST DE INGLES COMUM E TERMOS CLINICOS
+        # 3. BLACKLIST LEVE (Como olhamos só titulo, a sujeira é menor)
         blacklist = {
-            "PII", "DOI", "ISSN", "PMID", "THIS", "THAT", "HAVE", "HAS", "HAD", "ARE", "WAS", "WERE", 
-            "BEEN", "BEING", "CAN", "COULD", "SHOULD", "WOULD", "MAY", "MIGHT", "MUST", "WILL", "SHALL", 
-            "DOES", "DID", "DOING", "WHICH", "WHAT", "WHEN", "WHERE", "WHO", "WHOM", "WHOSE", "WHY", 
-            "HOW", "AND", "THE", "FOR", "NOT", "BUT", "WITH", "FROM", "STUDY", "RESULTS", "CELLS", 
-            "USING", "USED", "DATA", "ANALYSIS", "GROUP", "CONTROL", "MODEL", "RATS", "MICE", "HUMAN", 
-            "PATIENTS", "CLINICAL", "TREATMENT", "EFFECTS", "LEVELS", "EXPRESSION", "INCREASED", "DECREASED", 
-            "SIGNIFICANTLY", "CONCLUSION", "BACKGROUND", "METHODS", "OBJECTIVE", "AIM", "PURPOSE", "AFTER", 
-            "BEFORE", "DURING", "WITHIN", "BETWEEN", "AMONG", "UNDER", "ABOVE", "BELOW", "ACUTE", "CHRONIC", 
-            "DISEASE", "SYNDROME", "DISORDER", "INJURY", "HEALTH", "CARE", "RISK", "TOTAL", "MEAN", "RATIO", 
-            "SCORE", "FACTOR", "TYPE", "CASE", "SERIES", "TRIAL", "REVIEW", "FAILURE", "MANAGEMENT", 
-            "CARDIAC", "SYSTOLIC", "DIASTOLIC", "FUNCTION", "PRESSURE", "VOLUME", "EJECTION", "FRACTION",
-            "UNIVERSITY", "DEPARTMENT", "RECEIVED", "ACCEPTED", "PUBLISH", "CORRESPONDENCE"
-        } 
+            "PII", "DOI", "ISSN", "PMID", "RATS", "MICE", "HUMAN", "PATIENTS", "CLINICAL", "TRIAL",
+            "REVIEW", "META", "ANALYSIS", "REPORT", "CASE", "SERIES", "STUDY", "RESULTS", "CONCLUSION",
+            "BACKGROUND", "METHODS", "OBJECTIVE", "AIM", "PURPOSE", "AND", "THE", "FOR", "WITH", "NOT",
+            "BUT", "FROM", "USING", "USED", "BETWEEN", "AMONG", "DURING", "AFTER", "BEFORE", "WITHIN",
+            "ACUTE", "CHRONIC", "DISEASE", "SYNDROME", "DISORDER", "INJURY", "FAILURE", "DAMAGE",
+            "TREATMENT", "THERAPY", "MANAGEMENT", "DIAGNOSIS", "PROGNOSIS", "OUTCOME", "RISK", "FACTOR",
+            "ROLE", "EFFECT", "EFFECTS", "ACTION", "FUNCTION", "EXPRESSION", "REGULATION", "LEVELS",
+            "NEW", "NOVEL", "RECENT", "INSIGHTS", "UPDATE", "PERSPECTIVE", "FUTURE", "CHALLENGES",
+            "PATHWAY", "MECHANISM", "SIGNALING", "TARGET", "BIOMARKER", "POTENTIAL", "CANDIDATE",
+            "ASSOCIATED", "MEDIATED", "INDUCED", "DEPENDENT", "INDEPENDENT", "RELATED", "LINKED",
+            "UNIVERSITY", "DEPARTMENT", "HOSPITAL", "CENTER", "GROUP", "SOCIETY", "ASSOCIATION"
+        }
         
         candidatos_por_artigo = []
+        
         for artigo in artigos_raw:
-            # 1. Extração Cirúrgica: Só TI (Título) e AB (Abstract)
-            linhas_uteis = []
-            lendo_abstract = False
+            # --- ESTRATÉGIA "SNIPER": SÓ TI (TÍTULO) E OT/KW (KEYWORDS) ---
+            # Ignoramos AB (Abstract) completamente para evitar ruído
+            texto_focado = ""
             for line in artigo.split("\n"):
                 if line.startswith("TI  - "):
-                    linhas_uteis.append(line[6:].strip())
-                    lendo_abstract = False
-                elif line.startswith("AB  - "):
-                    linhas_uteis.append(line[6:].strip())
-                    lendo_abstract = True
-                elif lendo_abstract and line.startswith("      "):
-                    linhas_uteis.append(line.strip())
-                elif not line.startswith(" "):
-                    lendo_abstract = False
+                    texto_focado += line[6:].strip() + " "
+                elif line.startswith("OT  - ") or line.startswith("KW  - "):
+                    texto_focado += line[6:].strip() + " "
             
-            # NÃO USAMOS .upper() NO TEXTO INTEIRO AQUI!
-            texto_focado = " ".join(linhas_uteis) 
-            
-            # 2. REGEX INTELIGENTE (Case Sensitive)
-            # Captura apenas palavras que tenham PELO MENOS 2 letras maiúsculas ou números
-            # Ex: "TRPV1" (Ok), "ATP" (Ok), "mRNA" (Ok), "Cardiac" (Ignora), "Failure" (Ignora)
-            encontrados = re.findall(r'\b(?:[A-Z]{2,}[A-Z0-9-]*|[A-Z][A-Z0-9-]*[0-9][A-Z0-9-]*)\b', texto_focado)
+            # Se não achou título nem keywords, pula
+            if not texto_focado: continue
+
+            # Regex: Siglas com pelo menos 2 letras maiúsculas (TRPV1, mTOR, BDNF)
+            # ou mistura de letra+número (P2X3, Nav1.8)
+            encontrados = re.findall(r'\b(?:[A-Z]{2,}[A-Z0-9-]*|[a-z]*[A-Z][a-zA-Z0-9-]*[0-9]+[a-zA-Z0-9-]*)\b', texto_focado)
             
             for t in encontrados:
-                # Agora sim normalizamos para comparar com a blacklist
                 t_clean = re.sub(r'[^A-Z0-9]', '', t).upper()
                 
+                if len(t_clean) < 3: continue
                 if t_clean in blacklist: continue
-                if len(t_clean) < 3: continue 
-                if t_clean == termo_base.upper().replace(" ", ""): continue
-                if t_clean.isdigit(): continue 
+                if t_clean == termo_upper.replace(" ", ""): continue # Remove o termo de busca (ex: HEART)
+                if t_clean.isdigit(): continue
                 
                 candidatos_por_artigo.append(t_clean)
 
@@ -173,13 +176,15 @@ def buscar_alvos_emergentes_pubmed(termo_base, email):
         contagem = Counter(candidatos_por_artigo)
         total_docs = max(1, len(artigos_raw))
         
-        # Filtro: Top 50 candidatos, frequência < 90% (Bem permissivo para não voltar vazio)
+        # Filtro: Retorna Top 10 que apareçam em menos de 90% dos títulos (muito permissivo, pois título é curto)
         return [termo for termo,freq in contagem.most_common(50) if (freq/total_docs)<0.90][:10]
+
     except: return []
 
-# --- RADAR ---
+# --- RADAR DE NOTÍCIAS ---
 def buscar_todas_noticias(lang='pt'):
     try:
+        # Usa o termo base 'pharmacology' mas podemos expandir no futuro
         query = "(molecular biology OR pharmacology) AND (2024/09/01:2025/12/31[Date - Publication])"
         handle = Entrez.esearch(db="pubmed", term=query, retmax=6, sort="pub_date")
         record = Entrez.read(handle); handle.close()
@@ -189,11 +194,10 @@ def buscar_todas_noticias(lang='pt'):
         for art in dados.split("\n\nPMID-"):
             tit, pmid, journal = "", "", ""
             for line in art.split("\n"):
-                if re.match(r'^TI\s+-', line): tit = re.sub(r'^TI\s+-\s+', '', line).strip()
+                if line.startswith("TI  - "): tit = line[6:].strip()
                 if line.startswith("JT  - "): journal = line.replace("JT  - ", "").strip()
                 if line.strip().isdigit() and not pmid: pmid = line.strip()
             if tit and pmid:
                 news.append({"titulo": tit, "fonte": journal[:30], "link": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/", "img":"https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=400"})
         return news
     except: return []
-        
