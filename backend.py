@@ -6,53 +6,44 @@ import json
 import re
 import time
 from collections import Counter
-from difflib import SequenceMatcher
 from typing import List, Dict, Any
 
 # ================= CONFIGURAÇÃO =================
 Entrez.email = "pesquisador_guest@unifesp.br"
 
-# Modelos Flash são essenciais para o plano gratuito (gastam menos quota)
+# Modelos rápidos e econômicos
 MODELOS_ATIVOS = [
-    "gemini-2.5-flash",          # Mais novo e rápido
-    "gemini-2.0-flash",          # Muito estável
-    "gemini-2.0-flash-lite",     # Ultra econômico
-    "gemini-1.5-flash"           # Fallback clássico
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-lite",
+    "gemini-1.5-flash"
 ]
 
-# A Blacklist continua para garantir que, mesmo sem abstract, não passe lixo
+# LISTA NEGRA: O filtro de "Lixo" baseado no seu feedback
 BLACKLIST_MONSTRO = {
-    # Metodologia
-    "OBJECTIVE", "INTRODUCTION", "METHODS", "RESULTS", "CONCLUSION", "DISCUSSION",
-    "BACKGROUND", "ABSTRACT", "HYPOTHESIS", "PURPOSE", "MATERIAL", "MATERIALS",
-    "PRESENTATION", "REPORT", "CASE", "SERIES", "REVIEW", "META-ANALYSIS",
-    "SYSTEMATIC", "COHORT", "RETROSPECTIVE", "PROSPECTIVE", "RANDOMIZED", "TRIAL",
-    "STUDY", "ANALYSIS", "DATA", "STATISTICS", "KEY", "FINDINGS", "LIMITATIONS",
-    "REPLY", "LETTER", "EDITOR", "EDITORIAL", "DOI", "PMID", "PMC",
+    # Termos Metodológicos (O que vazou antes)
+    "ASSOCIATION", "EVALUATION", "UNCOMMON", "INTRAUTERINE", "GERMLINE", 
+    "COLLISION", "NOTABLY", "IMPACT", "FOLLOW-UP", "KEY", "FINDINGS",
+    "LIMITATIONS", "BACKGROUND", "OBJECTIVE", "METHODS", "RESULTS", "CONCLUSION",
+    "ABSTRACT", "INTRODUCTION", "STUDY", "ANALYSIS", "DATA", "STATISTICS",
+    "SIGNIFICANT", "DIFFERENCE", "BETWEEN", "AMONG", "WITHIN", "DURING",
+    "PREVALENCE", "INCIDENCE", "RISK", "FACTOR", "ROLE", "POTENTIAL",
+    
+    # Siglas de Biologia Básica e Exames (Não são alvos)
+    "DNA", "RNA", "ATP", "ADP", "AMP", "PCR", "QPCR", "MRI", "CT", "PET", 
+    "RBE", "IMPT", "BCG", "GUERIN", "VIII", "HLA", "CAR", "UVJ", "VUR",
+    "BMI", "WHO", "HIC", "SCS", "TCS", "QTC", "AE", "AES", "SAE",
+    
+    # Clínico Geral
+    "PATIENT", "PATIENTS", "CLINICAL", "CASE", "REPORT", "REVIEW", "META",
+    "SYSTEMATIC", "TREATMENT", "THERAPY", "SURGERY", "DIAGNOSIS", "PROGNOSIS",
+    "QUALITY", "LIFE", "QOL", "SURVIVAL", "MORTALITY", "MORBIDITY", "SAFETY",
+    "EFFICACY", "OUTCOME", "OUTCOMES", "PLACEBO", "CONTROL", "GROUP", "TOTAL",
     
     # Tempo e Lugar
-    "JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", 
-    "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER", "2020", "2021", "2022", "2023", 
-    "2024", "2025", "HOSPITAL", "UNIVERSITY", "CENTER", "DEPARTMENT", "CHINA", "USA", 
-    "UK", "JAPAN", "INDIAN", "CHINESE", "EUROPEAN", "AMERICAN", "NATIONAL", "INTERNATIONAL",
-    
-    # Termos Gerais (Não moleculares)
-    "PATIENT", "PATIENTS", "ADULT", "CHILD", "QUALITY", "LIFE", "QOL", "SURVIVAL", 
-    "RISK", "FACTOR", "SCORE", "DIAGNOSIS", "PROGNOSIS", "THERAPY", "TREATMENT", 
-    "SURGERY", "OUTCOME", "EFFICACY", "SAFETY", "ADVERSE", "EVENTS", "SYMPTOMS", 
-    "DISEASE", "CANCER", "TUMOR", "BLADDER", "UROTHELIAL", "URINARY", "CYSTOSCOPY",
-    "CLINICAL", "PRIMARY", "NORMAL", "CONTROL", "BASELINE", "TOTAL", "HIGH", "LOW",
-    "LEVEL", "INCREASED", "DECREASED", "POSITIVE", "NEGATIVE", "SIGNIFICANT", 
-    "ASSOCIATED", "BETWEEN", "AMONG", "WITH", "WITHOUT", "DURING", "AFTER", "BEFORE",
-    "HUMAN", "MOUSE", "RAT", "ANIMAL", "MODEL", "CELL", "CELLS", "TISSUE", "BLOOD",
-    "URINE", "EXPRESSION", "ACTIVITY", "FUNCTION", "MECHANISM", "PATHWAY", "TARGET", 
-    "POTENTIAL", "ROLE", "NOVEL", "NEW", "RECENT", "FUTURE", "IMPACT", "EFFECT",
-    "SPECIFIC", "NON", "ANTI", "PRO", "TYPE", "GENE", "PROTEIN", "MOLECULE", 
-    "RECEPTOR", "ENZYME", "DRUG", "PHARMACOLOGY", "SCIENCE", "MEDICAL", "HEALTH",
-    
-    # Conjunções/Preposições comuns em títulos
-    "THE", "AND", "FOR", "NOT", "BUT", "WAS", "ARE", "HAS", "ITS", "THAT", "THIS",
-    "FROM", "INTO", "ONTO", "VIA", "ALL", "ANY", "TWO", "ONE", "BOTH"
+    "JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST",
+    "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER", "2020", "2021", "2022", 
+    "2023", "2024", "2025", "HOSPITAL", "UNIVERSITY", "NATIONAL", "INTERNATIONAL"
 }
 
 MAPA_SINONIMOS_BASE = {
@@ -67,7 +58,7 @@ def clean_model_name(model_name: str) -> str:
     return model_name.replace("models/", "")
 
 def call_gemini_json(prompt: str, api_key: str) -> List[str]:
-    """Tenta extrair JSON. Se der erro 429 (Cota excedida), retorna lista vazia para usar o Regex."""
+    """Tenta extrair JSON. Se falhar, retorna lista vazia."""
     if not api_key: return []
     
     headers = {"Content-Type": "application/json"}
@@ -97,7 +88,6 @@ def call_gemini_json(prompt: str, api_key: str) -> List[str]:
                     return []
                 except: continue
             elif resp.status_code == 429:
-                # Se der erro de cota, para de tentar chamar a IA e deixa o Regex assumir
                 break 
         except: continue
     return []
@@ -119,23 +109,27 @@ def simple_gemini_text(prompt: str, api_key: str) -> str:
         except: continue
     return ""
 
-# ================= MINERAÇÃO OTIMIZADA (TOKEN SAVER) =================
+# ================= MINERAÇÃO FILTRADA =================
 
 def ner_extraction_batch(titulos_keywords: List[str], api_key: str) -> List[str]:
-    """Usa IA apenas em Títulos e Keywords (poucos tokens)."""
+    """Prompt reforçado contra lixo metodológico."""
     if not titulos_keywords: return []
     
-    # Envia lote menor para não estourar tokens
     texto_input = "\n".join([f"- {t}" for t in titulos_keywords[:50]])
     
     prompt = f"""
     Role: Molecular Pharmacologist.
-    Task: Analyze these paper TITLES and KEYWORDS. Extract a JSON list of SPECIFIC MOLECULAR TARGETS and DRUGS.
+    Task: Extract strictly MOLECULAR TARGETS (Receptors, Enzymes, Channels) and DRUGS.
     
-    RULES:
-    1. Extract Receptors (e.g., P2X3, TRPV1), Enzymes (e.g., mTOR, COX-2), Genes, and Drugs (e.g., Mirabegron, Cisplatin).
-    2. IGNORE general terms (e.g., "Patients", "Study", "Cancer", "Cell").
-    3. IGNORE dates and locations.
+    STRICT EXCLUSIONS (Do NOT extract):
+    - Method words: "Association", "Evaluation", "Analysis", "Study", "Role".
+    - Common Bio: "DNA", "RNA", "ATP", "BCG", "MRI", "CT".
+    - Clinical: "Patients", "Diagnosis", "Prognosis", "Treatment".
+    
+    EXAMPLES TO KEEP:
+    - "HSP90", "SGLT2", "TRPV1", "P2X3" (Targets)
+    - "Alantolactone", "Mirabegron", "Cisplatin" (Drugs)
+    - "mTOR", "NF-kappaB", "VEGF" (Pathways)
     
     INPUT:
     {texto_input}
@@ -150,7 +144,7 @@ def minerar_pubmed(termo_base: str, email: str, usar_ia: bool = True) -> Dict:
     Entrez.email = email
     
     termo_expandido = MAPA_SINONIMOS_BASE.get(termo_base.upper(), termo_base)
-    # Busca 100 artigos (equilíbrio entre volume e velocidade)
+    # Busca 100 artigos
     query = f"({termo_expandido}) AND (2020:2026[Date])"
     
     try:
@@ -160,7 +154,7 @@ def minerar_pubmed(termo_base: str, email: str, usar_ia: bool = True) -> Dict:
         
         if not record["IdList"]: return {}
 
-        # Fetch APENAS Título (TI) e Keywords (OT) - SEM ABSTRACT (AB)
+        # Fetch apenas Title e Keywords
         handle = Entrez.efetch(db="pubmed", id=record["IdList"], rettype="medline", retmode="text")
         records = Medline.parse(handle)
         
@@ -170,45 +164,44 @@ def minerar_pubmed(termo_base: str, email: str, usar_ia: bool = True) -> Dict:
         for r in records:
             titulo = r.get('TI', '')
             keywords = ' '.join(r.get('OT', []))
-            
-            # Texto ultra leve para a IA processar rápido
             texto_limpo = f"{titulo} . {keywords}"
             
             if len(texto_limpo) > 5:
                 raw_texts.append(texto_limpo)
-                # Salvamos no objeto apenas o que temos (sem abstract longo)
                 artigos_completos.append({"titulo": titulo, "texto": texto_limpo})
         
         entidades = []
         
-        # 1. IA Leve (Se possível)
+        # 1. IA (Prioritária)
         if api_key and usar_ia:
             entidades = ner_extraction_batch(raw_texts, api_key)
         
-        # 2. Regex Avançado (Funciona sem IA ou se a cota acabar)
-        # O "Meio Termo": Pega códigos E nomes de drogas sem pegar lixo
-        if True: # Executa sempre para complementar a IA ou agir como fallback
+        # 2. Regex Fallback (Onde mora o perigo, agora controlado)
+        if True: 
             texto_full = " ".join(raw_texts)
             
-            # A: Siglas Técnicas (Letras + Números) -> P2X3, HSP90, IL-6
+            # A: Códigos (Ex: HSP90AB1, SGLT2, P2X3) - Seguro
+            # Pega letras maiúsculas seguidas de números
             regex_codigos = r'\b[A-Z]{2,}[0-9]+[A-Z0-9-]*\b'
             candidatos_codigos = re.findall(regex_codigos, texto_full)
             
-            # B: Fármacos (PascalCase + Sufixos Comuns) -> Cisplatin, Mirabegron, Solifenacin
-            # Sufixos: -in, -ine, -ib, -mab, -ol, -on, -one, -il, -ide, -ate
-            regex_farmacos = r'\b[A-Z][a-z]{3,}(?:in|ine|ib|mab|ol|on|one|il|ide|ate)\b'
+            # B: Fármacos e Químicos (Ex: Alantolactone, Cisplatin)
+            # TRUQUE: Exige sufixo farmacológico para evitar palavras comuns como "Association"
+            # Sufixos: -one (Alantolactone), -ine, -in, -mab, -ib, -ol, -ase, -ate
+            sufixos = r'(?:one|ine|in|mab|ib|ol|ase|ate|ide)\b'
+            regex_farmacos = r'\b[A-Z][a-z]{3,}' + sufixos
             candidatos_farmacos = re.findall(regex_farmacos, texto_full)
             
-            # C: Acrônimos Puros (3+ letras maiúsculas) -> VEGF, BDNF, EGFR
+            # C: Acrônimos Puros (Ex: VEGF, mTOR, TRPV)
+            # Filtra coisas de 3+ letras maiúsculas
             regex_acronimos = r'\b[A-Z]{3,}\b'
             candidatos_acronimos = re.findall(regex_acronimos, texto_full)
 
-            # Junta tudo
             entidades.extend(candidatos_codigos)
             entidades.extend(candidatos_farmacos)
             entidades.extend(candidatos_acronimos)
 
-        # 3. Filtragem (Limpeza)
+        # 3. Limpeza Final (O Pente Fino)
         entidades_limpas = []
         for e in entidades:
             e = e.strip(".,-;:()[] ")
@@ -216,27 +209,28 @@ def minerar_pubmed(termo_base: str, email: str, usar_ia: bool = True) -> Dict:
             if len(e) < 3: continue 
             if e.isdigit(): continue
             
-            # Verifica Blacklist
+            # Verifica Blacklist rigorosa
             if e.upper() in BLACKLIST_MONSTRO: continue
             
+            # Filtra palavras comuns de inglês que escapam do regex de acrônimos
+            if e.upper() in ["THE", "AND", "FOR", "NOT", "BUT", "WAS", "ARE", "HAS", "VIA", "ALL"]: continue
+
             entidades_limpas.append(e)
 
-        # 4. Contagem e Retorno
+        # 4. Estatística
         counts = Counter(entidades_limpas)
         
-        # Se IA rodou, aceita ocorrência única. Se só Regex rodou, idealmente 2+, mas no Free liberamos 1
-        recorrentes = sorted([e for e in counts], key=lambda x: counts[x], reverse=True)
-        
-        # Deduplicação visual (case insensitive)
+        # Ordena e corta
         final = []
         seen = set()
-        for item in recorrentes:
+        # Most Common traz os mais relevantes primeiro
+        for item, count in counts.most_common(40):
             if item.lower() not in seen:
                 final.append(item)
                 seen.add(item.lower())
 
         return {
-            "termos_indicados": final[:40],
+            "termos_indicados": final,
             "counts": counts,
             "total_docs": len(artigos_completos),
             "artigos_originais": artigos_completos
@@ -244,7 +238,7 @@ def minerar_pubmed(termo_base: str, email: str, usar_ia: bool = True) -> Dict:
     except Exception:
         return {}
 
-# ================= WRAPPERS =================
+# ================= FUNÇÕES DE APOIO =================
 
 def buscar_alvos_emergentes_pubmed(alvo: str, email: str, usar_ia: bool = True) -> List[str]:
     res = minerar_pubmed(alvo, email, usar_ia=usar_ia)
@@ -262,7 +256,6 @@ def consultar_pubmed_count(termo: str, contexto: str, email: str, ano_ini: int, 
 
 @st.cache_data(ttl=3600)
 def buscar_resumos_detalhados(termo: str, orgao: str, email: str, ano_ini: int, ano_fim: int) -> List[Dict]:
-    """Busca abstracts apenas para exibição final (leitura humana), não para mineração."""
     Entrez.email = email
     query = f"({termo}) AND ({orgao}) AND ({ano_ini}:{ano_fim}[Date])"
     try:
@@ -283,7 +276,6 @@ def buscar_resumos_detalhados(termo: str, orgao: str, email: str, ano_ini: int, 
     except: return []
 
 def analisar_abstract_com_ia(titulo: str, dados_curtos: str, api_key: str, lang: str = 'pt') -> str:
-    """Função sob demanda: Só gasta token se o usuário clicar para analisar um paper específico."""
     if not api_key: return "Chave API necessária."
     prompt = f"Analyze: {titulo}\nOutput one line: TARGET | DRUG | EFFECT"
     return simple_gemini_text(prompt, api_key).replace("\n", " ")
