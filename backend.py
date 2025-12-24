@@ -26,24 +26,33 @@ MAPA_SINONIMOS = {
     "CANCER": "Cancer OR Tumor OR Oncology OR Carcinoma OR Metastasis OR Proliferation OR Angiogenesis OR Apoptosis OR Microenvironment"
 }
 
+# --- LISTA DE MODELOS DO USUÁRIO (PERSONALIZADA) ---
+# Centralizei aqui para facilitar. Se precisar mudar, muda só aqui.
+MODELOS_ATIVOS = [
+    "gemini-2.5-flash",          
+    "gemini-2.0-flash",          
+    "gemini-2.0-flash-exp",      
+    "gemini-flash-latest",       
+    "gemini-2.5-flash-lite"
+]
+
 # --- 2. FAXINEIRO IA (FILTRO MOLECULAR) ---
 def _faxina_ia(lista_suja):
+    """
+    Usa a IA para separar Alvos Moleculares Reais de Lixo Clínico.
+    """
     api_key = st.session_state.get('api_key_usuario', '')
     if not api_key: return lista_suja[:30] 
 
     lista_str = ", ".join(lista_suja)
     
-    # PROMPT RIGOROSO: FARMACOLOGISTA SÊNIOR
     prompt = f"""
     ACT AS: Senior Research Pharmacologist.
     TASK: Clean this list extracted from PubMed. Keep ONLY Molecular Targets.
-    
     INPUT: {lista_str}
-    
     RULES:
     1. KEEP: Receptors (TRPV1), Enzymes (mTOR), Genes, Proteins, Signaling Molecules (ATP, NO).
-    2. DELETE: Diseases (LUTS, Cancer), Procedures (TURBT), Anatomy (Bladder), Study Types (RCT), General Terms (Study, Data).
-    
+    2. DELETE: Diseases (LUTS, Cancer, OAB), Procedures (TURBT), Anatomy (Bladder), Study Types (RCT), General Terms (Study, Data).
     OUTPUT: A clean Python list of strings. Example: ['TRPV1', 'NGF', 'BDNF']
     """
     
@@ -54,9 +63,7 @@ def _faxina_ia(lista_suja):
         "generationConfig": {"temperature": 0.0}
     }
     
-    modelos = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"]
-    
-    for m in modelos:
+    for m in MODELOS_ATIVOS:
         try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={api_key}"
             resp = requests.post(url, headers=headers, data=json.dumps(data), timeout=10)
@@ -72,27 +79,42 @@ def _faxina_ia(lista_suja):
     
     return lista_suja[:30]
 
-# --- 3. ANÁLISE DE RESUMOS ---
+# --- 3. ANÁLISE DE RESUMOS COM IA ---
 def analisar_abstract_com_ia(titulo, dados_curtos, api_key, lang='pt'):
-    if not api_key: return "⚠️ IA não ativada"
+    if not api_key: return "⚠️ Chave API não detectada no menu lateral."
+    
     idioma = "Português" if lang == 'pt' else "Inglês"
-    prompt_text = f"""Farmacologista, analise:
-FONTE: {titulo}. {dados_curtos}
-FORMATO: Alvo: [Sigla] | Mecanismo: [Resumo].
-Limite: 15 palavras. Idioma: {idioma}."""
+    
+    prompt_text = f"""Atue como Pesquisador em Farmacologia. Analise este artigo:
+    TITULO: {titulo}
+    CONTEXTO: {dados_curtos}
+    
+    TAREFA: Resuma o Alvo Molecular, o Fármaco (se houver) e o Efeito Principal.
+    REGRAS: Máximo 20 palavras. Seja direto. Idioma: {idioma}.
+    Exemplo: "Alvo: TRPV1 | Efeito: Redução da hiperatividade vesical via inibição de C-fibers."
+    """
     
     headers = {'Content-Type': 'application/json'}
     data = {"contents": [{"parts": [{"text": prompt_text}]}]}
     
-    try:
-        url = f"[https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=){api_key}"
-        resp = requests.post(url, headers=headers, data=json.dumps(data), timeout=6)
-        if resp.status_code == 200:
-            return resp.json()['candidates'][0]['content']['parts'][0]['text'].strip()
-    except: pass
-    return "⚠️ IA indisponível."
+    erro_msg = ""
+    
+    for m in MODELOS_ATIVOS:
+        try:
+            url = f"[https://generativelanguage.googleapis.com/v1beta/models/](https://generativelanguage.googleapis.com/v1beta/models/){m}:generateContent?key={api_key}"
+            resp = requests.post(url, headers=headers, data=json.dumps(data), timeout=10)
+            
+            if resp.status_code == 200:
+                return resp.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+            else:
+                erro_msg = f"Erro {resp.status_code}"
+        except Exception as e:
+            erro_msg = str(e)
+            continue
+            
+    return f"⚠️ IA indisponível. ({erro_msg})"
 
-# --- 4. FUNÇÕES DE BUSCA (CORE) ---
+# --- 4. BUSCA PUBMED (CORE) ---
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
 def _fetch_pubmed_count(query):
     handle = Entrez.esearch(db="pubmed", term=query, retmax=0)
@@ -134,7 +156,7 @@ def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
         return artigos
     except: return []
 
-# --- 5. MINERAÇÃO (ALTA CAPACIDADE) ---
+# --- 5. MINERAÇÃO MASSIVA ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
     if email: Entrez.email = email
@@ -142,7 +164,6 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
     termo_upper = termo_base.upper().strip()
     query_string = MAPA_SINONIMOS.get(termo_upper, f"{termo_base}[Title/Abstract]")
     
-    # Busca 1500 abstracts recentes
     final_query = f"({query_string}) AND (2018:2030[Date - Publication]) AND (NOT Review[pt])"
     
     try:
@@ -154,7 +175,7 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
         full_data = handle.read(); handle.close()
         artigos_raw = full_data.split("\n\nPMID-")
 
-        # --- BLACKLIST SUPREMA (Proteção de Sintaxe Garantida) ---
+        # BLACKLIST
         blacklist = {
             "LUTS", "SUI", "UUI", "MUI", "OAB", "BPH", "UTI", "IC", "BPS", "ICIRS", "LUT", "BOO",
             "SNM", "PTNS", "TURBT", "TURP", "BOTOX", "INJECTION", "STENT", "CATHETER", "SLING", "MESH",
@@ -184,17 +205,14 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
             
             if not texto_focado: continue
 
-            # Regex para capturar siglas e moléculas
             encontrados = re.findall(r'\b(?:[A-Z]{2,}[A-Z0-9-]*|[a-z]{1,2}[A-Z][a-zA-Z0-9-]*)\b', texto_focado)
             
             for t in encontrados:
                 t_clean = re.sub(r'[^a-zA-Z0-9]', '', t).upper()
-                
                 if len(t_clean) < 3: continue 
                 if t_clean in blacklist: continue
                 if t_clean.isdigit(): continue
                 if t_clean == termo_upper.replace(" ", ""): continue
-                
                 candidatos_por_artigo.append(t_clean)
 
         if not candidatos_por_artigo: return []
@@ -203,7 +221,6 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
         total_docs = max(1, len(artigos_raw))
         top_candidatos = [termo for termo,freq in contagem.most_common(120) if (freq/total_docs)<0.90]
         
-        # Remoção forçada de termos da blacklist que tenham escapado da primeira passada
         lista_final = [t for t in top_candidatos if t not in blacklist]
         
         if usar_ia and st.session_state.get('api_key_usuario'):
@@ -232,4 +249,3 @@ def buscar_todas_noticias(lang='pt'):
                 news.append({"titulo": tit, "fonte": journal[:30], "link": f"[https://pubmed.ncbi.nlm.nih.gov/](https://pubmed.ncbi.nlm.nih.gov/){pmid}/", "img":"[https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=400](https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=400)"})
         return news
     except: return []
-        
