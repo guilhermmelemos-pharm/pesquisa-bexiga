@@ -1,17 +1,19 @@
 # backend.py
 import streamlit as st
-from Bio import Entrez
+from Bio import Entrez, Medline
 import requests
+import json
 import re
 import time
-import ast
 import math
 from collections import Counter
 from difflib import SequenceMatcher
+from typing import List, Dict, Any, Union, Optional
 
 # ================= CONFIG =================
 Entrez.email = "pesquisador_guest@unifesp.br"
-MODELOS_ATIVOS = ["gemini-2.0-flash", "gemini-2.0-flash-exp"]
+# Recomendado: Mover chaves para st.secrets em produção
+MODELOS_ATIVOS = ["gemini-2.0-flash", "gemini-2.0-flash-exp", "gemini-1.5-flash"]
 
 MAPA_SINONIMOS_BASE = {
     "BLADDER": "(Bladder OR Vesical OR Detrusor OR Urothelium)",
@@ -21,10 +23,55 @@ MAPA_SINONIMOS_BASE = {
 
 # ================= GEMINI CORE =================
 
-def call_gemini(prompt, api_key, temperature=0.0):
+def call_gemini_json(prompt: str, api_key: str, temperature: float = 0.1) -> Any:
+    """Chamada robusta à API esperando resposta JSON."""
+    if not api_key:
+        return []
+
+    headers = {"Content-Type": "application/json"}
+    # Instrução explícita para JSON no payload se o modelo suportar, 
+    # ou embutido no prompt (garantido abaixo)
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}], 
+        "generationConfig": {
+            "temperature": temperature,
+            "response_mime_type": "application/json" # Força JSON estruturado
+        }
+    }
+    
+    for modelo in MODELOS_ATIVOS:
+        try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={api_key.strip()}"
+            resp = requests.post(url, headers=headers, json=payload, timeout=30)
+            
+            if resp.status_code == 200:
+                result = resp.json()
+                try:
+                    text_content = result["candidates"][0]["content"]["parts"][0]["text"]
+                    return json.loads(text_content)
+                except (KeyError, json.JSONDecodeError, IndexError):
+                    # Fallback: tentar limpar blocos de código markdown se o JSON falhar
+                    clean_text = re.sub(r"```json|```", "", text_content).strip()
+                    return json.loads(clean_text)
+            
+            elif resp.status_code == 429:
+                time.sleep(1.5) # Backoff simples
+                continue
+                
+        except Exception as e:
+            # Em produção, usar logging.error(e)
+            continue
+            
+    return []
+
+def simple_gemini_text(prompt: str, api_key: str) -> str:
+    """Chamada simples para texto livre (resumos)."""
     if not api_key: return ""
     headers = {"Content-Type": "application/json"}
-    payload = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"temperature": temperature}}
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}], 
+        "generationConfig": {"temperature": 0.2}
+    }
     
     for modelo in MODELOS_ATIVOS:
         try:
@@ -32,64 +79,59 @@ def call_gemini(prompt, api_key, temperature=0.0):
             resp = requests.post(url, headers=headers, json=payload, timeout=25)
             if resp.status_code == 200:
                 return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
-            elif resp.status_code == 429:
-                time.sleep(1)
         except: continue
     return ""
 
-def parse_structure(text, expected=list):
-    if not text: return expected()
-    text = re.sub(r"```.*?```", "", text, flags=re.DOTALL).strip()
-    try:
-        match = re.search(r"\[.*\]" if expected == list else r"\{.*\}", text, re.DOTALL)
-        if match:
-            obj = ast.literal_eval(match.group(0))
-            if isinstance(obj, expected): return obj
-    except: pass
-    
-    if expected == list:
-        return re.findall(r"\b[A-Z][A-Z0-9-]{2,15}\b", text)
-    return expected()
-
 # ================= NER (EXTRAÇÃO DE ALVOS) =================
 
-def ner_extraction_batch(artigos, api_key):
-    texto_input = "\n".join([f"- {a['texto']}" for a in artigos[:40]])
+def ner_extraction_batch(artigos: List[Dict], api_key: str) -> List[str]:
+    # Limita o contexto para evitar estouro de tokens
+    texto_amostra = [f"- {a['texto']}" for a in artigos[:30]] 
+    texto_input = "\n".join(texto_amostra)
+    
     prompt = f"""
-    As a Senior Molecular Pharmacologist, extract a Python list of specific MOLECULAR TARGETS and DRUGS.
+    Role: Senior Molecular Pharmacologist.
+    Task: Extract a JSON list of specific MOLECULAR TARGETS (Receptors, Enzymes, Channels) and DRUGS mentioned in the text.
     
-    STRICTLY IGNORE AND DELETE: 
-    - Clinical/Exams: MRI, CT, PET, BCG, TURBT, NHANES, GWAS, SBRT, IMPT, RBE.
-    - Cell Lines: T24, UM-UC-3, RT4.
-    - General Biology: DNA, RNA, ATP, CELL, TISSUE, PATIENT, GENE, PROTEIN.
-    - Disease Acronyms: BLCA, NMIBC, OAB, LUTS, BPS.
+    STRICT EXCLUSIONS (Do NOT include):
+    - Clinical terms (MRI, CT, PET, BCG, TURBT, GWAS, RBE)
+    - Cell lines (T24, UM-UC-3)
+    - General terms (DNA, RNA, ATP, Gene, Protein, Patient, Study)
+    - Disease/Anatomy (BLCA, NMIBC, OAB, LUTS, Bladder)
     
-    Return ONLY: ["TARGET1", "DRUG1", ...]
-    TEXT:
+    Format: Return ONLY a JSON list of strings. Example: ["P2X3", "Mirabegron", "TRPV1"]
+    
+    TEXT DATA:
     {texto_input}
     """
-    raw = call_gemini(prompt, api_key, temperature=0.1)
-    return parse_structure(raw, list)
+    
+    resultado = call_gemini_json(prompt, api_key)
+    if isinstance(resultado, list):
+        return [str(x) for x in resultado]
+    return []
 
 # ================= ANALISAR ABSTRACT =================
 
-def analisar_abstract_com_ia(titulo, dados_curtos, api_key, lang='pt'):
+def analisar_abstract_com_ia(titulo: str, dados_curtos: str, api_key: str) -> str:
     if not api_key: return "N/A | N/A | N/A"
-    prompt = f"Analyze: {titulo}. Context: {dados_curtos}. Extract: TARGET | DRUG | EFFECT. Strictly one line."
-    res = call_gemini(prompt, api_key)
-    if not res or len(res) < 5: return "Alvo | Fármaco | Análise de sinal em andamento"
+    prompt = f"Analyze: {titulo}. Context: {dados_curtos}. Extract: TARGET | DRUG | EFFECT. Output strictly one line separated by pipes."
+    res = simple_gemini_text(prompt, api_key)
+    if not res or "|" not in res: return "Alvo | Fármaco | Análise em andamento"
     return res.strip()
 
 # ================= MÉTRICAS E PIPELINE =================
 
-def calcular_metricas_originais(freq, total_docs, n_alvo_total):
-    lambda_score = (freq / total_docs) * 100 if total_docs > 0 else 0
+def calcular_metricas_originais(freq: int, total_docs: int, n_alvo_total: int):
+    if total_docs == 0: return 0, 1.0, 0, "N/A"
+    
+    lambda_score = (freq / total_docs) * 100
     p_val = math.exp(-freq/2.5) if freq > 0 else 1.0 
     blue_ocean = max(10, 100 - (n_alvo_total * 2))
+    
     return lambda_score, round(p_val, 4), round(blue_ocean, 2), "Competitivo"
 
 @st.cache_data(ttl=3600)
-def minerar_pubmed(termo_base, email):
+def minerar_pubmed(termo_base: str, email: str) -> Dict:
     api_key = st.session_state.get("api_key_usuario", "").strip()
     Entrez.email = email
     
@@ -97,103 +139,139 @@ def minerar_pubmed(termo_base, email):
     query = f"({termo_expandido}) AND (2019:2026[Date])"
     
     try:
+        # Busca IDs
         handle = Entrez.esearch(db="pubmed", term=query, retmax=150)
-        record = Entrez.read(handle); handle.close()
+        record = Entrez.read(handle)
+        handle.close()
+        
         if not record["IdList"]: return {}
 
+        # Fetch e Parsing robusto com Bio.Medline
         handle = Entrez.efetch(db="pubmed", id=record["IdList"], rettype="medline", retmode="text")
-        raw_medline = handle.read(); handle.close()
-
-        artigos = []
-        for bloco in raw_medline.split("\n\nPMID-"):
-            titulo, texto = "", ""
-            for line in bloco.split("\n"):
-                if line.startswith("TI  - "): titulo = line[6:].strip()
-                if line.startswith(("TI  - ", "KW  - ", "OT  - ")): texto += line[6:].strip() + " "
-            if texto: artigos.append({"titulo": titulo, "texto": texto})
-
-        entidades = ner_extraction_batch(artigos, api_key) if api_key else []
+        records = Medline.parse(handle)
+        artigos_parsed = []
         
-        # Fallback Determinístico REFINADO
+        for r in records:
+            # Combina Título (TI), Palavras-chave (OT/KW) e Abstract (AB) se disponível
+            texto_combinado = f"{r.get('TI', '')} {r.get('AB', '')} {' '.join(r.get('OT', []))}"
+            if texto_combinado.strip():
+                artigos_parsed.append({"titulo": r.get('TI', ''), "texto": texto_combinado})
+        
+        # 1. Tentativa via IA
+        entidades = []
+        if api_key:
+            entidades = ner_extraction_batch(artigos_parsed, api_key)
+        
+        # 2. Fallback Determinístico (Se IA falhar ou não houver chave)
         if not entidades:
-            texto_full = " ".join([a['texto'] for a in artigos])
-            # Ignora palavras de 1 ou 2 letras (Ex: VIII, CT, NF)
-            entidades = re.findall(r'\b[A-Z][A-Z0-9-]{2,12}\b', texto_full)
+            texto_full = " ".join([a['texto'] for a in artigos_parsed])
+            # Regex melhorado para capturar siglas e nomes compostos simples
+            candidatos = re.findall(r'\b[A-Z][a-zA-Z0-9-]{2,15}\b', texto_full)
             
-            # Peneira de Farmacologia (Blacklist de ruído clínico e administrativo)
             blacklist_farmaco = {
                 "MRI", "CT", "PET", "BCG", "DNA", "RNA", "ATP", "GWAS", "TURP", "NHANES",
                 "LUTS", "OAB", "BPH", "IPSS", "AUA", "EAU", "NMIBC", "MIBC", "TURBT",
                 "SBRT", "IMPT", "RBE", "BLCA", "T24", "HLA", "CALR", "SGLT2", "VIII",
-                "STUDY", "ROLE", "CELL", "TISSUE", "PATIENT", "AND", "WITH", "THE", "FOR"
+                "STUDY", "ROLE", "CELL", "TISSUE", "PATIENT", "AND", "WITH", "THE", "FOR",
+                "ABSTRACT", "BACKGROUND", "METHODS", "RESULTS", "CONCLUSION"
             }
-            entidades = [e for e in entidades if e not in blacklist_farmaco]
+            entidades = [e for e in candidatos if e.upper() not in blacklist_farmaco]
 
+        # Contagem e Normalização
         counts = Counter(entidades)
-        recorrentes = [e for e, c in counts.items() if c >= 2]
-        if not recorrentes: recorrentes = [e for e, _ in counts.most_common(15)]
+        # Filtra ruído de ocorrência única se houver muitos dados
+        limit_cut = 1 if len(entidades) < 50 else 2
+        recorrentes = [e for e, c in counts.items() if c >= limit_cut]
         
-        def normalize(entities):
-            canon = []
-            for e in entities:
-                if not any(SequenceMatcher(None, e.lower(), c.lower()).ratio() > 0.88 for c in canon):
-                    canon.append(e)
-            return canon
+        # Se filtrou demais, pega os top 15
+        if not recorrentes: 
+            recorrentes = [e for e, _ in counts.most_common(15)]
+        
+        # Deduplicação Fuzzy simples
+        canonicos = []
+        for e in recorrentes:
+            # Se não for similar a nenhum já adicionado
+            if not any(SequenceMatcher(None, e.lower(), c.lower()).ratio() > 0.90 for c in canonicos):
+                canonicos.append(e)
 
         return {
-            "termos_indicados": normalize(recorrentes),
+            "termos_indicados": canonicos,
             "counts": counts,
-            "total_docs": len(artigos),
-            "artigos_originais": artigos
+            "total_docs": len(artigos_parsed),
+            "artigos_originais": artigos_parsed
         }
-    except: return {}
+    except Exception as e:
+        # st.error(f"Erro na mineração: {e}") # Descomentar para debug
+        return {}
 
 # ================= FUNÇÕES DE APOIO =================
 
-def buscar_alvos_emergentes_pubmed(alvo, email, usar_ia=True):
+def buscar_alvos_emergentes_pubmed(alvo: str, email: str) -> List[str]:
     res = minerar_pubmed(alvo, email)
     return res.get("termos_indicados", [])
 
 @st.cache_data(ttl=3600)
-def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
+def buscar_resumos_detalhados(termo: str, orgao: str, email: str, ano_ini: int, ano_fim: int) -> List[Dict]:
     Entrez.email = email
     query = f"({termo}) AND ({orgao}) AND ({ano_ini}:{ano_fim}[Date])"
     try:
         handle = Entrez.esearch(db="pubmed", term=query, retmax=10)
-        record = Entrez.read(handle); handle.close()
+        record = Entrez.read(handle)
+        handle.close()
+        
+        if not record["IdList"]: return []
+
         handle = Entrez.efetch(db="pubmed", id=record["IdList"], rettype="medline", retmode="text")
-        raw = handle.read(); handle.close()
+        records = Medline.parse(handle)
+        
         artigos = []
-        for bloco in raw.split("\n\nPMID-"):
-            tit, pmid, abstract = "", "", ""
-            for line in bloco.split("\n"):
-                if line.startswith("TI  - "): tit = line[6:].strip()
-                if line.startswith("AB  - "): abstract = line[6:800].strip()
-                if line.startswith("PMID- "): pmid = line[6:].strip()
-            if tit: artigos.append({"Title": tit, "Info_IA": abstract, "Link": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"})
+        for r in records:
+            tit = r.get("TI", "Sem título")
+            abstract = r.get("AB", "Resumo indisponível.")[:800] # Limita tamanho
+            pmid = r.get("PMID", "")
+            if pmid:
+                artigos.append({
+                    "Title": tit, 
+                    "Info_IA": abstract, 
+                    "Link": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
+                })
         return artigos
     except: return []
 
-def consultar_pubmed_count(termo, contexto, email, ano_ini, ano_fim):
+def consultar_pubmed_count(termo: str, contexto: str, email: str, ano_ini: int, ano_fim: int) -> int:
     Entrez.email = email
     query = f"({termo}) AND ({contexto}) AND ({ano_ini}:{ano_fim}[Date])"
-    handle = Entrez.esearch(db="pubmed", term=query, retmax=0)
-    record = Entrez.read(handle); handle.close()
-    return int(record["Count"])
+    try:
+        handle = Entrez.esearch(db="pubmed", term=query, retmax=0)
+        record = Entrez.read(handle)
+        handle.close()
+        return int(record["Count"])
+    except:
+        return 0
 
-def buscar_todas_noticias(email):
+def buscar_todas_noticias(email: str) -> List[Dict]:
     Entrez.email = email
     query = "(molecular bladder pharmacology) AND (2024:2026[Date])"
-    handle = Entrez.esearch(db="pubmed", term=query, retmax=5, sort="pub_date")
-    record = Entrez.read(handle); handle.close()
-    handle = Entrez.efetch(db="pubmed", id=record["IdList"], rettype="medline", retmode="text")
-    raw = handle.read(); handle.close()
-    news = []
-    for bloco in raw.split("\n\nPMID-"):
-        tit, journal, pmid = "", "", ""
-        for line in bloco.split("\n"):
-            if line.startswith("TI  - "): tit = line[6:].strip()
-            if line.startswith("JT  - "): journal = line[3:].strip()
-            if line.strip().isdigit() and not pmid: pmid = line.strip()
-        if tit: news.append({"titulo": tit, "fonte": journal[:30], "link": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"})
-    return news
+    try:
+        handle = Entrez.esearch(db="pubmed", term=query, retmax=5, sort="pub_date")
+        record = Entrez.read(handle)
+        handle.close()
+        
+        if not record["IdList"]: return []
+
+        handle = Entrez.efetch(db="pubmed", id=record["IdList"], rettype="medline", retmode="text")
+        records = Medline.parse(handle)
+        
+        news = []
+        for r in records:
+            tit = r.get("TI", "Sem título")
+            journal = r.get("JT", "Journal desconhecido")
+            pmid = r.get("PMID", "")
+            if pmid:
+                news.append({
+                    "titulo": tit, 
+                    "fonte": journal[:30], 
+                    "link": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
+                })
+        return news
+    except: return []
