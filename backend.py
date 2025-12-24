@@ -47,39 +47,43 @@ def parse_structure(text, expected=list):
             if isinstance(obj, expected): return obj
     except: pass
     
-    # Fallback: se a IA não mandou lista, tenta pegar palavras em caixa alta (siglas de alvos)
     if expected == list:
-        return re.findall(r"\b[A-Z0-9-]{3,15}\b", text)
+        # Regex mais seletiva: evita números puros ou siglas muito curtas
+        return re.findall(r"\b[A-Z][A-Z0-9-]{2,15}\b", text)
     return expected()
 
 # ================= NER (EXTRAÇÃO DE ALVOS) =================
 
 def ner_extraction_batch(artigos, api_key):
-    # Pega os 40 primeiros títulos/keywords para dar volume
     texto_input = "\n".join([f"- {a['texto']}" for a in artigos[:40]])
     prompt = f"""
-    As a Molecular Pharmacologist, extract a Python list of MOLECULAR TARGETS (receptors, channels, proteins) and DRUGS from this text.
-    Return ONLY the list: ["TARGET1", "DRUG1", ...]
+    As a Senior Molecular Pharmacologist, extract a Python list of specific MOLECULAR TARGETS and DRUGS.
+    STRICTLY IGNORE: 
+    - Clinical/Exams: MRI, CT, PET, BCG, TURBT, NHANES, GWAS.
+    - General Biology: DNA, RNA, ATP, CELL, TISSUE, PATIENT.
+    - Acronyms of Diseases: NMIBC, OAB, LUTS, BPS.
+    
+    Return ONLY: ["TARGET1", "DRUG1", ...]
     TEXT:
     {texto_input}
     """
     raw = call_gemini(prompt, api_key, temperature=0.1)
     return parse_structure(raw, list)
 
-# ================= ANALISAR ABSTRACT (FIX N/A) =================
+# ================= ANALISAR ABSTRACT =================
 
 def analisar_abstract_com_ia(titulo, dados_curtos, api_key, lang='pt'):
     if not api_key: return "N/A | N/A | N/A"
-    prompt = f"Analyze: {titulo}. Extract: TARGET | DRUG | EFFECT. Strictly one line. Text: {dados_curtos}"
+    prompt = f"Analyze: {titulo}. Context: {dados_curtos}. Extract: TARGET | DRUG | EFFECT. Strictly one line."
     res = call_gemini(prompt, api_key)
-    if not res or len(res) < 5: return "Target | Drug | Estudo em andamento"
+    if not res or len(res) < 5: return "Alvo | Fármaco | Análise de sinal em andamento"
     return res.strip()
 
 # ================= MÉTRICAS E PIPELINE =================
 
 def calcular_metricas_originais(freq, total_docs, n_alvo_total):
     lambda_score = (freq / total_docs) * 100 if total_docs > 0 else 0
-    p_val = math.exp(-freq/2.0) if freq > 0 else 1.0 # P-value mais sensível
+    p_val = math.exp(-freq/2.5) if freq > 0 else 1.0 
     blue_ocean = max(10, 100 - (n_alvo_total * 2))
     return lambda_score, round(p_val, 4), round(blue_ocean, 2), "Competitivo"
 
@@ -88,12 +92,11 @@ def minerar_pubmed(termo_base, email):
     api_key = st.session_state.get("api_key_usuario", "").strip()
     Entrez.email = email
     
-    # Expande a query automaticamente
     termo_expandido = MAPA_SINONIMOS_BASE.get(termo_base.upper(), termo_base)
-    query = f"({termo_expandido}) AND (2018:2026[Date])" # Janela maior para garantir dados
+    query = f"({termo_expandido}) AND (2019:2026[Date])"
     
     try:
-        handle = Entrez.esearch(db="pubmed", term=query, retmax=200)
+        handle = Entrez.esearch(db="pubmed", term=query, retmax=150)
         record = Entrez.read(handle); handle.close()
         if not record["IdList"]: return {}
 
@@ -108,27 +111,29 @@ def minerar_pubmed(termo_base, email):
                 if line.startswith(("TI  - ", "KW  - ", "OT  - ")): texto += line[6:].strip() + " "
             if texto: artigos.append({"titulo": titulo, "texto": texto})
 
-        # NER com a IA
         entidades = ner_extraction_batch(artigos, api_key) if api_key else []
         
-        # Fallback Determinístico (Se a IA falhar, o código extrai siglas na marra)
+        # Fallback Determinístico REFINADO (Remove lixo clínico comum via Blacklist)
         if not entidades:
             texto_full = " ".join([a['texto'] for a in artigos])
             entidades = re.findall(r'\b[A-Z][A-Z0-9-]{2,12}\b', texto_full)
-            # Remove ruído comum
-            blacklist = {"AND", "THE", "FOR", "WITH", "ROLE", "CELL", "STUDY", "PMID"}
-            entidades = [e for e in entidades if e not in blacklist]
+            
+            # Peneira de Farmacologia (Blacklist de ruído clínico)
+            blacklist_farmaco = {
+                "MRI", "CT", "PET", "BCG", "DNA", "RNA", "ATP", "GWAS", "TURP", "NHANES",
+                "LUTS", "OAB", "BPH", "IPSS", "AUA", "EAU", "NMIBC", "MIBC", "TURBT",
+                "STUDY", "ROLE", "CELL", "TISSUE", "PATIENT", "AND", "WITH", "THE"
+            }
+            entidades = [e for e in entidades if e not in blacklist_farmaco]
 
         counts = Counter(entidades)
-        
-        # Filtro de relevância: Alvos recorrentes ou Top 20
         recorrentes = [e for e, c in counts.items() if c >= 2]
-        if not recorrentes: recorrentes = [e for e, _ in counts.most_common(20)]
+        if not recorrentes: recorrentes = [e for e, _ in counts.most_common(15)]
         
         def normalize(entities):
             canon = []
             for e in entities:
-                if not any(SequenceMatcher(None, e.lower(), c.lower()).ratio() > 0.85 for c in canon):
+                if not any(SequenceMatcher(None, e.lower(), c.lower()).ratio() > 0.88 for c in canon):
                     canon.append(e)
             return canon
 
