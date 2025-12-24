@@ -9,69 +9,77 @@ import ast
 # --- CONFIGURAÇÃO ---
 Entrez.email = "pesquisador_guest@unifesp.br"
 
-# --- MODELOS DA SUA LISTA (SÓ 2.5 E 3.0) ---
+# --- MODELOS DA SUA LISTA (FOCO EM 2.5 E 3.0) ---
 MODELOS_ATIVOS = [
-    "gemini-2.5-flash",
     "gemini-3-flash-preview",
+    "gemini-2.5-flash",
     "gemini-2.0-flash"
 ]
 
-# --- 1. BLACKLIST DE EXTERMÍNIO (Mata o lixo clínico no Python) ---
+# --- 1. BLACKLIST DE PRE-FILTRAGEM (Python mata o lixo clínico antes) ---
 BLACKLIST_RADICAL = {
-    "THE", "AND", "WITH", "FOR", "FROM", "CASE", "REPORT", "STUDY", 
-    "TURBT", "BCG", "NMIBC", "MIBC", "LUTS", "OAB", "UTI", "BPH", 
-    "RADS", "SEER", "MRI", "PET", "BBN", "NEOADJUVANT", "PRIMARY",
-    "MALIGNANT", "RADICAL", "SURGERY", "CLINICAL", "EFFICACY", "DIAGNOSIS",
-    "MANAGEMENT", "UPDATE", "CURRENT", "SYNDROME", "OUTCOMES", "WOMEN"
+    "VI-RADS", "RADS", "RCT", "TURP", "TURBT", "BCG", "III", "3-D", "FISH",
+    "GUERIN", "CALMETTE", "DISEASE", "SURGERY", "CLINICAL", "PATIENTS",
+    "THE", "CASE", "UPDATE", "MANAGEMENT", "PRIMARY", "MRI-", "RNA-"
 }
 
-# --- 2. FAXINEIRO IA (USANDO 2.5/3.0) ---
+# --- 2. O PROMPT DE FILTRAGEM RIGOROSA ---
 def _faxina_ia(lista_suja):
     api_key = st.session_state.get('api_key_usuario', '').strip()
-    # Se não tem chave, faz uma limpeza básica via Python
     if not api_key: 
         return [t for t in lista_suja if t.upper() not in BLACKLIST_RADICAL][:30]
 
+    # PROMPT COM FOCO EM FARMACOLOGIA EXPERIMENTAL
     prompt = f"""
-    ACT AS: Senior PhD Pharmacologist.
-    TASK: Extract ONLY molecular targets (receptors, channels, enzymes) and experimental compounds.
+    ROLE: PhD Senior Researcher in Pharmacophysiology.
+    CONTEXT: You are analyzing potential targets for isolated organ bath experiments and molecular signaling.
     
-    STRICT RULES:
-    - KEEP: TRPV1, TRPA1, NLRP3, STING, BDNF, PDE, Solifenacin, Cyclophosphamide.
-    - DELETE: Clinical acronyms (BCG, OAB, LUTS), Imaging (MRI, PET), Procedures (TURBT), and filler words (THE).
-    - If it's not a molecule for an 'Organ Bath' or 'Western Blot' experiment, DELETE it.
+    INPUT LIST: {", ".join(lista_suja)}
     
-    INPUT: {", ".join(lista_suja)}
+    TASK: Strictly filter this list and return ONLY relevant molecular entities.
     
-    OUTPUT: Return strictly a Python list of strings.
+    ✅ KEEP (STRICT):
+    - Receptors & Channels: TRPV4, TRPA1, 5-HT, P2X, Muscarinic receptors.
+    - Signaling Proteins/Enzymes: ERK, STING, NLRP3, TGF-beta, NF-kB, BDNF.
+    - Molecules/Drugs: ATP, Cyclophosphamide, Vitamin (if specific), Resveratrol.
+    - Genetic Markers/EMT: EMT markers (Vimentin, E-cadherin), Genes.
+    
+    ❌ DELETE (STRICT):
+    - Clinical/Surgical terms: VI-RADS, TURP, RCT, Surgery, Patients.
+    - Anatomy/Disease names: Bladder, Cancer, Cystitis, SCI (unless target-related).
+    - Vague terms: Disease, Case, Update, 3-D, III, Guerin, FISH.
+    
+    OUTPUT: Return strictly a Python list of strings. If the list is empty, return [].
     """
     
-    payload = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"temperature": 0.0}}
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": 0.0} # Precisão máxima
+    }
     
     for m in MODELOS_ATIVOS:
         try:
-            # URL pura e direta para evitar erros de biblioteca
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={api_key}"
-            resp = requests.post(url, json=payload, timeout=12)
+            resp = requests.post(url, json=payload, timeout=15)
             
             if resp.status_code == 200:
                 raw_text = resp.json()['candidates'][0]['content']['parts'][0]['text']
+                # Limpeza de resíduos de markdown (```python ... ```)
                 clean_text = re.sub(r'```[a-zA-Z]*', '', raw_text).replace('```', '').strip()
                 res = ast.literal_eval(clean_text)
                 if isinstance(res, list): return res
         except: continue
     
-    # FALLBACK: Se a IA falhar (429 ou 404), o Python limpa o grosso do lixo
     return [t for t in lista_suja if t.upper() not in BLACKLIST_RADICAL][:30]
 
-# --- 3. MINERAÇÃO PUBMED ---
+# --- 3. MINERAÇÃO PUBMED (AJUSTADA) ---
 def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
     if email: Entrez.email = email
-    # Foco em artigos muito recentes de ciência básica
-    query = f"({termo_base}) AND (2023:2026[Date - Publication]) NOT Review[pt]"
+    # Busca focada em mecanismos e farmacologia
+    query = f"({termo_base}) AND (2022:2026[Date - Publication]) NOT (Review[pt] OR Case Reports[pt])"
     
     try:
-        handle = Entrez.esearch(db="pubmed", term=query, retmax=1200, sort="relevance")
+        handle = Entrez.esearch(db="pubmed", term=query, retmax=1500, sort="relevance")
         record = Entrez.read(handle); handle.close()
         if not record["IdList"]: return []
 
@@ -81,10 +89,11 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
         candidatos = []
         for line in lines:
             if line.startswith("TI  - ") or line.startswith("OT  - "):
-                # Pega siglas (ex: TRPV4) e nomes químicos que terminam em in, ol, receptor, etc.
-                found = re.findall(r'\b(?:[A-Z0-9-]{3,10}|[A-Z][a-z]{3,}(?:in|ol|ide|ase|ant|receptor|channel))\b', line)
+                # Pega siglas e termos técnicos Capitalizados
+                found = re.findall(r'\b(?:[A-Z0-9-]{3,12}|[A-Z][a-z]{3,}(?:in|one|ol|ide|ase|ant|receptor|channel))\b', line)
                 for f in found:
-                    if f.upper() not in BLACKLIST_RADICAL:
+                    f_up = f.upper()
+                    if f_up not in BLACKLIST_RADICAL and len(f) > 2:
                         candidatos.append(f)
         
         top_terms = [t for t, count in Counter(candidatos).most_common(120)]
@@ -94,19 +103,24 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
         return top_terms[:30]
     except: return []
 
-# --- 4. ANALISAR ARTIGO ---
+# --- 4. ANALISAR ABSTRACT ---
 def analisar_abstract_com_ia(titulo, resumo_texto, api_key):
-    prompt = f"Como Farmacologista, resuma em 15 palavras o Alvo Molecular e efeito tecidual: {titulo}. Contexto: {resumo_texto[:600]}"
+    prompt = f"""
+    Resuma como Doutor em Farmacologia (máx 20 palavras):
+    Foque no Alvo Molecular e na sinalização intracelular (ex: ERK, NF-kB).
+    TÍTULO: {titulo}
+    TEXTO: {resumo_texto[:800]}
+    """
     for m in MODELOS_ATIVOS:
         try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={api_key}"
-            resp = requests.post(url, json={"contents": [{"parts": [{"text": prompt}]}]}, timeout=8)
+            resp = requests.post(url, json={"contents": [{"parts": [{"text": prompt}]}]}, timeout=10)
             if resp.status_code == 200:
                 return resp.json()['candidates'][0]['content']['parts'][0]['text'].strip()
         except: continue
-    return "Erro nos modelos 2.5/3.0. Verifique sua cota."
+    return "Erro de resposta da IA."
 
-# --- FUNÇÕES SUPORTE (COUNT/RESUMOS) ---
+# --- FUNÇÕES SUPORTE ---
 def consultar_pubmed_count(termo, contexto, email, ano_ini, ano_fim):
     query = f"({termo}) AND ({contexto}) AND ({ano_ini}:{ano_fim}[Date - Publication])"
     try:
