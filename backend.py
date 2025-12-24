@@ -43,23 +43,28 @@ def buscar_todas_noticias(lang='pt'):
             tit, journal, pmid = "", "", ""
             for line in art.split("\n"):
                 if line.startswith("TI  - "): tit = line[6:].strip()
-                if line.startswith("JT  - "): journal = line[3:].strip()
+                if line.startswith("JT  - "): journal = line[6:].strip()
                 if line.strip().isdigit() and not pmid: pmid = line.strip()
             if tit and pmid:
-                news.append({"titulo": tit, "fonte": journal[:40], "link": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"})
+                news.append({"titulo": tit, "fonte": journal[:40], "link": f"https://pubmed.ncbi.gov/{pmid}/"})
         return news
     except: return []
 
-# --- 4. DOUTORA INVESTIGADORA (COM LIMPEZA DE STRING ROBUSTA) ---
+# --- 4. DOUTORA INVESTIGADORA (STRICT FILTER) ---
 def _doutora_investigadora(termo_base, lista_pubmed=None, fase="brainstorming"):
     api_key = st.session_state.get('api_key_usuario', '')
     if not api_key: return []
 
     if fase == "brainstorming":
-        prompt = f"Liste 50 alvos moleculares, fármacos e miRNAs para {termo_base}. Ex: TRPV4, GSK1016790A. Apenas lista Python []."
+        prompt = f"Como PhD em farmacologia molecular, liste 50 alvos moleculares, fármacos e miRNAs para {termo_base}. Ex: TRPV4, GSK1016790A. Apenas lista Python []."
     else:
         lista_str = ", ".join(lista_pubmed[:100])
-        prompt = f"Cruze seu conhecimento com estes termos PubMed: {lista_str}. Isolar apenas alvos/fármacos técnicos. Sem lixo clínico ou animal. Apenas lista Python []."
+        prompt = f"""
+        Cruze seu conhecimento com estes termos PubMed: {lista_str}. 
+        ATENÇÃO: Ignore termos de metadados (PMID, FAU, NLM, JID). 
+        Extraia apenas ALVOS (canais, receptores, enzimas) e FÁRMACOS específicos. 
+        Apenas lista Python [].
+        """
 
     headers = {'Content-Type': 'application/json'}
     data = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"temperature": 0.2}}
@@ -70,23 +75,19 @@ def _doutora_investigadora(termo_base, lista_pubmed=None, fase="brainstorming"):
             resp = requests.post(url, headers=headers, data=json.dumps(data), timeout=15)
             if resp.status_code == 200:
                 texto = resp.json()['candidates'][0]['content']['parts'][0]['text']
-                # Tenta extrair a lista mesmo se a IA falar demais
                 match = re.search(r'\[.*\]', texto, re.DOTALL)
-                if match:
-                    return ast.literal_eval(match.group())
+                if match: return ast.literal_eval(match.group())
         except: continue
     return []
 
-# --- 5. MINERAÇÃO E CRUZAMENTO MASSIVO ---
+# --- 5. MINERAÇÃO E CRUZAMENTO (O CORAÇÃO DO FIX) ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
     if email: Entrez.email = email
     
-    # 1. IA Pensa
     alvos_previstos = []
     if usar_ia: alvos_previstos = _doutora_investigadora(termo_base, fase="brainstorming")
     
-    # 2. Busca PubMed
     query = f"({termo_base} AND (Pharmacology OR Molecular)) AND (2018:2026[Date])"
     try:
         handle = Entrez.esearch(db="pubmed", term=query, retmax=1000, sort="relevance")
@@ -95,20 +96,32 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
         handle = Entrez.efetch(db="pubmed", id=record["IdList"], rettype="medline", retmode="text")
         full_data = handle.read(); handle.close()
         
-        # Regex flexível: aceita siglas de 2+ letras se forem maiúsculas
-        candidatos_raw = re.findall(r'\b[A-Z0-9-]{2,}\b', full_data) 
-        contagem = Counter([c.upper() for c in candidatos_raw if len(c) > 2])
+        # --- NOVO FILTRO: EXTRAI APENAS TEXTO ÚTIL ---
+        blacklist_tags = {'FAU', 'PMID', 'NLM', 'DCOM', 'JID', 'EDAT', 'MHDA', 'CRDT', 'PST', 'HHS', 'NIH', 'NIDDK', 'LID', 'NID', 'PMC', 'PMCR', 'OTO', 'AUID', 'ORCID', 'PHST', 'AID'}
+        
+        candidatos_pubmed = []
+        for artigo in full_data.split("\n\nPMID-"):
+            texto_util = ""
+            for line in artigo.split("\n"):
+                # SÓ OLHA TÍTULOS (TI), ABSTRACT (AB) E KEYWORDS (KW/OT)
+                if line.startswith("TI  - ") or line.startswith("AB  - ") or line.startswith("KW  - ") or line.startswith("OT  - "):
+                    texto_util += line[6:].strip() + " "
+            
+            # Captura siglas técnicos e fármacos no texto útil
+            encontrados = re.findall(r'\b[A-Z0-9-]{3,}\b', texto_util)
+            for t in encontrados:
+                if t.upper() not in blacklist_tags:
+                    candidatos_pubmed.append(t.upper())
+
+        contagem = Counter(candidatos_pubmed)
         top_pubmed = [termo for termo, freq in contagem.most_common(150)]
         
-        # 3. Cruzamento com Redundância
         nomes_finais = []
         if usar_ia:
             lista_para_cruzamento = list(set(alvos_previstos + top_pubmed))
             nomes_finais = _doutora_investigadora(termo_base, lista_pubmed=lista_para_cruzamento, fase="cruzamento")
         
-        # Se a IA falhar ou retornar vazio, usamos o Top PubMed limpo para não travar o app
-        if not nomes_finais:
-            nomes_finais = top_pubmed[:60]
+        if not nomes_finais: nomes_finais = top_pubmed[:60]
 
         res_finais = []
         for nome in nomes_finais:
@@ -125,7 +138,7 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
 # --- 6. ANÁLISE IA ---
 def analisar_abstract_com_ia(titulo, dados, api_key, lang='pt'):
     if not api_key: return "Chave necessária."
-    prompt = f"Analise como PhD em farmacologia: {titulo}. Contexto: {dados}. Resuma em 20 palavras."
+    prompt = f"Analise: {titulo}. Resuma Alvo, Fármaco e Efeito em 20 palavras."
     headers = {'Content-Type': 'application/json'}
     data = {"contents": [{"parts": [{"text": prompt}]}]}
     for m in MODELOS_ATIVOS:
