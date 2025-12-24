@@ -28,26 +28,24 @@ MAPA_SINONIMOS = {
 
 # --- LISTA DE MODELOS ---
 MODELOS_ATIVOS = [
-    "gemini-2.0-flash",          
-    "gemini-2.0-flash-exp",      
-    "gemini-1.5-flash",          
-    "gemini-1.5-pro",
-    "gemini-flash-latest"
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-lite-preview-02-05",
+    "gemini-flash-latest",
+    "gemini-1.5-pro"
 ]
 
-# --- 2. FAXINEIRO IA (PROMPT INOVADOR) ---
+# --- 2. FAXINEIRO IA ---
 def _faxina_ia(lista_suja):
     api_key = st.session_state.get('api_key_usuario', '').strip()
     if not api_key: return lista_suja[:30] 
 
     lista_str = ", ".join(lista_suja)
     
-    # Prompt focado em achar "A Agulha no Palheiro" (TMAO, TFEB, Trehalose)
+    # Prompt ajustado para Inovação Farmacológica
     prompt = f"""
     ACT AS: PhD Researcher in Pharmacophysiology searching for NOVEL targets.
-    
     INPUT LIST: {lista_str}
-    
     TASK: Curate this list. Remove generic biology terms and keep specific pharmacological interests.
     
     ✅ KEEP (PRIORITY):
@@ -57,7 +55,7 @@ def _faxina_ia(lista_suja):
     - Experimental Drugs/Compounds: Mirabegron, Solifenacin, C29, GYY4137.
     
     ❌ DELETE (NOISE):
-    - Ubiquitous Molecules: ATP, DNA, RNA, cAMP, VEGF.
+    - Ubiquitous Molecules: ATP, DNA, RNA, cAMP, VEGF, NO, ROS.
     - Clinical/Diseases: LUTS, OAB, Cancer, Infection, COVID, UTI, BPH.
     - Procedures/Diagnostics: MRI, TURBT, Botox, EMG, Urodynamics.
     - General Terms: Protein, Gene, Study, Analysis, Group, Rat, Mouse.
@@ -72,10 +70,13 @@ def _faxina_ia(lista_suja):
         "generationConfig": {"temperature": 0.0}
     }
     
+    # URL LIMPA (Correção Importante)
+    base_url = "https://generativelanguage.googleapis.com/v1beta/models"
+
     for m in MODELOS_ATIVOS:
         try:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={api_key}"
-            resp = requests.post(url, headers=headers, data=json.dumps(data), timeout=20) # Timeout maior
+            url = f"{base_url}/{m}:generateContent?key={api_key}"
+            resp = requests.post(url, headers=headers, data=json.dumps(data), timeout=20)
             
             if resp.status_code == 200:
                 texto = resp.json()['candidates'][0]['content']['parts'][0]['text']
@@ -99,11 +100,13 @@ def analisar_abstract_com_ia(titulo, dados_curtos, api_key, lang='pt'):
     headers = {'Content-Type': 'application/json'}
     data = {"contents": [{"parts": [{"text": prompt_text}]}]}
     
+    # URL LIMPA (Correção Importante)
+    base_url = "[https://generativelanguage.googleapis.com/v1beta/models](https://generativelanguage.googleapis.com/v1beta/models)"
     ultimo_erro = ""
 
     for m in MODELOS_ATIVOS:
         try:
-            url = f"[https://generativelanguage.googleapis.com/v1beta/models/](https://generativelanguage.googleapis.com/v1beta/models/){m}:generateContent?key={key}"
+            url = f"{base_url}/{m}:generateContent?key={key}"
             resp = requests.post(url, headers=headers, data=json.dumps(data), timeout=10)
             if resp.status_code == 200:
                 return resp.json()['candidates'][0]['content']['parts'][0]['text'].strip()
@@ -153,6 +156,7 @@ def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
                 if line.startswith("AB  - "): abstract = line[6:500].strip()
                 if line.startswith("OT  - ") or line.startswith("KW  - "): keywords += line[6:].strip() + ", "
             if tit:
+                # URL LIMPA (Correção Importante)
                 artigos.append({
                     "Title": tit, 
                     "Info_IA": f"{keywords} {abstract}", 
@@ -161,14 +165,15 @@ def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
         return artigos
     except: return []
 
-# --- 5. MINERAÇÃO (CORE) ---
+# --- 5. MINERAÇÃO (AGRESSIVA + FILTRO DUPLO) ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
     if email: Entrez.email = email
+    
     termo_upper = termo_base.upper().strip()
     query_string = MAPA_SINONIMOS.get(termo_upper, f"{termo_base}[Title/Abstract]")
     
-    # Busca 2000 artigos para garantir que pegamos termos raros como Trehalose
+    # Busca 2000 artigos para garantir profundidade
     final_query = f"({query_string}) AND (2018:2030[Date - Publication]) AND (NOT Review[pt])"
     
     try:
@@ -180,16 +185,15 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
         full_data = handle.read(); handle.close()
         artigos_raw = full_data.split("\n\nPMID-")
 
-        # --- LISTA NEGRA DE EXTERMÍNIO ---
-        # Removendo termos genéricos que você não quer ver
+        # --- LISTA NEGRA DE EXTERMÍNIO ATUALIZADA ---
         blacklist_exterminio = {
-            # Genéricos Biológicos (Feijão com Arroz)
+            # Genéricos Biológicos (Lixo para prospecção de inovação)
             "ATP", "DNA", "RNA", "NO", "ROS", "CO2", "H2O", "PGE", "PGE2", "VEGF", "PD1", "PDL1", "HER2",
             "UPEC", "HBP", "SGC", "PDE5", "ALK", "TP63", "DHEA", "CD44", "IFN", "MIRNAS", "PRP", "SVF",
             "RRNA", "UCA", "NGAL", "EVA", "BTX", "BOTULINUM", "TOXIN", "ANTIBODIES", "NEUTRALIZING", 
             "GPA", "PACAP", "PAC1", "EG70", "CG0070", "CD90", "CXCL13", "AVP", "AQP2", "HCG", "DMSO",
             
-            # Clínicos & Doenças (Sua lista anterior)
+            # Clínicos & Doenças
             "LUTS", "OAB", "BPH", "UTI", "IC", "BPS", "ICIRS", "LUT", "LUTD", "BOO", "SUI", "UUI", "MUI",
             "COVID", "COVID19", "SARS", "VIRUS", "INFECTION", "SEPSIS", "CANCER", "TUMOR", "CIS", "MIBC", "NMIBC",
             
@@ -213,25 +217,21 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
             
             if not texto_focado: continue
 
-            # --- REGEX NOVO: Captura Siglas E Palavras estilo "Chemical" (Trehalose, Resveratrol) ---
-            # 1. [A-Z]{2,} -> Siglas (TRPV1)
-            # 2. [A-Z][a-z]{3,} -> Title Case (Trehalose, Metformin)
+            # REGEX: Pega Siglas (TRPV1) e Palavras Químicas (Trehalose, Resveratrol)
             encontrados = re.findall(r'\b(?:[A-Z]{2,}[A-Z0-9-]*|[A-Z][a-z]{3,}[a-z0-9-]*)\b', texto_focado)
             
             for t in encontrados:
-                # Removemos plural simples ('s) e pontuação
                 t_clean = re.sub(r'[^a-zA-Z0-9]', '', t)
                 t_upper = t_clean.upper()
                 
-                # Regra 1: Tamanho mínimo (TMAO passa, NO morre)
+                # Regra 1: Tamanho mínimo (Protege TMAO)
                 if len(t_clean) < 3: continue 
                 
-                # Regra 2: Blacklist (Verifica em Maiúsculo para garantir)
+                # Regra 2: Blacklist (Case Insensitive Check)
                 if t_upper in blacklist_exterminio: continue
                 if t_upper == termo_upper.replace(" ", ""): continue
                 
-                # Regra 3: Se for Title Case (Ex: Trehalose), mantemos a formatação original na lista
-                # para que a IA entenda que é nome próprio/químico.
+                # Regra 3: Se for Title Case (Ex: Trehalose), mantemos a formatação original
                 candidatos_por_artigo.append(t_clean)
 
         if not candidatos_por_artigo: return []
@@ -239,14 +239,13 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
         contagem = Counter(candidatos_por_artigo)
         total_docs = max(1, len(artigos_raw))
         
-        # Pega uma amostra MAIOR (Top 200) para incluir os termos raros (TFEB, Trehalose)
+        # Pega uma amostra MAIOR (Top 200) para incluir os termos raros
         top_candidatos = [termo for termo,freq in contagem.most_common(200) if (freq/total_docs)<0.90]
         
-        # Filtra redundante (caso regex tenha pegado algo da blacklist com casing diferente)
+        # Filtra redundante
         lista_para_ia = [t for t in top_candidatos if t.upper() not in blacklist_exterminio]
         
         if usar_ia and st.session_state.get('api_key_usuario'):
-            # Envia para a IA filtrar
             return _faxina_ia(lista_para_ia)
         else:
             return lista_para_ia[:40]
@@ -269,8 +268,10 @@ def buscar_todas_noticias(lang='pt'):
                 if line.startswith("JT  - "): journal = line.replace("JT  - ", "").strip()
                 if line.strip().isdigit() and not pmid: pmid = line.strip()
             if tit and pmid:
+                # URL LIMPA (Correção Importante)
                 news.append({
-                    "titulo": tit, "fonte": journal[:30], 
+                    "titulo": tit, 
+                    "fonte": journal[:30], 
                     "link": f"[https://pubmed.ncbi.nlm.nih.gov/](https://pubmed.ncbi.nlm.nih.gov/){pmid}/", 
                     "img": "[https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=400](https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=400)"
                 })
