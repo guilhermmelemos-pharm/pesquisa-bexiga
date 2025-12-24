@@ -12,7 +12,6 @@ import ast
 Entrez.email = "pesquisador_guest@unifesp.br"
 
 # --- 1. MAPA DE EXPANSÃO SEMÂNTICA ---
-# O "Cérebro" que traduz termos simples para buscas complexas
 MAPA_SINONIMOS = {
     "HEART": "Heart OR Cardiac OR Myocardium OR Cardiomyocyte OR Coronary OR Artery OR Ventricular OR Atrial OR Ischemia OR Heart Failure",
     "BLADDER": "Bladder OR Urothelium OR Detrusor OR Vesical OR Urethra OR Micturition OR LUTS OR Cystitis OR Overactive Bladder OR OAB",
@@ -27,28 +26,18 @@ MAPA_SINONIMOS = {
     "CANCER": "Cancer OR Tumor OR Oncology OR Carcinoma OR Metastasis OR Proliferation OR Angiogenesis OR Apoptosis"
 }
 
-# --- 2. FAXINEIRO IA (LIMPEZA INTELIGENTE) ---
+# --- 2. FAXINEIRO IA ---
 def _faxina_ia(lista_suja):
-    """
-    Usa a IA para separar Alvos Moleculares Reais de Lixo Clínico/Administrativo.
-    """
     api_key = st.session_state.get('api_key_usuario', '')
-    
-    # Se não tiver chave, retorna a lista suja cortada (Backup)
-    if not api_key: 
-        return lista_suja[:25] 
+    if not api_key: return lista_suja[:25] 
 
     lista_str = ", ".join(lista_suja)
-    
     prompt = f"""
-    Task: Pharmacological Data Cleaning.
+    Task: Pharmacological Target Cleaner.
     Input: {lista_str}
-    
-    Instruction: Filter this list extracted from PubMed titles. 
-    REMOVE: Clinical terms (OAB, BPH, UTI), Procedures (TURBT, MRI), Organizations (AHA, EAU), Statistics (ANOVA), and general words.
-    KEEP ONLY: Genes (e.g., TFEB, mTOR), Proteins, Receptors (e.g., TRPV1), Enzymes, Metabolites (e.g., TMAO), and Pharmacological Targets.
-    
-    Output format: A clean Python list string, e.g., ['TMAO', 'TFEB', 'TRPV1']
+    Instructions: REMOVE completely: Clinical terms (VIRADS, OAB, BPH, UTI), Procedures (TURBT, TURP, MRI, CEUS), Statistics (AUC, ACR, CI), and general acronyms.
+    KEEP ONLY: Molecular Targets (Genes, Proteins, Receptors like TRPV4, P2X3, NGF, BDNF), Enzymes, and Drugs.
+    Output: A python list string.
     """
     
     headers = {'Content-Type': 'application/json'}
@@ -58,29 +47,22 @@ def _faxina_ia(lista_suja):
         "generationConfig": {"temperature": 0.0}
     }
     
-    # Tenta modelos rápidos primeiro
     modelos = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"]
-    
     for m in modelos:
         try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={api_key}"
             resp = requests.post(url, headers=headers, data=json.dumps(data), timeout=6)
-            
             if resp.status_code == 200:
                 texto = resp.json()['candidates'][0]['content']['parts'][0]['text']
-                # Limpeza da string JSON/Markdown
                 texto = texto.replace("```python", "").replace("```json", "").replace("```", "").strip()
-                
                 if texto.startswith("[") and texto.endswith("]"):
                     lista_limpa = ast.literal_eval(texto)
                     if isinstance(lista_limpa, list) and len(lista_limpa) > 0:
                         return lista_limpa
         except: continue
-            
-    # Se a IA falhar em todos os modelos, retorna a lista original
     return lista_suja[:25]
 
-# --- 3. ANÁLISE DE RESUMOS COM IA ---
+# --- 3. ANÁLISE DE RESUMOS ---
 def analisar_abstract_com_ia(titulo, dados_curtos, api_key, lang='pt'):
     if not api_key: return "⚠️ IA não ativada"
     idioma = "Português" if lang == 'pt' else "Inglês"
@@ -98,10 +80,9 @@ REGRAS: Máximo 12 palavras. Seja técnico. Idioma: {idioma}."""
         if resp.status_code == 200:
             return resp.json()['candidates'][0]['content']['parts'][0]['text'].strip()
     except: pass
-    return "⚠️ IA indisponível no momento."
+    return "⚠️ IA indisponível."
 
-# --- 4. FUNÇÕES DE BUSCA PUBMED (CORE) ---
-
+# --- 4. BUSCA PUBMED ---
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
 def _fetch_pubmed_count(query):
     handle = Entrez.esearch(db="pubmed", term=query, retmax=0)
@@ -144,15 +125,14 @@ def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
         return artigos
     except: return []
 
-# --- 5. MOTOR DE MINERAÇÃO HÍBRIDO (HEAVY DUTY V8) ---
+# --- 5. MOTOR DE MINERAÇÃO (FINAL COM CONTROLE DO USUÁRIO) ---
 @st.cache_data(ttl=3600, show_spinner=False)
-def buscar_alvos_emergentes_pubmed(termo_base, email):
+def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
     if email: Entrez.email = email
-    
     termo_upper = termo_base.upper().strip()
     query_string = MAPA_SINONIMOS.get(termo_upper, f"{termo_base}[Title/Abstract]")
     
-    # BUSCA MASSIVA: 1000 abstracts para garantir diversidade
+    # Busca 1000 artigos
     final_query = f"({query_string}) AND (2018:2030[Date - Publication]) AND (NOT Review[pt])"
     
     try:
@@ -164,127 +144,55 @@ def buscar_alvos_emergentes_pubmed(termo_base, email):
         full_data = handle.read(); handle.close()
         artigos_raw = full_data.split("\n\nPMID-")
 
-        # --- BLACKLIST SUPREMA (Proteção contra Lixo de Todas as Áreas) ---
-        blacklist = set()
-        
-        # A. Metadados, Editoras & Publicação
-        blacklist.update([
-            "PII", "DOI", "ISSN", "PMID", "PMC", "NIHMS", "ISBN", "COPYRIGHT", "AUTHOR", "AUTHORS", 
-            "EDITOR", "PUBLISHER", "RECEIVED", "ACCEPTED", "PUBLISH", "PUBLISHED", "REVISED", "CORRESPONDENCE", 
-            "EMAIL", "ARTICLE", "JOURNAL", "REPORT", "REPORTS", "VOLUME", "ISSUE", "PAGE", "PAGES", "SUPPL",
-            "FIG", "FIGURE", "TABLE", "REF", "REFERENCE", "REFERENCES", "ABSTRACT", "TEXT", "FULL", "TITLE",
-            "INTRODUCTION", "BACKGROUND", "METHODS", "RESULTS", "DISCUSSION", "CONCLUSION", "CONCLUSIONS",
-            "UNIVERSITY", "DEPARTMENT", "HOSPITAL", "CENTER", "CENTRE", "SCHOOL", "COLLEGE", "INSTITUTE",
-            "FOUNDATION", "SOCIETY", "ASSOCIATION", "FEDERATION", "COMMITTEE", "TASK", "FORCE", "GROUP",
-            "SCIENCE", "NATURE", "CELL", "PLOS", "ONE", "FRONTIERS", "MDPI", "WILEY", "ELSEVIER"
-        ])
-
-        # B. Urologia & Nefrologia (Procedimentos & Doenças)
-        blacklist.update([
-            "BPH", "LUTS", "OAB", "IC", "BPS", "ICIRS", "UTI", "UPEC", "SCI", "NB", "UI", "SUI", "MUI",
-            "MIBC", "NMIBC", "CIS", "TURBT", "TURP", "BCG", "RCC", "TCC", "UC", "PCAR", "PSA", "CRPC",
-            "URODYNAMICS", "CYSTOSCOPY", "VIRADS", "PIRADS", "PTNS", "SNM", "BOTOX", "ONABOTULINUMTOXINA",
-            "HOLEP", "THULEP", "GREENLIGHT", "RES", "RESECTION", "STENT", "CATHETER", "SLING", "MESH",
-            "TRANSPLANTATION", "GRAFT", "DIVERSION", "CONDUIT", "NEPHRECTOMY", "LITHOTRIPSY"
-        ])
-
-        # C. Cardiologia & Metabólico
-        blacklist.update([
-            "AHA", "ACC", "ESC", "HFSA", "ACHD", "STEMI", "NSTEMI", "HFPEF", "HFREF", "HFMREF", "CABG", "PCI",
-            "LVAD", "HVAD", "ECMO", "TAVI", "TAVR", "PACEMAKER", "ICD", "CRT", "AFIB", "VT", "VF", "SCD",
-            "SYSTOLIC", "DIASTOLIC", "EJECTION", "FRACTION", "PRESSURE", "HYPERTENSION", "CAD", "ACS",
-            "BMI", "OBESITY", "DIABETES", "INSULIN", "GLUCOSE", "HBA1C", "LIPID", "CHOLESTEROL"
-        ])
-
-        # D. Termos Clínicos Gerais (Todas as áreas)
-        blacklist.update([
-            "PATIENT", "PATIENTS", "HUMAN", "MEN", "WOMEN", "ADULT", "CHILD", "INFANT", "ELDERLY", "MALE", "FEMALE",
-            "CONTROL", "PLACEBO", "SHAM", "TREATED", "UNTREATED", "VEHICLE", "BASELINE", "NORMAL", "ABNORMAL",
-            "CLINICAL", "PRECLINICAL", "MEDICAL", "MEDICINE", "HEALTH", "CARE", "PUBLIC", "COMMUNITY", "GLOBAL",
-            "DISEASE", "DISORDER", "SYNDROME", "CONDITION", "FAILURE", "INJURY", "DAMAGE", "STRESS", "TRAUMA",
-            "ACUTE", "CHRONIC", "SEVERE", "MILD", "MODERATE", "STAGE", "GRADE", "CLASS", "RISK", "FACTOR", "SCORE",
-            "DIAGNOSIS", "PROGNOSIS", "THERAPY", "TREATMENT", "MANAGEMENT", "STRATEGY", "OUTCOME", "OUTCOMES",
-            "EVENT", "EVENTS", "DEATH", "MORTALITY", "MORBIDITY", "SURVIVAL", "SAFETY", "EFFICACY", "QUALITY", "LIFE",
-            "COVID", "COVID19", "SARS", "PANDEMIC", "VIRUS", "INFECTION", "SEPSIS", "CANCER", "TUMOR", "METASTASIS"
-        ])
-
-        # E. Exames, Estatística & Genéricos
-        blacklist.update([
-            "MRI", "CMR", "CT", "PET", "SPECT", "ECG", "EKG", "ECHO", "ULTRASOUND", "XRAY", "IMAGING", "CEUS",
-            "WESTERN", "BLOT", "PCR", "QPCR", "RT", "ELISA", "STAINING", "IMMUNO", "HISTOLOGY", "ASSAY",
-            "TOTAL", "MEAN", "RATIO", "SD", "SEM", "CI", "HR", "RR", "OR", "VS", "VERSUS", "LOG", "ANOVA",
-            "YEAR", "YEARS", "MONTH", "MONTHS", "DAY", "DAYS", "HOUR", "HOURS", "MIN", "SEC", "TIME",
-            "KG", "MG", "ML", "NM", "UM", "MM", "CM", "HZ", "MV", "MMHG", "AUC", "ROC", "P", "VALUE",
-            "AND", "THE", "FOR", "NOT", "BUT", "WITH", "FROM", "THIS", "THAT", "THESE", "THOSE",
-            "WHICH", "WHAT", "WHEN", "WHERE", "WHO", "WHY", "HOW", "ANY", "ALL", "EACH", "EVERY",
-            "HAVE", "HAS", "HAD", "WAS", "WERE", "BEEN", "BEING", "ARE", "IS", "CAN", "COULD",
-            "SHOULD", "WOULD", "MAY", "MIGHT", "MUST", "WILL", "SHALL", "DOES", "DID", "DOING",
-            "VIA", "DUE", "BETWEEN", "AMONG", "WITHIN", "WITHOUT", "UNDER", "ABOVE", "BELOW", 
-            "AFTER", "BEFORE", "DURING", "SINCE", "UNTIL", "WHILE", "ONCE", "UPON", "INTO", "ONTO",
-            "USING", "USED", "USE", "DATA", "ANALYSIS", "STUDY", "TRIALS", "TRIAL", "META", "REVIEW"
-        ])
-        
-        # F. Termos Biológicos Genéricos (Para deixar passar apenas os Específicos)
-        blacklist.update([
-            "DNA", "RNA", "MRNA", "MIRNA", "SIRNA", "GENE", "GENES", "PROTEIN", "PROTEINS", "CELL", "CELLS", 
-            "TISSUE", "TISSUES", "RATS", "MICE", "RABBIT", "PIG", "DOG", "MODEL", "MODELS", "VIVO", "VITRO", 
-            "EX", "SITU", "LEVEL", "LEVELS", "EXPRESSION", "REGULATION", "ACTIVITY", "ACTIVATION", "INHIBITION",
-            "PATHWAY", "SIGNALING", "MECHANISM", "TARGET", "ROLE", "FUNCTION", "ACTION", "EFFECT", "EFFECTS",
-            "MEDIATED", "INDUCED", "DEPENDENT", "INDEPENDENT", "ASSOCIATED", "RELATED", "LINKED", "POTENTIAL",
-            "BIOMARKER", "CANDIDATE", "NOVEL", "NEW", "RECENT", "INSIGHTS", "UPDATE", "FUTURE", "PERSPECTIVE",
-            "MOLECULAR", "GENETIC", "EPIGENETIC", "PHARMACOLOGY", "DRUG", "DRUGS", "RECEPTOR", "CHANNEL", "ENZYME"
-        ])
+        # --- BLACKLIST DE SEGURANÇA (Sempre ativa) ---
+        blacklist = {
+            "VIRADS", "BPS", "OAB", "BCG", "UTI", "ICIRS", "BPH", "LUT", "TURBT", "MIBC", "CEUS", 
+            "YAG", "ACR", "AUC", "PUNLMP", "PRP", "EMG", "TURP", "LUTD", "NMIBC", "PTNS", "SCI", 
+            "TRANSPLANTATION", "TVOR", "UPEC", "ECIL", "FPMRS", "RTA", "COUB", "ARM", "PBS", 
+            "RADIATION", "TOXICITY", "RADICAL", "RADIOTHERAPY", "GENITAL", "CONTROL", "GROUP",
+            "PATIENTS", "CLINICAL", "HUMAN", "MALE", "FEMALE", "ACUTE", "CHRONIC", "REVIEW",
+            "META", "ANALYSIS", "DATA", "USING", "USED", "BETWEEN", "AMONG", "WITHIN", "DURING",
+            "AFTER", "BEFORE", "TOTAL", "MEAN", "RATIO", "CI", "OR", "HR", "P", "VALUE", "YEAR",
+            "UNIVERSITY", "DEPARTMENT", "HOSPITAL", "CENTER", "PUBLISH", "ACCEPTED", "RECEIVED",
+            "PII", "DOI", "ISSN", "PMID", "PMC", "ISBN", "COPYRIGHT", "AUTHOR", "EDITOR",
+            "AHA", "ACC", "ESC", "WHO", "NIH", "CDC", "FDA", "EMA", "ISO", "AUA", "EAU", "ICS",
+            "MRI", "CMR", "CT", "PET", "SPECT", "ECG", "EKG", "ECHO", "ULTRASOUND", "XRAY",
+            "WESTERN", "BLOT", "PCR", "QPCR", "ELISA", "STAINING", "IMMUNO", "HISTOLOGY"
+        }
 
         candidatos_por_artigo = []
         for artigo in artigos_raw:
-            # SÓ LÊ TÍTULO E KEYWORDS
             texto_focado = ""
             for line in artigo.split("\n"):
                 if line.startswith("TI  - "): texto_focado += line[6:].strip() + " "
                 elif line.startswith("OT  - ") or line.startswith("KW  - "): texto_focado += line[6:].strip() + " "
             
             if not texto_focado: continue
-
-            # REGEX OTIMIZADO:
-            # 1. Siglas clássicas (TRPV1, mTOR, P2X3)
-            # 2. Siglas de letras (TMAO, BDNF, TFEB) com min 3 letras
-            # 3. Evita números isolados
             encontrados = re.findall(r'\b(?:[A-Z]{2,}[A-Z0-9-]*|[a-z]{1,2}[A-Z][a-zA-Z0-9-]*)\b', texto_focado)
             
             for t in encontrados:
-                t_clean = re.sub(r'[^a-zA-Z0-9]', '', t).upper() # Normaliza tudo para UPPER na checagem
-                
-                if len(t_clean) < 3: continue
-                if t_clean in blacklist: continue
+                t_clean = re.sub(r'[^a-zA-Z0-9]', '', t).upper()
+                if len(t_clean) < 3 or t_clean in blacklist or t_clean.isdigit(): continue
                 if t_clean == termo_upper.replace(" ", ""): continue
-                if t_clean.isdigit(): continue 
-                
-                # Mantém a formatação original (ex: 'mTOR' em vez de 'MTOR') se possível, 
-                # mas aqui vamos padronizar para evitar duplicatas.
                 candidatos_por_artigo.append(t_clean)
 
         if not candidatos_por_artigo: return []
         
-        # 1. Contagem Bruta
         contagem = Counter(candidatos_por_artigo)
         total_docs = max(1, len(artigos_raw))
+        top_candidatos = [termo for termo,freq in contagem.most_common(120) if (freq/total_docs)<0.90]
         
-        # 2. Filtro Estatístico Inicial (Lista Suja mas Rica)
-        # Pegamos Top 80 termos que aparecem em <90% dos títulos
-        top_candidatos = [termo for termo,freq in contagem.most_common(120) if (freq/total_docs)<0.90][:80]
+        lista_final = [t for t in top_candidatos if t not in blacklist]
         
-        # 3. LIMPEZA FINAL VIA IA (Se o usuário tiver chave)
-        if st.session_state.get('api_key_usuario'):
-            # Chama o "Faxineiro IA"
-            lista_limpa = _faxina_ia(top_candidatos)
-            return lista_limpa # Retorna a lista curada pela IA
+        # --- DECISÃO: USAR IA OU NÃO? ---
+        if usar_ia and st.session_state.get('api_key_usuario'):
+            return _faxina_ia(lista_final[:80])
         else:
-            # Sem chave, retorna a lista bruta filtrada (Top 30)
-            return top_candidatos[:30]
+            return lista_final[:30]
 
     except: return []
 
-# --- RADAR DE NOTÍCIAS ---
+# --- RADAR ---
 def buscar_todas_noticias(lang='pt'):
     try:
         query = "(molecular biology OR pharmacology) AND (2024/09/01:2025/12/31[Date - Publication])"
@@ -303,4 +211,4 @@ def buscar_todas_noticias(lang='pt'):
                 news.append({"titulo": tit, "fonte": journal[:30], "link": f"[https://pubmed.ncbi.nlm.nih.gov/](https://pubmed.ncbi.nlm.nih.gov/){pmid}/", "img":"[https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=400](https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=400)"})
         return news
     except: return []
-                                  
+    
