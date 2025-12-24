@@ -45,23 +45,23 @@ def _faxina_ia(lista_suja):
     # Prompt agressivo contra termos clínicos e abstratos
     prompt = f"""
     ACT AS: Senior Pharmacologist & Molecular Biologist.
-    CONTEXT: We are filtering terms from PubMed titles.
+    CONTEXT: We are filtering terms from PubMed titles to find specific molecular targets.
     INPUT LIST: {lista_str}
     
     TASK: STRICTLY Filter this list. Keep ONLY concrete molecular entities.
     
-    ✅ KEEP (Physical Entities you can pipet or sequence):
+    ✅ KEEP (Physical Entities you can pipet, sequence, or bind to):
     - Specific Receptors/Channels (TRPV1, P2X3, Beta-3-AR)
     - Enzymes/Kinases (mTOR, ROCK, COX-2)
     - Signaling Molecules (cAMP, ATP, NO, PGE2)
     - Genes/RNAs (miRNA-132, GATA3)
     - Specific Drugs/Compounds (Mirabegron, Trehalose, Resveratrol, TMAO)
     
-    ❌ DELETE (Concepts, Anatomy, Clinical words):
-    - NO ANATOMY: Bladder, Detrusor, Urothelium, Nerve, Pelvic, Tract.
-    - NO CLINICAL TERMS: Incontinence, Overactive, Syndrome, Dysfunction, Neurogenic.
-    - NO PROCEDURES: Treatment, Management, Diagnosis, Imaging, Botox.
-    - NO ACADEMIC FLUFF: Role, Current, Systemic, What, Case, Clinical, Efficacy.
+    ❌ DELETE (Concepts, Anatomy, Clinical words, Academic Filler):
+    - NO ANATOMY: Bladder, Detrusor, Urothelium, Nerve, Pelvic, Tract, Lower, Urinary.
+    - NO CLINICAL TERMS: Incontinence, Overactive, Syndrome, Dysfunction, Neurogenic, Benign, Chronic.
+    - NO PROCEDURES: Treatment, Management, Diagnosis, Imaging, Botox, Neuromodulation, Surgical.
+    - NO ACADEMIC FLUFF: Role, Current, Systemic, What, Case, Clinical, Efficacy, Potential, Novel.
     
     OUTPUT: Return strictly a Python list of strings.
     """
@@ -172,6 +172,7 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
     termo_upper = termo_base.upper().strip()
     query_string = MAPA_SINONIMOS.get(termo_upper, f"{termo_base}[Title/Abstract]")
     
+    # Busca 2000 abstracts para garantir volume
     final_query = f"({query_string}) AND (2018:2030[Date - Publication]) AND (NOT Review[pt])"
     
     try:
@@ -183,24 +184,28 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
         full_data = handle.read(); handle.close()
         artigos_raw = full_data.split("\n\nPMID-")
 
-        # --- BLACKLIST NUCLEAR (EXTERMÍNIO TOTAL DE LIXO SEMÂNTICO) ---
+        # --- BLACKLIST NUCLEAR (A LISTA DA MORTE) ---
+        # Aqui morrem todos os termos genéricos, clínicos e acadêmicos.
         blacklist_exterminio = {
             # Anatomia e Tecidos (O que não é alvo molecular)
             "DETRUSOR", "UROTHELIUM", "NERVE", "IMMUNE", "AUTONOMIC", "SENSORY", "MUCOSA", "SMOOTH", "MUSCLE",
             "GANGLION", "EPITHELIUM", "TISSUE", "CELL", "VESICAL", "URETHRA", "URINARY", "TRACT", "PELVIC",
-            "SACRAL", "INTERSTITIAL", "FEMALE", "MALE", "HUMAN", "RAT", "MOUSE", "BLADDER", "BODY",
+            "SACRAL", "INTERSTITIAL", "FEMALE", "MALE", "HUMAN", "RAT", "MOUSE", "BLADDER", "BODY", "LOWER",
+            "UROTHELIAL", "URETHRAL", "SYSTEMATIC", "SYSTEMIC",
             
             # Palavras Acadêmicas/Genéricas (O "Lixo de Título")
             "CURRENT", "ROLE", "WHAT", "CASE", "SYSTEMATIC", "CLINICAL", "EFFICACY", "SYMPTOMS", "MOLECULAR",
             "RADICAL", "NOVEL", "NEW", "POTENTIAL", "EFFECT", "EFFECTS", "STUDY", "ANALYSIS", "REVIEW", "META",
             "DATA", "RESULTS", "CONCLUSION", "BACKGROUND", "METHODS", "OBJECTIVE", "AIM", "PURPOSE", "HYPOTHESIS",
             "INVESTIGATION", "EVALUATION", "ASSESSMENT", "COMPARISON", "DURING", "AFTER", "BEFORE", "WITHIN",
+            "HIGH", "LOW", "LEVEL", "INCREASED", "DECREASED", "EXPRESSION", "PATHWAY", "MECHANISM", "ACTIVITY", "ACTION", "FUNCTION",
             
             # Termos Clínicos, Diagnósticos e Procedimentos
             "TREATMENT", "MANAGEMENT", "DIAGNOSIS", "IMAGING", "DYSFUNCTION", "SURGICAL", "INCONTINENCE",
             "NEUROMODULATION", "TRANSURETHRAL", "CARCINOMA", "UROLOGY", "THERAPY", "CHRONIC", "BENIGN", "SYNDROME",
             "OVERACTIVE", "NEUROGENIC", "BOTULINUM", "CYSTITIS", "LUTS", "OAB", "BPH", "UTI", "IC", "BPS",
             "BCG", "TURBT", "TURP", "SNM", "PTNS", "BOTOX", "INJECTION", "STENT", "CATHETER", "MRI", "CT", "PET",
+            "VIRADS", "PIRADS", "CEUS", "ULTRASOUND", "EMG", "URODYNAMICS", "ACR", "AUC", "ROC", "CI", "OR",
             
             # Classes Farmacológicas Genéricas (Não são alvos específicos)
             "ANTICHOLINERGIC", "ANTIMUSCARINIC", "ANTIMUSCARINICS", "AGONIST", "ANTAGONIST", "INHIBITOR", "BLOCKER",
@@ -208,7 +213,7 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
             
             # Genéricos Biológicos "Feijão com Arroz"
             "ATP", "DNA", "RNA", "NO", "ROS", "CO2", "H2O", "PGE", "VEGF", "CALCIUM", "PROTEIN", "GENE",
-            "EXPRESSION", "LEVEL", "PATHWAY", "MECHANISM", "ACTIVITY", "ACTION", "FUNCTION"
+            "THE", "AND", "WITH", "FOR", "BUT", "NOT", "FROM", "USED", "USING"
         }
 
         candidatos_por_artigo = []
@@ -244,8 +249,8 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
         contagem = Counter(candidatos_por_artigo)
         total_docs = max(1, len(artigos_raw))
         
-        # Pega Top 150 para a IA refinar
-        top_candidatos = [termo for termo,freq in contagem.most_common(150) if (freq/total_docs)<0.90]
+        # Pega Top 200 para a IA refinar
+        top_candidatos = [termo for termo,freq in contagem.most_common(200) if (freq/total_docs)<0.90]
         
         # Filtro de Segurança
         lista_para_ia = [t for t in top_candidatos if t.upper() not in blacklist_exterminio]
