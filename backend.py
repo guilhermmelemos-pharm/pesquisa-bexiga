@@ -33,14 +33,21 @@ def calcular_metricas_originais(freq, total_docs, n_alvo_total):
 
 # --- 2. SNIPER IA: ALVO | FÁRMACO | AÇÃO ---
 def analisar_abstract_com_ia(titulo, dados, api_key, lang='pt'):
+    """
+    Extrator Sniper: Alvo | Fármaco | Ação.
+    Blindado contra 'Analysis unavailable'.
+    """
     key = api_key.strip()
     if not key: return "Erro | Key Ausente"
     
     prompt = f"""
     ROLE: Senior PhD Pharmacologist.
-    INPUT: Title: {titulo} | Data: {dados}
-    TASK: Extract strictly: ALVO | FÁRMACO | AÇÃO. 
-    RULES: Maximum 3 words per field. Use 'Endógeno' if no drug. No conversational text.
+    ANALISE: Title: {titulo} | Data: {dados}
+    TASK: Extract strictly: TARGET | DRUG | ACTION. 
+    RULES: 
+    - Output ONLY the 3 fields separated by '|'.
+    - Use 'Endogenous' if no drug.
+    - Example: TRPV4 | GSK1016790A | Agonist.
     """
     
     headers = {'Content-Type': 'application/json'}
@@ -51,7 +58,8 @@ def analisar_abstract_com_ia(titulo, dados, api_key, lang='pt'):
             url = montar_url_limpa(m, key)
             resp = requests.post(url, headers=headers, json=data, timeout=12)
             if resp.status_code == 200:
-                return resp.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+                res = resp.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+                return res if "|" in res else f"{res} | Endógeno | Mecanismo"
         except: continue
     return "N/A | N/A | N/A"
 
@@ -61,10 +69,10 @@ def _faxina_ia(lista_suja):
     if not api_key: return lista_suja[:30]
     
     prompt = f"""
-    ROLE: Senior Scientist in Pharmacology.
+    ROLE: Senior Scientist in Pharmacology & Physiopathology.
     INPUT: {", ".join(lista_suja)}
     TASK: Keep ONLY specific pharmacological targets (Channels, Receptors, Enzymes) and specific drugs.
-    DELETE: Animals, anatomy, clinical jargon, and general biology.
+    DELETE: Animals, anatomy, generic biology (Sodium, Water, Cell, Muscle).
     OUTPUT: Strictly a Python list [].
     """
     
@@ -74,7 +82,7 @@ def _faxina_ia(lista_suja):
     for m in MODELOS_ATIVOS:
         try:
             url = montar_url_limpa(m, api_key)
-            resp = requests.post(url, headers=headers, json=data, timeout=20)
+            resp = requests.post(url, headers=headers, data=json.dumps(data), timeout=20)
             if resp.status_code == 200:
                 texto = resp.json()['candidates'][0]['content']['parts'][0]['text']
                 match = re.search(r'\[.*\]', texto, re.DOTALL)
@@ -82,7 +90,7 @@ def _faxina_ia(lista_suja):
         except: continue
     return lista_suja[:30]
 
-# --- 4. BUSCA E CONTAGEM (FILTRO TEMPORAL FIXO) ---
+# --- 4. BUSCA E CONTAGEM (FIX DE ARGUMENTOS E FILTRO TEMPORAL) ---
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
 def _fetch_pubmed_count(query):
     handle = Entrez.esearch(db="pubmed", term=query, retmax=0)
@@ -92,7 +100,7 @@ def _fetch_pubmed_count(query):
 @st.cache_data(ttl=86400, show_spinner=False)
 def consultar_pubmed_count(termo, contexto, email, ano_ini=2015, ano_fim=2026):
     if email: Entrez.email = email
-    # Forçamos a query a ignorar o lixo de 100 anos atrás
+    # Forçamos a busca moderna (2015+) mesmo que o app peça datas antigas
     query = f"({termo}) AND (2015:2026[Date - Publication])"
     if contexto:
         q_contexto = MAPA_SINONIMOS.get(contexto.upper(), contexto)
@@ -104,6 +112,7 @@ def consultar_pubmed_count(termo, contexto, email, ano_ini=2015, ano_fim=2026):
 def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
     if email: Entrez.email = email
     q_orgao = MAPA_SINONIMOS.get(orgao.upper(), orgao)
+    # Detalhes também travados em ciência moderna
     query = f"({termo}) AND ({q_orgao}) AND (2015:2026[Date - Publication])"
     try:
         handle = Entrez.esearch(db="pubmed", term=query, retmax=5, sort="relevance")
@@ -123,37 +132,39 @@ def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
         return artigos
     except: return []
 
-# --- 5. MINERAÇÃO (CORE COM COUNTER E BLACKLIST) ---
+# --- 5. MINERAÇÃO (SÓ CIÊNCIA MODERNA PÓS-2018) ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
     if email: Entrez.email = email
     termo_upper = termo_base.upper().strip()
     query_string = MAPA_SINONIMOS.get(termo_upper, f"{termo_base}[Title/Abstract]")
     
-    # BUSCA MODERNA (2018-2026)
+    # BUSCA MODERNA (2018-2026): Mata o passado de sapos e cães
     final_query = f"({query_string}) AND (2018:2026[Date - Publication]) AND (NOT Review[pt])"
     
     try:
-        handle = Entrez.esearch(db="pubmed", term=final_query, retmax=1000, sort="relevance")
+        handle = Entrez.esearch(db="pubmed", term=final_query, retmax=1200, sort="relevance")
         record = Entrez.read(handle); handle.close()
         if not record["IdList"]: return []
 
         handle = Entrez.efetch(db="pubmed", id=record["IdList"], rettype="medline", retmode="text")
         full_data = handle.read(); handle.close()
         
+        # Blacklist de Extermínio de Lixo Anatômico e Clássico
         blacklist = {
             'TOAD', 'FROG', 'DOG', 'RABBIT', 'SODIUM', 'WATER', 'TRANSPORT', 'CELL', 'MUSCLE', 'BLADDER',
-            'URINARY', 'EPITHELIUM', 'DNA', 'RNA', 'PROTEIN', 'GENE', 'PATIENT', 'CLINICAL', 'ROLE', 'EFFECT'
+            'URINARY', 'EPITHELIUM', 'DNA', 'RNA', 'PROTEIN', 'GENE', 'PATIENT', 'CLINICAL', 'ROLE', 'EFFECT',
+            'SYSTEM', 'ACTION', 'STUDY', 'RESULTS', 'CONCLUSION', 'PHARMACOLOGY', 'THE', 'AND'
         }
 
         candidatos = []
         for artigo in full_data.split("\n\nPMID-"):
             texto_sniper = ""
             for line in artigo.split("\n"):
-                if line.startswith("TI  - ") or line.startswith("KW  - ") or line.startswith("OT  - "):
+                # Limpeza de caracteres fantasmas nas tags PubMed
+                if line.strip().startswith("TI") or line.strip().startswith("KW") or line.strip().startswith("OT"):
                     texto_sniper += line[6:].strip() + " "
             
-            # Pega siglas (ex: TRPV4, P2X3)
             siglas = re.findall(r'\b[A-Z0-9-]{3,15}\b', texto_sniper)
             for s in siglas:
                 if s.upper() not in blacklist and not s.isdigit():
