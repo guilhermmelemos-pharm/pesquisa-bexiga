@@ -95,15 +95,22 @@ def carregar_lista_dinamica_smart(textos):
     email, alvo = st.session_state.input_email, st.session_state.input_alvo
     if not alvo: st.error(textos["erro_alvo"]); return
     
+    # CORREÇÃO 1: Carrega apenas o que já está na tela, sem forçar presets
     existentes = [x.strip() for x in st.session_state.alvos_val.split(",") if x.strip()]
-    todos_presets = []
-    for lista in c.PRESETS_FRONTEIRA.values():
-        todos_presets.extend(lista)
-    lista_mestra = list(set(existentes + todos_presets)) 
+    lista_mestra = list(set(existentes)) 
     
     with st.spinner(f"{textos['status_minerando']} {alvo}..."):
         novos = bk.buscar_alvos_emergentes_pubmed(alvo, email)
-        if novos: lista_mestra.extend(novos)
+        
+        # Lógica de decisão inteligente:
+        if novos: 
+            # Se achou novidade, usa a novidade
+            lista_mestra.extend(novos)
+        else:
+            # Fallback: Se não achou nada (0), carrega os presets de segurança
+            st.warning("Mineração retornou vazio. Carregando sugestões padrão...")
+            for lista in c.PRESETS_FRONTEIRA.values():
+                lista_mestra.extend(lista)
     
     qtd = adicionar_termos_seguro(lista_mestra, textos)
     st.toast(textos["toast_atualizado"], icon="✅")
@@ -325,8 +332,10 @@ else:
         st.success(f"✅ {len(st.session_state.alvos_val.split(','))} alvos prontos.")
         with st.expander(t["expander_lista"]):
             st.text_area("", key="alvos_val", height=150)
-            # Rótulo definido conforme solicitação em 17/12/2025
-            if st.button("termos indicados"): limpar_lista_total(); st.rerun()
+            
+            # CORREÇÃO 2: Botão agora usa Callback para evitar erro de widget
+            st.button("termos indicados", on_click=limpar_lista_total)
+
         if st.button(t["btn_executar"], type="primary", use_container_width=True):
             if not st.session_state.input_email: st.error(t["erro_email"])
             else: ir_para_analise(st.session_state.input_email, st.session_state.input_fonte, st.session_state.input_alvo, anos[0], anos[1], t)
