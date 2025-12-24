@@ -28,37 +28,43 @@ MAPA_SINONIMOS = {
 
 # --- LISTA DE MODELOS ---
 MODELOS_ATIVOS = [
-    "gemini-2.5-flash",
-    "gemini-2.0-flash",
-    "gemini-2.0-flash-lite-preview-02-05",
-    "gemini-flash-latest",
-    "gemini-1.5-pro"
+    "gemini-2.0-flash",          
+    "gemini-2.0-flash-exp",      
+    "gemini-1.5-flash",          
+    "gemini-1.5-pro",
+    "gemini-flash-latest"
 ]
 
-# --- 2. FAXINEIRO IA ---
+# --- 2. FAXINEIRO IA (PROMPT MOLECULAR PURO) ---
 def _faxina_ia(lista_suja):
+    # Limpeza preventiva da chave
     api_key = st.session_state.get('api_key_usuario', '').strip()
     if not api_key: return lista_suja[:30] 
 
     lista_str = ", ".join(lista_suja)
     
-    # Prompt ajustado para Inovação Farmacológica
+    # PROMPT REFINADO: Separando o "Onde" do "Quem"
     prompt = f"""
-    ACT AS: PhD Researcher in Pharmacophysiology searching for NOVEL targets.
+    ACT AS: Senior Pharmacologist & Molecular Biologist.
+    CONTEXT: We are mining literature for Specific Molecular Targets and Signaling Pathways.
+    
     INPUT LIST: {lista_str}
-    TASK: Curate this list. Remove generic biology terms and keep specific pharmacological interests.
     
-    ✅ KEEP (PRIORITY):
-    - Novel Metabolites & Small Molecules: TMAO, Short-chain fatty acids, Resveratrol, Trehalose.
-    - Specific Regulators: TFEB (Autophagy), mTOR, HIF-1a, NRF2.
-    - Specific Receptors/Channels: TRPV1, P2X3, Beta-3-AR, Piezo1.
-    - Experimental Drugs/Compounds: Mirabegron, Solifenacin, C29, GYY4137.
+    TASK: Filter the list strictly.
     
-    ❌ DELETE (NOISE):
-    - Ubiquitous Molecules: ATP, DNA, RNA, cAMP, VEGF, NO, ROS.
-    - Clinical/Diseases: LUTS, OAB, Cancer, Infection, COVID, UTI, BPH.
-    - Procedures/Diagnostics: MRI, TURBT, Botox, EMG, Urodynamics.
-    - General Terms: Protein, Gene, Study, Analysis, Group, Rat, Mouse.
+    ✅ KEEP ONLY (SPECIFIC MOLECULES & PATHWAYS):
+    - Specific Receptors: TRPV1, P2X3, Beta-3-AR, M3 Receptor, CB2.
+    - Specific Signaling Pathways/Proteins: mTOR, PI3K/Akt, NF-kB, Rho-Kinase, cAMP.
+    - Specific Enzymes: COX-2, PDE5, NOS, Monoamine Oxidase.
+    - Specific Drugs/Compounds: Mirabegron, Tadalafil, Resveratrol, Trehalose, TMAO.
+    - Specific Genes/RNAs: GATA3, TFEB, miRNA-132.
+    
+    ❌ DELETE IMMEDIATELY (VAGUE / ANATOMY / CLASSES):
+    - Tissues/Anatomy: Detrusor, Urothelium, Nerve, Bladder, Mucosa, Smooth Muscle, Ganglion.
+    - Drug Classes (General): Anticholinergics, Antimuscarinics, Agonists, Blockers, Inhibitors.
+    - Physiological Systems: Autonomic, Immune, Sensory, Sympathetic.
+    - Clinical/Diseases: LUTS, OAB, Cancer, Infection, Inflammation.
+    - Common Molecules: ATP, DNA, RNA, Water, Oxygen.
     
     OUTPUT: Return strictly a Python list of strings.
     """
@@ -70,7 +76,7 @@ def _faxina_ia(lista_suja):
         "generationConfig": {"temperature": 0.0}
     }
     
-    # URL LIMPA (Correção Importante)
+    # URL BLINDADA (Sem formatação markdown)
     base_url = "https://generativelanguage.googleapis.com/v1beta/models"
 
     for m in MODELOS_ATIVOS:
@@ -100,7 +106,6 @@ def analisar_abstract_com_ia(titulo, dados_curtos, api_key, lang='pt'):
     headers = {'Content-Type': 'application/json'}
     data = {"contents": [{"parts": [{"text": prompt_text}]}]}
     
-    # URL LIMPA (Correção Importante)
     base_url = "[https://generativelanguage.googleapis.com/v1beta/models](https://generativelanguage.googleapis.com/v1beta/models)"
     ultimo_erro = ""
 
@@ -156,7 +161,6 @@ def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
                 if line.startswith("AB  - "): abstract = line[6:500].strip()
                 if line.startswith("OT  - ") or line.startswith("KW  - "): keywords += line[6:].strip() + ", "
             if tit:
-                # URL LIMPA (Correção Importante)
                 artigos.append({
                     "Title": tit, 
                     "Info_IA": f"{keywords} {abstract}", 
@@ -165,11 +169,10 @@ def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
         return artigos
     except: return []
 
-# --- 5. MINERAÇÃO (AGRESSIVA + FILTRO DUPLO) ---
+# --- 5. MINERAÇÃO (CORE) ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
     if email: Entrez.email = email
-    
     termo_upper = termo_base.upper().strip()
     query_string = MAPA_SINONIMOS.get(termo_upper, f"{termo_base}[Title/Abstract]")
     
@@ -185,13 +188,19 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
         full_data = handle.read(); handle.close()
         artigos_raw = full_data.split("\n\nPMID-")
 
-        # --- LISTA NEGRA DE EXTERMÍNIO ATUALIZADA ---
+        # --- LISTA NEGRA MANUAL (Camada Extra de Segurança) ---
         blacklist_exterminio = {
-            # Genéricos Biológicos (Lixo para prospecção de inovação)
-            "ATP", "DNA", "RNA", "NO", "ROS", "CO2", "H2O", "PGE", "PGE2", "VEGF", "PD1", "PDL1", "HER2",
+            # Anatomia e Tecidos (Alvos errados)
+            "DETRUSOR", "UROTHELIUM", "NERVE", "IMMUNE", "AUTONOMIC", "SENSORY", "MUCOSA", "SMOOTH", "MUSCLE",
+            "GANGLION", "EPITHELIUM", "TISSUE", "CELL", "VESICAL", "URETHRA",
+            
+            # Classes de Drogas Genéricas
+            "ANTICHOLINERGIC", "ANTIMUSCARINIC", "ANTIMUSCARINICS", "AGONIST", "ANTAGONIST", 
+            "INHIBITOR", "BLOCKER", "ACTIVATOR", "MODULATOR", "RECEPTOR", "CHANNEL",
+            
+            # Genéricos Biológicos
+            "ATP", "DNA", "RNA", "NO", "ROS", "CO2", "H2O", "PGE", "PGE2", "VEGF", "PD1", "PDL1", "HER2", "CALCIUM",
             "UPEC", "HBP", "SGC", "PDE5", "ALK", "TP63", "DHEA", "CD44", "IFN", "MIRNAS", "PRP", "SVF",
-            "RRNA", "UCA", "NGAL", "EVA", "BTX", "BOTULINUM", "TOXIN", "ANTIBODIES", "NEUTRALIZING", 
-            "GPA", "PACAP", "PAC1", "EG70", "CG0070", "CD90", "CXCL13", "AVP", "AQP2", "HCG", "DMSO",
             
             # Clínicos & Doenças
             "LUTS", "OAB", "BPH", "UTI", "IC", "BPS", "ICIRS", "LUT", "LUTD", "BOO", "SUI", "UUI", "MUI",
@@ -202,9 +211,9 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
             "VIRADS", "PIRADS", "CEUS", "ULTRASOUND", "EMG", "URODYNAMICS", "ACR", "AUC", "ROC", "CI", "OR",
             
             # Lixo Gramatical
-            "THE", "AND", "WITH", "FOR", "BUT", "NOT", "FROM", "USED", "USING", "DATA", "STUDY", "RESULTS",
+            "THE", "AND", "WITH", "FOR", "BUT", "NOT", "FROM", "USED", "USING", "DATA", "STUDY", "RESULTS", "GROUP",
             "UNIVERSITY", "DEPARTMENT", "CENTER", "HOSPITAL", "PUBLISH", "ACCEPTED", "RECEIVED", "PMC", "PMID",
-            "WESTERN", "BLOT", "PCR", "ELISA", "ANALYSIS", "REVIEW", "META", "TRIAL", "COHORT", "GROUP", "CONTROL",
+            "WESTERN", "BLOT", "PCR", "ELISA", "ANALYSIS", "REVIEW", "META", "TRIAL", "COHORT", "CONTROL",
             "TOTAL", "MEAN", "RATIO", "YEAR", "MONTH", "DAY", "HOUR", "MIN", "SEC", "HIGH", "LOW", "LEVEL"
         }
 
@@ -224,14 +233,14 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
                 t_clean = re.sub(r'[^a-zA-Z0-9]', '', t)
                 t_upper = t_clean.upper()
                 
-                # Regra 1: Tamanho mínimo (Protege TMAO)
+                # Regra 1: Tamanho mínimo
                 if len(t_clean) < 3: continue 
                 
                 # Regra 2: Blacklist (Case Insensitive Check)
                 if t_upper in blacklist_exterminio: continue
                 if t_upper == termo_upper.replace(" ", ""): continue
                 
-                # Regra 3: Se for Title Case (Ex: Trehalose), mantemos a formatação original
+                # Regra 3: Title Case para químicos (Trehalose)
                 candidatos_por_artigo.append(t_clean)
 
         if not candidatos_por_artigo: return []
@@ -239,7 +248,7 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
         contagem = Counter(candidatos_por_artigo)
         total_docs = max(1, len(artigos_raw))
         
-        # Pega uma amostra MAIOR (Top 200) para incluir os termos raros
+        # Pega Top 200 para dar material para a IA trabalhar
         top_candidatos = [termo for termo,freq in contagem.most_common(200) if (freq/total_docs)<0.90]
         
         # Filtra redundante
@@ -268,10 +277,8 @@ def buscar_todas_noticias(lang='pt'):
                 if line.startswith("JT  - "): journal = line.replace("JT  - ", "").strip()
                 if line.strip().isdigit() and not pmid: pmid = line.strip()
             if tit and pmid:
-                # URL LIMPA (Correção Importante)
                 news.append({
-                    "titulo": tit, 
-                    "fonte": journal[:30], 
+                    "titulo": tit, "fonte": journal[:30], 
                     "link": f"[https://pubmed.ncbi.nlm.nih.gov/](https://pubmed.ncbi.nlm.nih.gov/){pmid}/", 
                     "img": "[https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=400](https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=400)"
                 })
