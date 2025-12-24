@@ -51,14 +51,14 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
     if usar_ia:
         prompt_brain = f"""
         Role: PhD Molecular Pharmacologist.
-        Task: List 60 specific molecular targets (channels, receptors, enzymes) and specific experimental drugs for "{termo_base}" based ONLY on 2020-2026 science.
-        STRICT EXCLUSION: No classic physiology (Toads, Frogs, Dogs, Sodium/Water transport, Vasopressin).
+        Task: List 60 specific molecular targets (channels, receptors, enzymes) and experimental drugs for "{termo_base}" based ONLY on 2020-2026 science.
+        STRICT EXCLUSION: No classic physiology (Toads, Frogs, Dogs, Sodium/Water transport).
         CORE TARGETS: TRPV4, Piezo1, P2X3, ROCK, NLRP3, SPHK1, Rho-kinase, miRNAs.
         Output: ONLY a Python list of strings [].
         """
         alvos_elite = _chamar_ia_seletiva(prompt_brain)
     
-    # Busca PubMed: Só 2018 para frente. Isso mata a fisiologia clássica de 1970 na fonte.
+    # Busca PubMed: Só 2018 para frente. Isso mata a fisiologia clássica na fonte.
     query = f"({termo_base} AND (Pharmacology OR Molecular OR Signaling)) AND (2018:2026[Date])"
     try:
         handle = Entrez.esearch(db="pubmed", term=query, retmax=1200, sort="relevance")
@@ -68,7 +68,7 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
         handle = Entrez.efetch(db="pubmed", id=record["IdList"], rettype="medline", retmode="text")
         full_data = handle.read(); handle.close()
         
-        # Super Blacklist (Termos que não são alvos de bancada modernos)
+        # Blacklist de termos que não são alvos de bancada modernos
         lixo = {
             'TOAD', 'FROG', 'DOG', 'RABBIT', 'SODIUM', 'WATER', 'TRANSPORT', 'KIDNEY', 
             'STUDY', 'ROLE', 'LAB', 'EXPERIMENTAL', 'PHYSIOLOGY', 'HORMONES', 
@@ -77,13 +77,11 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
         
         candidatos_pubmed = []
         for artigo in full_data.split("\n\nPMID-"):
-            # FOCO TOTAL: Título e Keywords (onde está a identidade molecular do artigo)
             texto_util = ""
             for linha in artigo.split("\n"):
-                if linha.startswith("TI  - ") or linha.startswith("KW  - ") or line.startswith("OT  - "):
+                if linha.startswith("TI  - ") or linha.startswith("KW  - ") or linha.startswith("OT  - "):
                     texto_util += linha[6:].strip() + " "
             
-            # Captura siglas e nomes químicos (3+ caracteres)
             siglas = re.findall(r'\b[A-Z0-9-]{3,12}\b', texto_util)
             for s in siglas:
                 if s.upper() not in lixo:
@@ -92,7 +90,7 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
         contagem = Counter(candidatos_pubmed)
         top_pubmed = [termo for termo, freq in contagem.most_common(150)]
         
-        # O PULO DO GATO: Cruzamento Rígido com ordem de extermínio
+        # Cruzamento Rígido com ordem de extermínio
         nomes_finais = []
         if usar_ia:
             lista_para_cruzamento = list(set(alvos_elite + top_pubmed))
