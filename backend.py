@@ -63,8 +63,9 @@ def _doutora_investigadora(termo_base, lista_pubmed=None, fase="brainstorming"):
         prompt = f"""
         Cruze seu conhecimento com estes termos do PubMed: {lista_str}.
         MISSÃO: Isolar alvos de bancada e fármacos. 
-        REGRAS: Delete termos genéricos (Study, Effect, Results, MRNA, Body), conectivos e animais.
-        Mantenha siglas técnicas (TRPV4, SPHK1).
+        REGRAS: Delete termos genéricos (Study, Effect, Results, MRNA, Body), conectivos e animais (Toad, Rabbit).
+        Delete siglas de 1 ou 2 letras.
+        Mantenha siglas técnicas (TRPV4, SPHK1, GSK1016790A).
         OUTPUT: APENAS lista Python limpa (60 itens).
         """
 
@@ -99,7 +100,7 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
         handle = Entrez.efetch(db="pubmed", id=record["IdList"], rettype="medline", retmode="text")
         full_data = handle.read(); handle.close()
         
-        # Regex potente: Pega siglas de 3+ letras ou formatos como miR-132
+        # Regex potente: Pega siglas de 3+ letras (deleta RNA, J, O, etc.)
         candidatos_raw = re.findall(r'\b(?:[A-Z0-9-]{3,}|[a-z]{1,2}-[A-Z0-9]{2,})\b', full_data)
         contagem = Counter([c.upper() for c in candidatos_raw])
         top_pubmed = [termo for termo, freq in contagem.most_common(250)]
@@ -107,8 +108,8 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
         # 3. Cruzamento final
         nomes_finais = []
         if usar_ia:
-            lista_cruzamento = list(set(alvos_previstos + top_pubmed))
-            nomes_finais = _doutora_investigadora(termo_base, lista_pubmed=lista_cruzamento, fase="cruzamento")
+            lista_para_cruzamento = list(set(alvos_previstos + top_pubmed))
+            nomes_finais = _doutora_investigadora(termo_base, lista_pubmed=lista_para_cruzamento, fase="cruzamento")
         else:
             nomes_finais = top_pubmed[:40]
 
