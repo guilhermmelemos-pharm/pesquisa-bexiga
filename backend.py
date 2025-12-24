@@ -17,10 +17,10 @@ MODELOS_ATIVOS = [
     "gemini-1.5-flash"
 ]
 
-# LISTA NEGRA ATUALIZADA: Bloqueia o "Lixo" específico que você encontrou
+# LISTA NEGRA: Bloqueia metodologias, anatomia genérica e ruído estatístico
 BLACKLIST_MONSTRO = {
     # 1. Termos de Imagem e Física (Lixo Técnico)
-    "MRI", "CT", "PET", "RBE", "IMPT", "RBE", "VIII",
+    "MRI", "CT", "PET", "RBE", "IMPT", "RBE", "VIII", "RATIO",
     
     # 2. Termos Metodológicos Genéricos (Lixo de Procedimento)
     "ASSOCIATION", "EVALUATION", "UNCOMMON", "DISEASE", "BACKGROUND", 
@@ -30,20 +30,21 @@ BLACKLIST_MONSTRO = {
     "DURING", "PREVALENCE", "INCIDENCE", "RISK", "FACTOR", "ROLE", 
     "POTENTIAL", "NOVEL", "DIAGNOSTIC", "ARTIFICIAL", "MANAGEMENT",
     "PROGNOSTIC", "FACTORS", "NEUROMODULATION", "IMPLICATIONS",
+    "CLINICAL", "REVIEW", "META-ANALYSIS", "SYSTEMATIC", "SURVEY",
     
     # 3. Contexto Clínico/Anatomia (Lixo de Contexto)
     "INTRAUTERINE", "GERMLINE", "BLADDER", "CANCER", "URINARY", 
     "UROTHELIAL", "MUSCLE", "OVERACTIVE", "TUMOR", "CARCINOMA", 
     "PELVIC", "URETHRAL", "UROLOGIC", "NEUROGENIC", "DIABETES", 
     "SJOGREN", "INTRAVESICAL", "VOID", "VOIDING", "DETRUSOR", 
-    "PATIENT", "PATIENTS", "CHILDREN", "ADULT", "NHANES",
+    "PATIENT", "PATIENTS", "CHILDREN", "ADULT", "NHANES", "WOMEN", "MEN",
     
     # 4. Biologia Genérica e Imunologia Ampla (Lixo Biológico)
     "DNA", "RNA", "ATP", "GENE", "PROTEIN", "CELL", "EXPRESSION",
     "BCG", "GUERIN", "CALMETTE", "BACILLUS", "HLA", "CAR",
     
-    # 5. Stop Words (Inglês comum)
-    "THE", "AND", "FOR", "NOT", "BUT", "VIA", "ALL", "WITH"
+    # 5. Stop Words e Conectivos
+    "THE", "AND", "FOR", "NOT", "BUT", "VIA", "ALL", "WITH", "FROM", "AFTER"
 }
 
 MAPA_SINONIMOS_BASE = {
@@ -52,12 +53,13 @@ MAPA_SINONIMOS_BASE = {
     "INFLAMMATION": "(Inflammation OR Cytokines OR NF-kappaB)"
 }
 
-# ================= GEMINI CORE =================
+# ================= GEMINI CORE (COM TRATAMENTO DE ERRO) =================
 
 def clean_model_name(model_name: str) -> str:
     return model_name.replace("models/", "")
 
 def call_gemini_json(prompt: str, api_key: str) -> List[str]:
+    """Retorna lista JSON. Se falhar, retorna lista vazia."""
     if not api_key: return []
     headers = {"Content-Type": "application/json"}
     payload = {
@@ -84,47 +86,48 @@ def call_gemini_json(prompt: str, api_key: str) -> List[str]:
     return []
 
 def simple_gemini_text(prompt: str, api_key: str) -> str:
-    if not api_key: return ""
+    """Retorna texto puro. Se falhar, retorna None (para acionar fallback)."""
+    if not api_key: return None
     headers = {"Content-Type": "application/json"}
     payload = {
         "contents": [{"parts": [{"text": prompt}]}], 
-        "generationConfig": {"temperature": 0.2}
+        "generationConfig": {"temperature": 0.3}
     }
     for modelo_raw in MODELOS_ATIVOS:
         modelo = clean_model_name(modelo_raw)
         try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={api_key.strip()}"
-            resp = requests.post(url, headers=headers, json=payload, timeout=20)
+            resp = requests.post(url, headers=headers, json=payload, timeout=15)
             if resp.status_code == 200:
                 return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
         except: continue
-    return ""
+    return None
 
 # ================= MINERAÇÃO ESTRUTURADA =================
 
 def ner_extraction_batch(titulos_keywords: List[str], api_key: str) -> List[str]:
+    """Extração focada em Alvos Moleculares e Drogas."""
     if not titulos_keywords: return []
     
     texto_input = "\n".join([f"- {t}" for t in titulos_keywords[:60]])
     
-    # Prompt reforçado para ignorar explicitamente o que você não quer
     prompt = f"""
     Role: Molecular Pharmacologist.
-    Task: Extract strictly MOLECULAR TARGETS (Receptors, Enzymes, Genes) and DRUGS.
+    Task: Extract strictly MOLECULAR TARGETS (Receptors, Enzymes, Genes, Ion Channels) and DRUGS/COMPOUNDS.
     
     STRICT EXCLUSIONS (Do NOT extract):
-    - Methods: "Association", "Evaluation", "MRI", "Analysis".
+    - Methods: "Association", "Evaluation", "MRI", "Analysis", "Study".
     - Context: "Disease", "Intrauterine", "Germline", "Neuromodulation".
-    - General: "Patient", "Bladder", "Cancer".
+    - General: "Patient", "Bladder", "Cancer", "Cell", "Protein".
     
-    EXTRACT ONLY:
-    - Specific Targets: "HSP90", "P2X3", "SGLT2", "LRP5".
-    - Drugs/Compounds: "Alantolactone", "Mirabegron", "Cisplatin".
+    EXTRACT ONLY SPECIFIC ENTITIES:
+    - Targets: "HSP90", "P2X3", "SGLT2", "LRP5", "mTOR", "VEGF".
+    - Drugs: "Alantolactone", "Mirabegron", "Cisplatin", "Botox".
     
     INPUT:
     {texto_input}
     
-    OUTPUT: JSON list of strings.
+    OUTPUT: JSON list of strings (entity names only).
     """
     return call_gemini_json(prompt, api_key)
 
@@ -159,25 +162,26 @@ def minerar_pubmed(termo_base: str, email: str, usar_ia: bool = True) -> Dict:
         
         entidades = []
         
-        # 1. IA (Principal)
+        # 1. TENTATIVA VIA IA (Principal)
         if api_key and usar_ia:
             entidades = ner_extraction_batch(raw_texts, api_key)
         
-        # 2. Regex Fallback (Se IA falhar ou para complementar)
+        # 2. TENTATIVA VIA REGEX (Complementar/Fallback)
+        # Sempre rodamos isso para garantir que códigos como P2X3 não escapem
         if True:
             texto_full = " ".join(raw_texts)
             
-            # A: Códigos (Letras maiúsculas + Números) -> P2X3, HSP90
+            # A: Códigos (Letras + Números) -> ex: P2X3, HSP90
             regex_codigos = r'\b[A-Z]{2,}[0-9]+[A-Z0-9-]*\b'
             candidatos_codigos = re.findall(regex_codigos, texto_full)
             
             # B: Fármacos (PascalCase + Sufixos Químicos)
-            # Isso evita que "Association" entre, pois não tem sufixo de droga
+            # Evita palavras comuns, pega só o que parece química
             sufixos = r'(?:ine|in|mab|ib|ol|on|one|il|ide|ate|ase)\b'
             regex_farmacos = r'\b[A-Z][a-z]{3,}' + sufixos
             candidatos_farmacos = re.findall(regex_farmacos, texto_full)
             
-            # C: Acrônimos (3+ Letras Maiúsculas)
+            # C: Acrônimos de Vias (3+ Maiúsculas) -> ex: VEGF, mTOR
             regex_acronimos = r'\b[A-Z]{3,}\b'
             candidatos_acronimos = re.findall(regex_acronimos, texto_full)
 
@@ -185,28 +189,32 @@ def minerar_pubmed(termo_base: str, email: str, usar_ia: bool = True) -> Dict:
             entidades.extend(candidatos_farmacos)
             entidades.extend(candidatos_acronimos)
 
-        # 3. Filtragem Final (Onde eliminamos o "Lixo")
+        # 3. FILTRAGEM FINAL (Onde a Blacklist atua)
         entidades_limpas = []
         for e in entidades:
             e = e.strip(".,-;:()[] ")
             if len(e) < 3: continue 
             if e.isdigit(): continue
             
-            # Verifica Blacklist
+            # Bloqueio explícito da Blacklist
             if e.upper() in BLACKLIST_MONSTRO: continue
+            
+            # Bloqueio extra para preposições que escaparam
+            if e.lower() in ["with", "from", "after", "during"]: continue
             
             entidades_limpas.append(e)
 
-        # 4. Contagem
+        # 4. Contagem e Seleção
         counts = Counter(entidades_limpas)
         
-        # Se tiver muito pouco resultado, aceita termo único. Senão, exige 2.
+        # Limiar: Se tiver poucos dados, aceita frequência 1. Se tiver muitos, exige 2.
         limit = 2 if len(counts) > 20 else 1
         recorrentes = [e for e, c in counts.items() if c >= limit]
         
+        # Ordenação
         recorrentes = sorted(recorrentes, key=lambda x: counts[x], reverse=True)
         
-        # Deduplicação
+        # Deduplicação (Case insensitive)
         final = []
         seen = set()
         for item in recorrentes:
@@ -223,7 +231,7 @@ def minerar_pubmed(termo_base: str, email: str, usar_ia: bool = True) -> Dict:
     except Exception:
         return {}
 
-# ================= WRAPPERS =================
+# ================= WRAPPERS E ANÁLISE =================
 
 def buscar_alvos_emergentes_pubmed(alvo: str, email: str, usar_ia: bool = True) -> List[str]:
     res = minerar_pubmed(alvo, email, usar_ia=usar_ia)
@@ -261,9 +269,32 @@ def buscar_resumos_detalhados(termo: str, orgao: str, email: str, ano_ini: int, 
     except: return []
 
 def analisar_abstract_com_ia(titulo: str, dados_curtos: str, api_key: str, lang: str = 'pt') -> str:
-    if not api_key: return "Chave API necessária."
-    prompt = f"Analyze: {titulo}\nOutput format: [TARGET/DRUG] | [MECHANISM/FUNCTION]"
-    return simple_gemini_text(prompt, api_key).replace("\n", " ")
+    """Gera a Análise Lemos Lambda. Se a IA falhar, gera um resumo tático (Plano B)."""
+    
+    # 1. Tenta via IA (Gemini)
+    if api_key:
+        prompt = f"""
+        Act as a Pharmacologist. Analyze this paper title: "{titulo}"
+        Output a concise 1-sentence summary in this format:
+        [MAIN DRUG/TARGET] acts on [MECHANISM] to improve [CONDITION].
+        """
+        resposta_ia = simple_gemini_text(prompt, api_key)
+        
+        if resposta_ia:
+            return resposta_ia.replace("\n", " ").strip()
+
+    # 2. PLANO B (Fallback): Extração manual se a IA falhar
+    # Pega palavras longas e relevantes do título
+    palavras = titulo.split()
+    # Filtra palavras curtas e que estão na blacklist
+    palavras_chave = [p for p in palavras if len(p) > 5 and p.upper() not in BLACKLIST_MONSTRO]
+    
+    resumo_fallback = " | ".join(palavras_chave[:3])
+    
+    if not resumo_fallback:
+        return "Análise pendente (Verificar artigo original)."
+        
+    return f"🧬 Foco provável: {resumo_fallback} (Gerado automaticamente sem IA)"
 
 def buscar_todas_noticias(lang_code: str) -> List[Dict]:
     Entrez.email = "pesquisador_guest@unifesp.br"
