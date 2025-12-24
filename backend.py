@@ -26,23 +26,23 @@ MAPA_SINONIMOS = {
     "CANCER": "Cancer OR Tumor OR Oncology OR Carcinoma OR Metastasis OR Proliferation OR Angiogenesis OR Apoptosis OR Microenvironment"
 }
 
-# --- LISTA DE MODELOS ---
+# --- LISTA DE MODELOS (Mantendo os seus + Backup Estável) ---
 MODELOS_ATIVOS = [
     "gemini-2.5-flash",          
     "gemini-2.0-flash",          
     "gemini-2.0-flash-exp",      
     "gemini-flash-latest",       
-    "gemini-1.5-pro"
+    "gemini-1.5-pro",
+    "gemini-1.5-flash" # Backup de segurança
 ]
 
-# --- 2. FAXINEIRO IA (PROMPT FARMACOFISIOLOGIA) ---
+# --- 2. FAXINEIRO IA (COM REPORT DE ERRO) ---
 def _faxina_ia(lista_suja):
     api_key = st.session_state.get('api_key_usuario', '')
     if not api_key: return lista_suja[:30] 
 
     lista_str = ", ".join(lista_suja)
     
-    # Prompt ajustado para a Persona de Pesquisadora
     prompt = f"""
     ACT AS: PhD Researcher in Pharmacophysiology.
     TASK: Review this list of terms extracted from literature titles.
@@ -76,6 +76,7 @@ def _faxina_ia(lista_suja):
         "generationConfig": {"temperature": 0.0}
     }
     
+    # URL Base limpa (sem markdown)
     base_url = "https://generativelanguage.googleapis.com/v1beta/models"
 
     for m in MODELOS_ATIVOS:
@@ -94,7 +95,7 @@ def _faxina_ia(lista_suja):
     
     return lista_suja[:30]
 
-# --- 3. ANÁLISE DE RESUMOS ---
+# --- 3. ANÁLISE DE RESUMOS (COM REPORT DE ERRO DETALHADO) ---
 def analisar_abstract_com_ia(titulo, dados_curtos, api_key, lang='pt'):
     if not api_key: return "⚠️ Chave API não detectada."
     idioma = "Português" if lang == 'pt' else "Inglês"
@@ -107,16 +108,33 @@ def analisar_abstract_com_ia(titulo, dados_curtos, api_key, lang='pt'):
     
     headers = {'Content-Type': 'application/json'}
     data = {"contents": [{"parts": [{"text": prompt_text}]}]}
+    
     base_url = "[https://generativelanguage.googleapis.com/v1beta/models](https://generativelanguage.googleapis.com/v1beta/models)"
     
+    ultimo_erro = ""
+
     for m in MODELOS_ATIVOS:
         try:
+            # Construção da URL garantidamente limpa
             url = f"{base_url}/{m}:generateContent?key={api_key}"
+            
             resp = requests.post(url, headers=headers, data=json.dumps(data), timeout=10)
+            
             if resp.status_code == 200:
                 return resp.json()['candidates'][0]['content']['parts'][0]['text'].strip()
-        except: continue
-    return "⚠️ IA indisponível."
+            else:
+                # Guarda o erro para mostrar se tudo falhar
+                try:
+                    msg_erro_api = resp.json().get('error', {}).get('message', 'Erro desconhecido')
+                except:
+                    msg_erro_api = resp.text[:50]
+                ultimo_erro = f"Erro {resp.status_code}: {msg_erro_api}"
+                
+        except Exception as e:
+            ultimo_erro = f"Erro de Conexão: {str(e)}"
+            continue
+            
+    return f"⚠️ IA indisponível. Detalhe: {ultimo_erro} (Modelo tentado: {m})"
 
 # --- 4. FUNÇÕES DE BUSCA ---
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
@@ -183,7 +201,7 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
         full_data = handle.read(); handle.close()
         artigos_raw = full_data.split("\n\nPMID-")
 
-        # --- LISTA NEGRA DE "EXTERMÍNIO" (Proteção contra lixo óbvio) ---
+        # --- LISTA NEGRA DE "EXTERMÍNIO" ---
         blacklist_exterminio = {
             # Clínicos
             "LUTS", "OAB", "BPH", "UTI", "IC", "BPS", "ICIRS", "LUT", "LUTD", "BOO", "SUI", "UUI", "MUI",
@@ -235,14 +253,13 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
         contagem = Counter(candidatos_por_artigo)
         total_docs = max(1, len(artigos_raw))
         
-        # Amostra rica (120 termos) para a IA selecionar
+        # Amostra rica (120 termos)
         top_candidatos = [termo for termo,freq in contagem.most_common(120) if (freq/total_docs)<0.90]
         
         # Filtro de Segurança Redundante
         lista_para_ia = [t for t in top_candidatos if t not in blacklist_exterminio]
         
         if usar_ia and st.session_state.get('api_key_usuario'):
-            # Envia para a "Pesquisadora IA"
             return _faxina_ia(lista_para_ia)
         else:
             return lista_para_ia[:30]
@@ -265,7 +282,6 @@ def buscar_todas_noticias(lang='pt'):
                 if line.startswith("JT  - "): journal = line.replace("JT  - ", "").strip()
                 if line.strip().isdigit() and not pmid: pmid = line.strip()
             if tit and pmid:
-                # Link limpo para evitar erro de conexão
                 news.append({
                     "titulo": tit, 
                     "fonte": journal[:30], 
