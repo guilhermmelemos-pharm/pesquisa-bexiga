@@ -89,4 +89,4 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
         else:
             return top[:30] # Se a IA não estiver ativa, entrega o top 30 já sem o lixo da blacklist
     except: return []
-    
+        
