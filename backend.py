@@ -5,7 +5,6 @@ import json
 from tenacity import retry, stop_after_attempt, wait_exponential
 import re
 from collections import Counter
-import time
 import ast
 import math
 
@@ -14,7 +13,7 @@ Entrez.email = "pesquisador_guest@unifesp.br"
 
 MAPA_SINONIMOS = {
     "BLADDER": "Bladder OR Urothelium OR Detrusor OR Vesical OR Urethra OR Micturition OR LUTS OR Cystitis OR Overactive Bladder OR OAB OR Urinary Tract",
-    "PAIN": "Pain OR Nociception OR Analgesia OR Neuropathic OR Hyperalgesia OR TRP Channels",
+    "PAIN": "Pain OR Nociception OR Analgesia OR Neuropathic OR TRP Channels",
     "INFLAMMATION": "Inflammation OR Cytokine OR Macrophage OR Sepsis OR Inflammasome OR NF-kB"
 }
 
@@ -33,21 +32,17 @@ def calcular_metricas_originais(freq, total_docs, n_alvo_total):
 
 # --- 2. SNIPER IA: ALVO | FÁRMACO | AÇÃO ---
 def analisar_abstract_com_ia(titulo, dados, api_key, lang='pt'):
-    """
-    Extrator Sniper: Alvo | Fármaco | Ação.
-    Blindado contra 'Analysis unavailable'.
-    """
     key = api_key.strip()
     if not key: return "Erro | Key Ausente"
     
     prompt = f"""
     ROLE: Senior PhD Pharmacologist.
-    ANALISE: Title: {titulo} | Data: {dados}
+    INPUT: Title: {titulo} | Data: {dados}
     TASK: Extract strictly: TARGET | DRUG | ACTION. 
     RULES: 
     - Output ONLY the 3 fields separated by '|'.
-    - Use 'Endogenous' if no drug.
-    - Example: TRPV4 | GSK1016790A | Agonist.
+    - DELETE clinical terms (OAB, LUTS, MRI, UTI).
+    - FOCUS on molecular targets (TRP, Piezo, ROCK).
     """
     
     headers = {'Content-Type': 'application/json'}
@@ -69,10 +64,11 @@ def _faxina_ia(lista_suja):
     if not api_key: return lista_suja[:30]
     
     prompt = f"""
-    ROLE: Senior Scientist in Pharmacology & Physiopathology.
+    ROLE: Senior Scientist in Pharmacology.
     INPUT: {", ".join(lista_suja)}
-    TASK: Keep ONLY specific pharmacological targets (Channels, Receptors, Enzymes) and specific drugs.
-    DELETE: Animals, anatomy, generic biology (Sodium, Water, Cell, Muscle).
+    TASK: Keep ONLY specific pharmacological targets (Channels, Receptors, Enzymes) and specific experimental drugs.
+    DELETE ALL CLINICAL/DIAGNOSTIC JARGON: (OAB, LUTS, MRI, ICS, PTNS, BPS, VI-RADS, UTI, BPH, TURBT, SUI, SNM, COVID-19, BCG, WHO).
+    DELETE: Animals, anatomy, generic biology.
     OUTPUT: Strictly a Python list [].
     """
     
@@ -90,34 +86,28 @@ def _faxina_ia(lista_suja):
         except: continue
     return lista_suja[:30]
 
-# --- 4. BUSCA E CONTAGEM (FIX DE ARGUMENTOS E FILTRO TEMPORAL) ---
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
-def _fetch_pubmed_count(query):
-    handle = Entrez.esearch(db="pubmed", term=query, retmax=0)
-    record = Entrez.read(handle); handle.close()
-    return int(record["Count"])
-
+# --- 4. BUSCA E CONTAGEM (FILTRO TEMPORAL FIXO) ---
 @st.cache_data(ttl=86400, show_spinner=False)
 def consultar_pubmed_count(termo, contexto, email, ano_ini=2015, ano_fim=2026):
     if email: Entrez.email = email
-    # Forçamos a busca moderna (2015+) mesmo que o app peça datas antigas
     query = f"({termo}) AND (2015:2026[Date - Publication])"
     if contexto:
         q_contexto = MAPA_SINONIMOS.get(contexto.upper(), contexto)
         query += f" AND ({q_contexto})"
-    try: return _fetch_pubmed_count(query)
+    try:
+        handle = Entrez.esearch(db="pubmed", term=query, retmax=0)
+        record = Entrez.read(handle); handle.close()
+        return int(record["Count"])
     except: return 0
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
     if email: Entrez.email = email
     q_orgao = MAPA_SINONIMOS.get(orgao.upper(), orgao)
-    # Detalhes também travados em ciência moderna
-    query = f"({termo}) AND ({q_orgao}) AND (2015:2026[Date - Publication])"
+    query = f"({termo}) AND ({q_orgao}) AND (2018:2026[Date - Publication])"
     try:
         handle = Entrez.esearch(db="pubmed", term=query, retmax=5, sort="relevance")
         record = Entrez.read(handle); handle.close()
-        if not record["IdList"]: return []
         handle = Entrez.efetch(db="pubmed", id=record["IdList"], rettype="medline", retmode="text")
         dados = handle.read(); handle.close()
         artigos = []
@@ -132,36 +122,32 @@ def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
         return artigos
     except: return []
 
-# --- 5. MINERAÇÃO (SÓ CIÊNCIA MODERNA PÓS-2018) ---
+# --- 5. MINERAÇÃO (CORE COM COUNTER E BLACKLIST REFORÇADA) ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
     if email: Entrez.email = email
     termo_upper = termo_base.upper().strip()
     query_string = MAPA_SINONIMOS.get(termo_upper, f"{termo_base}[Title/Abstract]")
-    
-    # BUSCA MODERNA (2018-2026): Mata o passado de sapos e cães
-    final_query = f"({query_string}) AND (2018:2026[Date - Publication]) AND (NOT Review[pt])"
+    final_query = f"({query_string}) AND (2020:2026[Date - Publication]) AND (NOT Review[pt])"
     
     try:
-        handle = Entrez.esearch(db="pubmed", term=final_query, retmax=1200, sort="relevance")
+        handle = Entrez.esearch(db="pubmed", term=final_query, retmax=1000, sort="relevance")
         record = Entrez.read(handle); handle.close()
-        if not record["IdList"]: return []
-
+        
         handle = Entrez.efetch(db="pubmed", id=record["IdList"], rettype="medline", retmode="text")
         full_data = handle.read(); handle.close()
         
-        # Blacklist de Extermínio de Lixo Anatômico e Clássico
+        # BLACKLIST DE EXTERMÍNIO CLÍNICO (Aumentada conforme sua reclamação)
         blacklist = {
-            'TOAD', 'FROG', 'DOG', 'RABBIT', 'SODIUM', 'WATER', 'TRANSPORT', 'CELL', 'MUSCLE', 'BLADDER',
-            'URINARY', 'EPITHELIUM', 'DNA', 'RNA', 'PROTEIN', 'GENE', 'PATIENT', 'CLINICAL', 'ROLE', 'EFFECT',
-            'SYSTEM', 'ACTION', 'STUDY', 'RESULTS', 'CONCLUSION', 'PHARMACOLOGY', 'THE', 'AND'
+            'OAB', 'LUTS', 'MRI', 'ICS', 'PTNS', 'BPS', 'LUT', 'VI-RADS', 'UTI', 'ICI-RS', 'BPH', 
+            'EMG', 'LUTD', 'PET', 'TURBT', 'SUI', 'COVID-19', 'SNM', 'WHO', 'BCG', 'NOTNLM',
+            'DNA', 'RNA', 'CELL', 'MUSCLE', 'BLADDER', 'URINARY', 'EPITHELIUM', 'STUDY', 'PATIENT'
         }
 
         candidatos = []
         for artigo in full_data.split("\n\nPMID-"):
             texto_sniper = ""
             for line in artigo.split("\n"):
-                # Limpeza de caracteres fantasmas nas tags PubMed
                 if line.strip().startswith("TI") or line.strip().startswith("KW") or line.strip().startswith("OT"):
                     texto_sniper += line[6:].strip() + " "
             
@@ -171,9 +157,9 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
                     candidatos.append(s.upper())
 
         contagem = Counter(candidatos)
-        top_nomes = [t for t, f in contagem.most_common(150)]
+        top_nomes = [t for t, f in contagem.most_common(120)]
         
-        if usar_ia and st.session_state.get('api_key_usuario'):
+        if usar_ia:
             return _faxina_ia(top_nomes)
         return top_nomes[:40]
     except: return []
@@ -182,7 +168,7 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
 @st.cache_data(ttl=3600, show_spinner=False)
 def buscar_todas_noticias(lang='pt'):
     try:
-        query = "(bladder pharmacology OR ion channels signaling) AND (2024:2026[Date])"
+        query = "(bladder pharmacology signaling OR urothelium ion channels) AND (2024:2026[Date])"
         handle = Entrez.esearch(db="pubmed", term=query, retmax=6, sort="pub_date")
         record = Entrez.read(handle); handle.close()
         handle = Entrez.efetch(db="pubmed", id=record["IdList"], rettype="medline", retmode="text")
