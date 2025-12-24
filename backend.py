@@ -35,43 +35,25 @@ REGRAS: Máximo 12 palavras. Seja técnico. Idioma: {idioma}."""
         "generationConfig": {"temperature": 0.1}
     }
 
-    # LISTA ATUALIZADA COM SEUS MODELOS (Prioridade: 2.5 > 2.0 > Latest)
     modelos_disponiveis = [
-        "gemini-2.5-flash",          # Prioridade máxima (Rápido e Novo)
-        "gemini-2.0-flash",          # Backup estável
-        "gemini-2.0-flash-exp",      # Experimental
-        "gemini-flash-latest",       # Genérico
-        "gemini-2.5-flash-lite"      # Super leve se tudo falhar
+        "gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-exp", 
+        "gemini-flash-latest", "gemini-2.5-flash-lite"
     ]
 
     for modelo in modelos_disponiveis:
         try:
-            # URL Direta v1beta (Padrão para modelos novos)
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={api_key}"
-            
             response = requests.post(url, headers=headers, data=json.dumps(data), timeout=10)
-            
             if response.status_code == 200:
                 resultado = response.json()
                 try:
                     texto = resultado['candidates'][0]['content']['parts'][0]['text']
                     return texto.strip()
-                except:
-                    return "⚠️ IA respondeu vazio (Erro no parse)."
-            
-            elif response.status_code == 429:
-                return "💡 IA Ocupada (Cota excedida). Aguarde..."
-            
-            elif response.status_code == 400 or response.status_code == 403:
-                # Se a chave for inválida, para de tentar e avisa logo
-                return "❌ Chave API Inválida/Permissão Negada."
-            
-            # Se der 404, apenas continua o loop para o próximo modelo
+                except: return "⚠️ IA respondeu vazio."
+            elif response.status_code == 429: return "💡 IA Ocupada. Aguarde..."
+            elif response.status_code in [400, 403]: return "❌ Chave Inválida."
             continue
-
-        except Exception:
-            continue
-
+        except: continue
     return f"❌ Falha técnica. Título: {titulo[:30]}..."
 
 # --- BUSCA PUBMED ---
@@ -88,10 +70,8 @@ def consultar_pubmed_count(termo, contexto, email, ano_ini, ano_fim):
     query = f"({termo})"
     if contexto: query += f" AND ({contexto})"
     query += f" AND ({ano_ini}:{ano_fim}[Date - Publication]) AND (NOT Review[pt])"
-    try:
-        return _fetch_pubmed_count(query)
-    except:
-        return 0
+    try: return _fetch_pubmed_count(query)
+    except: return 0
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
@@ -111,28 +91,21 @@ def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
             for line in lines:
                 if line.strip().isdigit() and not pmid: pmid = line.strip()
                 if line.startswith("TI  - "): tit = line[6:].strip()
-                if line.startswith("OT  - ") or line.startswith("KW  - "):
-                    keywords += line[6:].strip() + ", "
-                if line.startswith("AB  - ") and not fallback_text:
-                    fallback_text = line[6:500].strip()
-            
+                if line.startswith("OT  - ") or line.startswith("KW  - "): keywords += line[6:].strip() + ", "
+                if line.startswith("AB  - ") and not fallback_text: fallback_text = line[6:500].strip()
             if tit:
                 info_final = keywords if len(keywords) > 5 else fallback_text
-                artigos.append({
-                    "Title": tit, 
-                    "Info_IA": info_final if info_final else "Sem resumo disponível.",
-                    "Link": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
-                })
+                artigos.append({"Title": tit, "Info_IA": info_final if info_final else "Sem resumo.", "Link": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"})
         return artigos
     except: return []
 
-# --- MOTOR DE MINERAÇÃO (AGRESSIVO V3.0) ---
+# --- MOTOR DE MINERAÇÃO (CORRIGIDO: FILTRO DE CONTEÚDO) ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def buscar_alvos_emergentes_pubmed(termo_base, email):
     if email: Entrez.email = email
     
-    # 1. Busca mais ampla (200 artigos) para ter volume estatístico
-    query = f"({termo_base}[Title/Abstract]) AND (2016:2030[Date - Publication]) AND (NOT Review[pt])"
+    # Busca agressiva: 200 artigos recentes
+    query = f"({termo_base}[Title/Abstract]) AND (2018:2030[Date - Publication]) AND (NOT Review[pt])"
     
     try:
         handle = Entrez.esearch(db="pubmed", term=query, retmax=200, sort="relevance")
@@ -143,51 +116,53 @@ def buscar_alvos_emergentes_pubmed(termo_base, email):
         full_data = handle.read(); handle.close()
         artigos_raw = full_data.split("\n\nPMID-")
 
-        # 2. BLACKLIST EXPANDIDA (Filtra o "Cascalho" clínico para sobrar o "Ouro" molecular)
+        # NOVA BLACKLIST DE METADADOS (Remove o lixo que você encontrou)
         blacklist = {
-            # Conjunções e comuns
-            "AND", "THE", "FOR", "NOT", "BUT", "WITH", "FROM", "STUDY", "RESULTS", "CELLS", "WAS", "WERE", 
-            "CBS", "FAU", "AID", "USE", "AIM", "DUE", "VIA", "MAY", "CAN", "HAS", "HAD", "LOW", "HIGH",
-            "NEW", "TWO", "ONE", "ALL", "ANY", "EACH", "THIS", "THAT", "WHICH", "WHAT", "WHEN", "WHERE",
-            # Termos Clínicos/Acadêmicos (que não são genes)
-            "PATIENTS", "GROUP", "GROUPS", "CONTROL", "TREATED", "UNTREATED", "SHAM", "VEHICLE", "MODEL", 
-            "MODELS", "DATA", "ANALYSIS", "USING", "USED", "PERFORMED", "OBSERVED", "SHOWED", "FOUND", 
-            "INDICATED", "SUGGESTED", "DEMONSTRATED", "INVESTIGATED", "EVALUATED", "COMPARED", "INCREASED", 
-            "DECREASED", "LEVELS", "EFFECTS", "SIGNIFICANTLY", "RESPECTIVELY", "CONCLUSION", "BACKGROUND", 
-            "METHODS", "OBJECTIVE", "PURPOSE", "DEPARTMENT", "UNIVERSITY", "HOSPITAL", "CENTER", "CENTRE",
-            "SCHOOL", "COLLEGE", "INSTITUTE", "RESEARCH", "SCIENCE", "SCIENCES", "MEDICINE", "MEDICAL", 
-            "CLINICAL", "RAT", "MICE", "DOG", "PIG", "CAT", "MAN", "AGE", "OLD", "DRUG", "AFTER", "BEFORE",
-            "DURING", "WITHIN", "BETWEEN", "AMONG", "UNDER", "ABOVE", "BELOW", "THESE", "THOSE",
-            # Estatística e Termos Médicos Genéricos
-            "CI", "HR", "RR", "OR", "VS", "P", "IV", "III", "II", "KG", "MG", "ML", "MIN", "SEC", "HRS",
-            "ACUTE", "CHRONIC", "DISEASE", "DISORDER", "SYNDROME", "THERAPY", "TREATMENT", "DIAGNOSIS",
-            "PROGNOSIS", "RISK", "FACTOR", "SCORE", "RATIO", "MEAN", "TOTAL", "CASE", "SERIES", "TRIAL",
-            "TRIALS", "META", "REVIEW", "SYSTEMATIC", "GUIDELINE", "REPORT", "CARE", "HEALTH", "PUBLIC",
-            "MORTALITY", "MORBIDITY", "SURVIVAL", "OUTCOME", "OUTCOMES", "EVENTS", "EVENT", "SAFETY",
-            "EFFICACY", "PLACEBO", "BASELINE", "CHARACTERISTICS", "POPULATION", "ADULT", "CHILD", "WOMEN", "MEN"
+            "PII", "DOI", "ISSN", "PMID", "PPUBLISH", "ACCEPTED", "RECEIVED", "REVISED", "COPYRIGHT", 
+            "AUTHOR", "AUTHORS", "EDITOR", "EMAIL", "CORRESPONDENCE", "DEPARTMENT", "UNIVERSITY", 
+            "PUBMED", "MEDLINE", "PMC", "NIHMS", "ARTICLE", "JOURNAL", "UROLOGY", "NEPHROLOGY", 
+            "PHARMACOLOGY", "SCIENCE", "REPORTS", "NATURE", "CELL", "PLOS", "ONE", "FRONTIERS",
+            "AND", "THE", "FOR", "NOT", "BUT", "WITH", "FROM", "STUDY", "RESULTS", "CELLS", "WAS", "WERE",
+            "USING", "USED", "DATA", "ANALYSIS", "GROUP", "CONTROL", "MODEL", "RATS", "MICE", "HUMAN",
+            "PATIENTS", "CLINICAL", "TREATMENT", "EFFECTS", "LEVELS", "EXPRESSION", "INCREASED", "DECREASED",
+            "SIGNIFICANTLY", "CONCLUSION", "BACKGROUND", "METHODS", "OBJECTIVE", "AIM", "PURPOSE",
+            "AFTER", "BEFORE", "DURING", "WITHIN", "BETWEEN", "AMONG", "UNDER", "ABOVE", "BELOW",
+            "ACUTE", "CHRONIC", "DISEASE", "SYNDROME", "DISORDER", "INJURY", "HEALTH", "CARE", "RISK",
+            "TOTAL", "MEAN", "RATIO", "SCORE", "FACTOR", "TYPE", "CASE", "SERIES", "TRIAL", "REVIEW"
         } 
         
-        unidades = {"MMHG","KPA","MIN","SEC","HRS","ML","MG","KG","NM","UM","MM","NMOL", "MOL", "PH"}
-
         candidatos_por_artigo = []
         for artigo in artigos_raw:
-            texto_upper = artigo.upper()
+            # --- MUDANÇA CRÍTICA: LÊ APENAS TÍTULO (TI) E ABSTRACT (AB) ---
+            # Isso evita ler datas, códigos de publicação e afiliações
+            linhas_uteis = []
+            lendo_abstract = False
             
-            # 3. REMOVIDO FILTRO DE KEYWORDS FUNCIONAIS
-            # Antes, se o artigo não dissesse "RECEPTOR", era ignorado.
-            # Agora mineramos tudo, confiando na blacklist para limpar.
+            for line in artigo.split("\n"):
+                if line.startswith("TI  - "):
+                    linhas_uteis.append(line[6:].strip())
+                    lendo_abstract = False
+                elif line.startswith("AB  - "):
+                    linhas_uteis.append(line[6:].strip())
+                    lendo_abstract = True
+                elif lendo_abstract and line.startswith("      "): # Continuação do abstract
+                    linhas_uteis.append(line.strip())
+                elif line.startswith(" ") is False: # Nova tag começou (ex: FAU -)
+                    lendo_abstract = False
 
-            # Regex para pegar siglas (Maiúsculas, pode ter números e hifens)
-            encontrados = re.findall(r'\b[A-Z][A-Z0-9-]{2,14}\b', texto_upper)
+            texto_focado = " ".join(linhas_uteis).upper()
+            
+            # Extrai siglas apenas do texto focado (Titulo + Abstract)
+            encontrados = re.findall(r'\b[A-Z][A-Z0-9-]{2,14}\b', texto_focado)
             
             candidatos_locais = set()
             for t in encontrados:
                 t_clean = re.sub(r'[^A-Z0-9]', '', t)
                 
-                # Filtros de Limpeza
-                if t_clean in blacklist or t_clean in unidades: continue
+                # Filtros Rigorosos
+                if t_clean in blacklist: continue
                 if len(t_clean) < 3: continue 
-                if t_clean == termo_base.upper().replace(" ", ""): continue # Remove o próprio termo buscado
+                if t_clean == termo_base.upper().replace(" ", ""): continue
                 if t_clean.isdigit(): continue 
                 
                 candidatos_locais.add(t_clean)
@@ -198,15 +173,14 @@ def buscar_alvos_emergentes_pubmed(termo_base, email):
         contagem = Counter(candidatos_por_artigo)
         total_docs = max(1, len(artigos_raw))
         
-        # 4. FILTRO RELAXADO: Pega os Top 50 candidatos e aceita até 80% de frequência
-        # Isso garante que se o termo for muito comum no contexto (ex: "ATP" em Puringergic), ele passa.
+        # Filtro final: Top 50 candidatos, frequência < 80%
         return [termo for termo,freq in contagem.most_common(50) if (freq/total_docs)<0.80][:10]
     except: return []
 
-# --- RADAR DE NOTÍCIAS ---
+# --- RADAR ---
 def buscar_todas_noticias(lang='pt'):
     try:
-        query = "(molecular biology OR pharmacology OR drug discovery) AND (2024/09/01:2025/12/31[Date - Publication])"
+        query = "(molecular biology OR pharmacology) AND (2024/09/01:2025/12/31[Date - Publication])"
         handle = Entrez.esearch(db="pubmed", term=query, retmax=6, sort="pub_date")
         record = Entrez.read(handle); handle.close()
         handle = Entrez.efetch(db="pubmed", id=record["IdList"], rettype="medline", retmode="text")
@@ -219,9 +193,7 @@ def buscar_todas_noticias(lang='pt'):
                 if line.startswith("JT  - "): journal = line.replace("JT  - ", "").strip()
                 if line.strip().isdigit() and not pmid: pmid = line.strip()
             if tit and pmid:
-                news.append({"titulo": tit, "fonte": journal[:30], 
-                             "link": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/",
-                             "img":"https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=400"})
+                news.append({"titulo": tit, "fonte": journal[:30], "link": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/", "img":"https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=400"})
         return news
     except: return []
-        
+            
