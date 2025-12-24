@@ -26,34 +26,54 @@ MAPA_SINONIMOS = {
     "CANCER": "Cancer OR Tumor OR Oncology OR Carcinoma OR Metastasis OR Proliferation OR Angiogenesis OR Apoptosis OR Microenvironment"
 }
 
-# --- LISTA DE MODELOS DO USUÁRIO (PERSONALIZADA) ---
-# Centralizei aqui para facilitar. Se precisar mudar, muda só aqui.
+# --- LISTA DE MODELOS (Seus modelos potentes) ---
 MODELOS_ATIVOS = [
     "gemini-2.5-flash",          
     "gemini-2.0-flash",          
     "gemini-2.0-flash-exp",      
     "gemini-flash-latest",       
-    "gemini-2.5-flash-lite"
+    "gemini-1.5-pro"
 ]
 
-# --- 2. FAXINEIRO IA (FILTRO MOLECULAR) ---
+# --- 2. FAXINEIRO IA (O CERÉBRO DA OPERAÇÃO) ---
 def _faxina_ia(lista_suja):
     """
-    Usa a IA para separar Alvos Moleculares Reais de Lixo Clínico.
+    Envia uma lista bruta gigante para a IA classificar semanticamente.
     """
     api_key = st.session_state.get('api_key_usuario', '')
-    if not api_key: return lista_suja[:30] 
+    
+    # Se não tiver chave, infelizmente temos que retornar a lista suja (cortada)
+    if not api_key: return lista_suja[:40] 
 
+    # Transformamos a lista em string para o prompt
     lista_str = ", ".join(lista_suja)
     
     prompt = f"""
-    ACT AS: Senior Research Pharmacologist.
-    TASK: Clean this list extracted from PubMed. Keep ONLY Molecular Targets.
-    INPUT: {lista_str}
-    RULES:
-    1. KEEP: Receptors (TRPV1), Enzymes (mTOR), Genes, Proteins, Signaling Molecules (ATP, NO).
-    2. DELETE: Diseases (LUTS, Cancer, OAB), Procedures (TURBT), Anatomy (Bladder), Study Types (RCT), General Terms (Study, Data).
-    OUTPUT: A clean Python list of strings. Example: ['TRPV1', 'NGF', 'BDNF']
+    ROLE: Expert Senior Pharmacologist & Data Scientist.
+    
+    INPUT: The following list of terms extracted from PubMed titles:
+    [{lista_str}]
+    
+    TASK: Filter this list rigorously. We are looking ONLY for Molecular Targets and Mechanisms.
+    
+    CRITERIA FOR KEEPING (INCLUDE):
+    - Specific Genes (e.g., mTOR, TFEB, GATA3)
+    - Receptors & Channels (e.g., TRPV1, P2X3, Beta-3-AR)
+    - Signaling Molecules & Enzymes (e.g., ATP, NO, PGE2, COX2)
+    - Specific RNAs (e.g., miRNA-132)
+    - Drugs/Compounds (e.g., Mirabegron, Resiniferatoxin)
+    
+    CRITERIA FOR DELETING (EXCLUDE):
+    - Locations/Geography (e.g., China, USA, London)
+    - Clinical Conditions/Diseases (e.g., LUTS, OAB, Cancer, Infection, COVID)
+    - Medical Procedures (e.g., TURBT, MRI, Surgery, Injection)
+    - Study Types (e.g., RCT, Review, Meta-analysis)
+    - Organizations (e.g., AHA, WHO)
+    - General Biological Terms (e.g., Protein, Gene, Cell, Study, Data)
+    
+    OUTPUT FORMAT: 
+    Return strictly a Python List of strings containing ONLY the valid targets.
+    Example: ['TRPV1', 'NGF', 'ATP']
     """
     
     headers = {'Content-Type': 'application/json'}
@@ -63,58 +83,57 @@ def _faxina_ia(lista_suja):
         "generationConfig": {"temperature": 0.0}
     }
     
+    base_url = "https://generativelanguage.googleapis.com/v1beta/models"
+
     for m in MODELOS_ATIVOS:
         try:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={api_key}"
-            resp = requests.post(url, headers=headers, data=json.dumps(data), timeout=10)
+            url = f"{base_url}/{m}:generateContent?key={api_key}"
+            resp = requests.post(url, headers=headers, data=json.dumps(data), timeout=15) # Mais tempo para processar lista grande
             
             if resp.status_code == 200:
                 texto = resp.json()['candidates'][0]['content']['parts'][0]['text']
+                # Limpeza cirúrgica da resposta
                 texto = texto.replace("```python", "").replace("```json", "").replace("```", "").strip()
+                
+                # Tenta parsear a lista
                 if texto.startswith("[") and texto.endswith("]"):
                     lista_limpa = ast.literal_eval(texto)
                     if isinstance(lista_limpa, list) and len(lista_limpa) > 0:
+                        # Sucesso! Retorna a lista curada pela IA
                         return lista_limpa
         except: continue
     
-    return lista_suja[:30]
+    # Fallback se a IA falhar
+    return lista_suja[:40]
 
-# --- 3. ANÁLISE DE RESUMOS COM IA ---
+# --- 3. ANÁLISE DE RESUMOS ---
 def analisar_abstract_com_ia(titulo, dados_curtos, api_key, lang='pt'):
-    if not api_key: return "⚠️ Chave API não detectada no menu lateral."
+    if not api_key: return "⚠️ Chave API não detectada."
     
     idioma = "Português" if lang == 'pt' else "Inglês"
     
-    prompt_text = f"""Atue como Pesquisador em Farmacologia. Analise este artigo:
+    prompt_text = f"""Atue como Pesquisador em Farmacologia. Analise:
     TITULO: {titulo}
     CONTEXTO: {dados_curtos}
-    
-    TAREFA: Resuma o Alvo Molecular, o Fármaco (se houver) e o Efeito Principal.
-    REGRAS: Máximo 20 palavras. Seja direto. Idioma: {idioma}.
-    Exemplo: "Alvo: TRPV1 | Efeito: Redução da hiperatividade vesical via inibição de C-fibers."
-    """
+    TAREFA: Resuma o Alvo Molecular, o Fármaco e o Efeito. 
+    REGRAS: Máximo 20 palavras. Idioma: {idioma}."""
     
     headers = {'Content-Type': 'application/json'}
     data = {"contents": [{"parts": [{"text": prompt_text}]}]}
     
-    erro_msg = ""
+    base_url = "[https://generativelanguage.googleapis.com/v1beta/models](https://generativelanguage.googleapis.com/v1beta/models)"
     
     for m in MODELOS_ATIVOS:
         try:
-            url = f"[https://generativelanguage.googleapis.com/v1beta/models/](https://generativelanguage.googleapis.com/v1beta/models/){m}:generateContent?key={api_key}"
+            url = f"{base_url}/{m}:generateContent?key={api_key}"
             resp = requests.post(url, headers=headers, data=json.dumps(data), timeout=10)
-            
             if resp.status_code == 200:
                 return resp.json()['candidates'][0]['content']['parts'][0]['text'].strip()
-            else:
-                erro_msg = f"Erro {resp.status_code}"
-        except Exception as e:
-            erro_msg = str(e)
-            continue
+        except: continue
             
-    return f"⚠️ IA indisponível. ({erro_msg})"
+    return "⚠️ IA indisponível."
 
-# --- 4. BUSCA PUBMED (CORE) ---
+# --- 4. FUNÇÕES DE BUSCA ---
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
 def _fetch_pubmed_count(query):
     handle = Entrez.esearch(db="pubmed", term=query, retmax=0)
@@ -156,7 +175,7 @@ def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
         return artigos
     except: return []
 
-# --- 5. MINERAÇÃO MASSIVA ---
+# --- 5. MINERAÇÃO IA-CENTRIC (A Nova Lógica) ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
     if email: Entrez.email = email
@@ -164,6 +183,7 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
     termo_upper = termo_base.upper().strip()
     query_string = MAPA_SINONIMOS.get(termo_upper, f"{termo_base}[Title/Abstract]")
     
+    # 1. Busca Massiva (1500 abstracts)
     final_query = f"({query_string}) AND (2018:2030[Date - Publication]) AND (NOT Review[pt])"
     
     try:
@@ -175,58 +195,63 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
         full_data = handle.read(); handle.close()
         artigos_raw = full_data.split("\n\nPMID-")
 
-        # BLACKLIST
-        blacklist = {
-            "LUTS", "SUI", "UUI", "MUI", "OAB", "BPH", "UTI", "IC", "BPS", "ICIRS", "LUT", "BOO",
-            "SNM", "PTNS", "TURBT", "TURP", "BOTOX", "INJECTION", "STENT", "CATHETER", "SLING", "MESH",
-            "COVID", "COVID19", "SARS", "VIRUS", "INFECTION", "SEPSIS", "CANCER", "TUMOR", "CIS", "MIBC",
-            "VIRADS", "PIRADS", "CEUS", "MRI", "CT", "PET", "ULTRASOUND", "ACR", "AUC", "ROC", "CI",
-            "SNAP25", "SV2", "VVF", "UVF", "SUFU", "ALE", "FOR", "AND", "THE", "WITH", "FROM", "BUT",
-            "TRANSPLANTATION", "NEPHRECTOMY", "LITHOTRIPSY", "URS", "RIRS", "HOLEP", "THULEP",
-            "RADIOTHERAPY", "RADIATION", "TOXICITY", "SAFETY", "EFFICACY", "CLINICAL", "PRECLINICAL",
-            "SACRAL", "NERVE", "STIMULATION", "MODULATION", "DHEA", "BAG3", "CK20", "PSA", "PROSTATE",
-            "RRNA", "TRNA", "DNA", "RNA", "GENE", "PROTEIN", "CELL", "TISSUE", "PATIENT", "HUMAN",
+        # --- BLACKLIST MÍNIMA (SÓ LIXO GRAMATICAL) ---
+        # Não filtramos mais doenças ou procedimentos aqui. Deixamos a IA decidir.
+        # Filtramos apenas o que é OBVIAMENTE lixo linguístico para não gastar token.
+        blacklist_tecnica = {
+            "AND", "THE", "FOR", "NOT", "BUT", "WITH", "FROM", "THIS", "THAT", "THESE", "THOSE",
+            "WHICH", "WHAT", "WHEN", "WHERE", "WHO", "WHY", "HOW", "ANY", "ALL", "EACH", "EVERY",
+            "HAVE", "HAS", "HAD", "WAS", "WERE", "BEEN", "BEING", "ARE", "IS", "CAN", "COULD",
+            "SHOULD", "WOULD", "MAY", "MIGHT", "MUST", "WILL", "SHALL", "DOES", "DID", "DOING",
+            "VIA", "DUE", "BETWEEN", "AMONG", "WITHIN", "WITHOUT", "UNDER", "ABOVE", "BELOW", 
+            "AFTER", "BEFORE", "DURING", "SINCE", "UNTIL", "WHILE", "ONCE", "UPON", "INTO", "ONTO",
+            "TOTAL", "MEAN", "RATIO", "SD", "SEM", "YEAR", "MONTH", "DAY", "HOUR", "MIN", "SEC",
+            "USING", "USED", "USE", "DATA", "ANALYSIS", "STUDY", "RESULTS", "CONCLUSION", "BACKGROUND",
+            "METHODS", "OBJECTIVE", "AIM", "PURPOSE", "DEPARTMENT", "UNIVERSITY", "HOSPITAL",
             "PUBLISH", "ACCEPTED", "RECEIVED", "REVISED", "CORRESPONDENCE", "EMAIL", "AUTHOR", "EDITOR",
             "PII", "DOI", "ISSN", "PMID", "PMC", "ISBN", "COPYRIGHT", "VOLUME", "ISSUE", "PAGE",
-            "AHA", "ACC", "ESC", "WHO", "NIH", "CDC", "FDA", "EMA", "ISO", "AUA", "EAU", "ICS",
-            "UNIVERSITY", "DEPARTMENT", "HOSPITAL", "CENTER", "CENTRE", "SCHOOL", "COLLEGE", "INSTITUTE",
-            "REVIEW", "META", "ANALYSIS", "STUDY", "DATA", "USING", "USED", "BETWEEN", "AMONG", "WITHIN",
-            "TOTAL", "MEAN", "RATIO", "SD", "SEM", "YEAR", "MONTH", "DAY", "HOUR", "MIN", "SEC",
-            "WESTERN", "BLOT", "PCR", "QPCR", "ELISA", "STAINING", "IMMUNO", "HISTOLOGY", "ASSAY",
-            "TRIAL", "COHORT", "RETROSPECTIVE", "PROSPECTIVE", "RANDOMIZED", "CONTROL", "GROUP"
+            "FIG", "FIGURE", "TABLE", "SUPPL", "TEXT", "FULL", "ABSTRACT", "TITLE"
         }
 
         candidatos_por_artigo = []
         for artigo in artigos_raw:
             texto_focado = ""
             for line in artigo.split("\n"):
+                # Foco em Título e Keywords
                 if line.startswith("TI  - "): texto_focado += line[6:].strip() + " "
                 elif line.startswith("OT  - ") or line.startswith("KW  - "): texto_focado += line[6:].strip() + " "
             
             if not texto_focado: continue
 
+            # Regex Permissivo: Pega qualquer coisa que pareça sigla ou termo técnico
             encontrados = re.findall(r'\b(?:[A-Z]{2,}[A-Z0-9-]*|[a-z]{1,2}[A-Z][a-zA-Z0-9-]*)\b', texto_focado)
             
             for t in encontrados:
                 t_clean = re.sub(r'[^a-zA-Z0-9]', '', t).upper()
                 if len(t_clean) < 3: continue 
-                if t_clean in blacklist: continue
+                if t_clean in blacklist_tecnica: continue # Só remove preposições
                 if t_clean.isdigit(): continue
                 if t_clean == termo_upper.replace(" ", ""): continue
+                
                 candidatos_por_artigo.append(t_clean)
 
         if not candidatos_por_artigo: return []
         
+        # Estatística
         contagem = Counter(candidatos_por_artigo)
         total_docs = max(1, len(artigos_raw))
-        top_candidatos = [termo for termo,freq in contagem.most_common(120) if (freq/total_docs)<0.90]
         
-        lista_final = [t for t in top_candidatos if t not in blacklist]
+        # PEGAMOS UMA AMOSTRA GRANDE (Top 150)
+        # Enviamos "lixo" junto (LUTS, OAB, TURBT) propositalmente para a IA filtrar
+        top_candidatos = [termo for termo,freq in contagem.most_common(150) if (freq/total_docs)<0.90]
         
+        # --- A MÁGICA ACONTECE AQUI ---
         if usar_ia and st.session_state.get('api_key_usuario'):
-            return _faxina_ia(lista_final[:100])
+            # Envia o "Pacotão" de 150 termos para a IA limpar
+            return _faxina_ia(top_candidatos)
         else:
-            return lista_final[:30]
+            # Se não tiver IA, temos que ser conservadores e cortar em 30
+            return top_candidatos[:30]
 
     except: return []
 
