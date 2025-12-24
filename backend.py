@@ -48,7 +48,6 @@ def parse_structure(text, expected=list):
     except: pass
     
     if expected == list:
-        # Regex mais seletiva: evita números puros ou siglas muito curtas
         return re.findall(r"\b[A-Z][A-Z0-9-]{2,15}\b", text)
     return expected()
 
@@ -58,10 +57,12 @@ def ner_extraction_batch(artigos, api_key):
     texto_input = "\n".join([f"- {a['texto']}" for a in artigos[:40]])
     prompt = f"""
     As a Senior Molecular Pharmacologist, extract a Python list of specific MOLECULAR TARGETS and DRUGS.
-    STRICTLY IGNORE: 
-    - Clinical/Exams: MRI, CT, PET, BCG, TURBT, NHANES, GWAS.
-    - General Biology: DNA, RNA, ATP, CELL, TISSUE, PATIENT.
-    - Acronyms of Diseases: NMIBC, OAB, LUTS, BPS.
+    
+    STRICTLY IGNORE AND DELETE: 
+    - Clinical/Exams: MRI, CT, PET, BCG, TURBT, NHANES, GWAS, SBRT, IMPT, RBE.
+    - Cell Lines: T24, UM-UC-3, RT4.
+    - General Biology: DNA, RNA, ATP, CELL, TISSUE, PATIENT, GENE, PROTEIN.
+    - Disease Acronyms: BLCA, NMIBC, OAB, LUTS, BPS.
     
     Return ONLY: ["TARGET1", "DRUG1", ...]
     TEXT:
@@ -113,16 +114,18 @@ def minerar_pubmed(termo_base, email):
 
         entidades = ner_extraction_batch(artigos, api_key) if api_key else []
         
-        # Fallback Determinístico REFINADO (Remove lixo clínico comum via Blacklist)
+        # Fallback Determinístico REFINADO
         if not entidades:
             texto_full = " ".join([a['texto'] for a in artigos])
+            # Ignora palavras de 1 ou 2 letras (Ex: VIII, CT, NF)
             entidades = re.findall(r'\b[A-Z][A-Z0-9-]{2,12}\b', texto_full)
             
-            # Peneira de Farmacologia (Blacklist de ruído clínico)
+            # Peneira de Farmacologia (Blacklist de ruído clínico e administrativo)
             blacklist_farmaco = {
                 "MRI", "CT", "PET", "BCG", "DNA", "RNA", "ATP", "GWAS", "TURP", "NHANES",
                 "LUTS", "OAB", "BPH", "IPSS", "AUA", "EAU", "NMIBC", "MIBC", "TURBT",
-                "STUDY", "ROLE", "CELL", "TISSUE", "PATIENT", "AND", "WITH", "THE"
+                "SBRT", "IMPT", "RBE", "BLCA", "T24", "HLA", "CALR", "SGLT2", "VIII",
+                "STUDY", "ROLE", "CELL", "TISSUE", "PATIENT", "AND", "WITH", "THE", "FOR"
             }
             entidades = [e for e in entidades if e not in blacklist_farmaco]
 
