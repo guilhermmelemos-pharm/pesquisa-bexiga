@@ -10,7 +10,7 @@ import time
 # --- CONFIGURAÇÃO ---
 Entrez.email = "pesquisador_guest@unifesp.br"
 
-# --- 1. MAPA DE EXPANSÃO SEMÂNTICA (O "CÉREBRO" ANATÔMICO) ---
+# --- 1. MAPA DE EXPANSÃO SEMÂNTICA ---
 MAPA_SINONIMOS = {
     "HEART": "Heart OR Cardiac OR Myocardium OR Cardiomyocyte OR Coronary OR Artery OR Ventricular OR Atrial OR Ischemia",
     "BLADDER": "Bladder OR Urothelium OR Detrusor OR Vesical OR Urethra OR Micturition OR LUTS OR Cystitis OR Overactive",
@@ -42,7 +42,6 @@ REGRAS: Máximo 12 palavras. Seja técnico. Idioma: {idioma}."""
         "generationConfig": {"temperature": 0.1}
     }
     
-    # Lista de Modelos (Prioridade para os mais novos e rápidos)
     modelos = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-exp", "gemini-flash-latest"]
     
     for m in modelos:
@@ -54,7 +53,7 @@ REGRAS: Máximo 12 palavras. Seja técnico. Idioma: {idioma}."""
         except: continue
     return f"❌ Falha técnica. Título: {titulo[:30]}..."
 
-# --- BUSCA PUBMED COUNTS (Para Estatística Lambda) ---
+# --- BUSCA PUBMED COUNTS ---
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
 def _fetch_pubmed_count(query):
     handle = Entrez.esearch(db="pubmed", term=query, retmax=0)
@@ -72,7 +71,7 @@ def consultar_pubmed_count(termo, contexto, email, ano_ini, ano_fim):
     try: return _fetch_pubmed_count(query)
     except: return 0
 
-# --- BUSCA DE ARTIGOS PARA LEITURA (Frontend) ---
+# --- BUSCA DE ARTIGOS PARA LEITURA ---
 @st.cache_data(ttl=86400, show_spinner=False)
 def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
     if email: Entrez.email = email
@@ -102,17 +101,15 @@ def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
         return artigos
     except: return []
 
-# --- MOTOR DE MINERAÇÃO: "HEAVY DUTY" (V6.0) ---
+# --- MOTOR DE MINERAÇÃO: "HEAVY DUTY" V7 (SINTAXE SEGURA) ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def buscar_alvos_emergentes_pubmed(termo_base, email):
     if email: Entrez.email = email
     
-    # 1. EXPANSÃO SEMÂNTICA
     termo_upper = termo_base.upper().strip()
     query_string = MAPA_SINONIMOS.get(termo_upper, f"{termo_base}[Title/Abstract]")
     
-    # 2. BUSCA MASSIVA (1000 abstracts para garantir volume estatístico)
-    # Aumentamos para 1000 porque vamos filtrar muito agressivamente
+    # Busca Massiva: 1000 abstracts
     final_query = f"({query_string}) AND (2018:2030[Date - Publication]) AND (NOT Review[pt])"
     
     try:
@@ -124,9 +121,11 @@ def buscar_alvos_emergentes_pubmed(termo_base, email):
         full_data = handle.read(); handle.close()
         artigos_raw = full_data.split("\n\nPMID-")
 
-        # 3. BLACKLIST "NUCLEAR" (FILTRA TUDO QUE NÃO É ALVO MOLECULAR)
-        blacklist = {
-            # -- LIXO DE PUBLICAÇÃO --
+        # --- BLACKLIST SEGURA (CONSTRUÍDA COM .update PARA NÃO QUEBRAR SINTAXE) ---
+        blacklist = set()
+        
+        # 1. Metadados e Publicação
+        blacklist.update([
             "PII", "DOI", "ISSN", "PMID", "PMC", "NIHMS", "ISBN", "COPYRIGHT", "AUTHOR", "AUTHORS", 
             "EDITOR", "PUBLISHER", "RECEIVED", "ACCEPTED", "PUBLISH", "PUBLISHED", "REVISED", "CORRESPONDENCE", 
             "EMAIL", "ARTICLE", "JOURNAL", "REPORT", "REPORTS", "VOLUME", "ISSUE", "PAGE", "PAGES", "SUPPL",
@@ -134,15 +133,19 @@ def buscar_alvos_emergentes_pubmed(termo_base, email):
             "INTRODUCTION", "BACKGROUND", "METHODS", "RESULTS", "DISCUSSION", "CONCLUSION", "CONCLUSIONS",
             "UNIVERSITY", "DEPARTMENT", "HOSPITAL", "CENTER", "CENTRE", "SCHOOL", "COLLEGE", "INSTITUTE",
             "FOUNDATION", "SOCIETY", "ASSOCIATION", "FEDERATION", "COMMITTEE", "TASK", "FORCE", "GROUP",
-            "SCIENCE", "NATURE", "CELL", "PLOS", "ONE", "FRONTIERS", "MDPI", "WILEY", "ELSEVIER",
-
-            # -- SIGLAS ADMINISTRATIVAS & CONTEXTO (Cardio/Uro/Geral) --
+            "SCIENCE", "NATURE", "CELL", "PLOS", "ONE", "FRONTIERS", "MDPI", "WILEY", "ELSEVIER"
+        ])
+        
+        # 2. Siglas Administrativas (Cardio/Uro/Geral)
+        blacklist.update([
             "AHA", "ACC", "ESC", "HFSA", "ACHD", "WHO", "NIH", "CDC", "FDA", "EMA", "ISO", "AUA", "EAU", "ICS",
             "GUIDELINE", "GUIDELINES", "STATEMENT", "POSITION", "CONSENSUS", "REGISTRY", "TRIAL", "TRIALS",
             "STUDY", "STUDIES", "COHORT", "PROSPECTIVE", "RETROSPECTIVE", "RANDOMIZED", "BLIND", "DOUBLE", "META",
-            "SYSTEMATIC", "REVIEW", "CASE", "SERIES", "PILOT", "MULTICENTER", "ANALYSIS", "DATA", "USING",
+            "SYSTEMATIC", "REVIEW", "CASE", "SERIES", "PILOT", "MULTICENTER", "ANALYSIS", "DATA", "USING"
+        ])
 
-            # -- TERMOS CLÍNICOS --
+        # 3. Termos Clínicos e Gerais
+        blacklist.update([
             "PATIENT", "PATIENTS", "HUMAN", "MEN", "WOMEN", "ADULT", "CHILD", "INFANT", "ELDERLY", "MALE", "FEMALE",
             "CONTROL", "PLACEBO", "SHAM", "TREATED", "UNTREATED", "VEHICLE", "BASELINE", "NORMAL", "ABNORMAL",
             "CLINICAL", "PRECLINICAL", "MEDICAL", "MEDICINE", "HEALTH", "CARE", "PUBLIC", "COMMUNITY", "GLOBAL",
@@ -154,9 +157,11 @@ def buscar_alvos_emergentes_pubmed(termo_base, email):
             "VASCULAR", "ARTERY", "VEIN", "AORTIC", "VALVE", "BLOOD", "PRESSURE", "FLOW", "RATE", "RHYTHM",
             "EJECTION", "FRACTION", "PRESERVED", "REDUCED", "HFPEF", "HFREF", "HFMREF", "COVID", "COVID19", "SARS",
             "UROLOGY", "NEPHROLOGY", "URINARY", "BLADDER", "RENAL", "KIDNEY", "LOWER", "TRACT", "SYMPTOMS", "LUTS",
-            "PAIN", "SEPSIS", "CANCER", "TUMOR", "METASTASIS", "OBESITY", "DIABETES", "INSULIN", "GLUCOSE",
-            
-            # -- TERMOS GENÉRICOS DE BIOLOGIA (O QUE SOBRA É ALVO) --
+            "PAIN", "SEPSIS", "CANCER", "TUMOR", "METASTASIS", "OBESITY", "DIABETES", "INSULIN", "GLUCOSE"
+        ])
+
+        # 4. Termos Genéricos de Biologia (Para sobrar só Alvos)
+        blacklist.update([
             "DNA", "RNA", "MRNA", "MIRNA", "SIRNA", "GENE", "GENES", "PROTEIN", "PROTEINS", "CELL", "CELLS", 
             "TISSUE", "TISSUES", "RATS", "MICE", "RABBIT", "PIG", "DOG", "MODEL", "MODELS", "VIVO", "VITRO", 
             "EX", "SITU", "LEVEL", "LEVELS", "EXPRESSION", "REGULATION", "ACTIVITY", "ACTIVATION", "INHIBITION",
@@ -164,26 +169,25 @@ def buscar_alvos_emergentes_pubmed(termo_base, email):
             "MEDIATED", "INDUCED", "DEPENDENT", "INDEPENDENT", "ASSOCIATED", "RELATED", "LINKED", "POTENTIAL",
             "BIOMARKER", "CANDIDATE", "NOVEL", "NEW", "RECENT", "INSIGHTS", "UPDATE", "FUTURE", "PERSPECTIVE",
             "MOLECULAR", "GENETIC", "EPIGENETIC", "PHARMACOLOGY", "DRUG", "DRUGS", "RECEPTOR", "CHANNEL", "ENZYME",
-
-            # -- EXAMES & UNIDADES --
             "MRI", "CMR", "CT", "PET", "SPECT", "ECG", "EKG", "ECHO", "ULTRASOUND", "XRAY", "IMAGING",
             "WESTERN", "BLOT", "PCR", "QPCR", "RT", "ELISA", "STAINING", "IMMUNO", "HISTOLOGY", "ASSAY",
+            "KG", "MG", "ML", "NM", "UM", "MM", "CM", "HZ", "MV", "MMHG"
+        ])
+
+        # 5. Inglês Comum e Estatística
+        blacklist.update([
             "TOTAL", "MEAN", "RATIO", "SD", "SEM", "CI", "HR", "RR", "OR", "VS", "VERSUS", "LOG",
             "YEAR", "YEARS", "MONTH", "MONTHS", "DAY", "DAYS", "HOUR", "HOURS", "MIN", "SEC", "TIME",
-            "KG", "MG", "ML", "NM", "UM", "MM", "CM", "HZ", "MV", "MMHG",
-
-            # -- INGLÊS COMUM --
             "AND", "THE", "FOR", "NOT", "BUT", "WITH", "FROM", "THIS", "THAT", "THESE", "THOSE",
             "WHICH", "WHAT", "WHEN", "WHERE", "WHO", "WHY", "HOW", "ANY", "ALL", "EACH", "EVERY",
             "HAVE", "HAS", "HAD", "WAS", "WERE", "BEEN", "BEING", "ARE", "IS", "CAN", "COULD",
             "SHOULD", "WOULD", "MAY", "MIGHT", "MUST", "WILL", "SHALL", "DOES", "DID", "DOING",
             "VIA", "DUE", "BETWEEN", "AMONG", "WITHIN", "WITHOUT", "UNDER", "ABOVE", "BELOW", 
             "AFTER", "BEFORE", "DURING", "SINCE", "UNTIL", "WHILE", "ONCE", "UPON", "INTO", "ONTO"
-        }
+        ])
         
         candidatos_por_artigo = []
         for artigo in artigos_raw:
-            # 4. EXTRAÇÃO: SÓ TÍTULO (TI) E KEYWORDS (OT/KW)
             texto_focado = ""
             for line in artigo.split("\n"):
                 if line.startswith("TI  - "): texto_focado += line[6:].strip() + " "
@@ -191,20 +195,17 @@ def buscar_alvos_emergentes_pubmed(termo_base, email):
             
             if not texto_focado: continue
 
-            # 5. REGEX FORTE (Case Sensitive)
-            # Pega: "TRPV1", "mTOR", "NF-kB", "TGF-beta", "SGLT2", "CYP2J2"
-            # Ignora: "Cardiac", "Heart", "Renal" (Só 1 maiúscula)
+            # Regex Case Sensitive (Pega siglas com 2+ maiúsculas ou número)
             encontrados = re.findall(r'\b(?:[A-Z]{2,}[A-Z0-9-]*|[a-z]*[A-Z][a-zA-Z0-9-]*[0-9]+[a-zA-Z0-9-]*)\b', texto_focado)
             
             for t in encontrados:
-                t_clean = re.sub(r'[^A-Z0-9]', '', t).upper() # Normaliza para checar blacklist
+                t_clean = re.sub(r'[^A-Z0-9]', '', t).upper()
                 
                 if len(t_clean) < 3: continue
                 if t_clean in blacklist: continue
                 if t_clean == termo_upper.replace(" ", ""): continue
                 if t_clean.isdigit(): continue 
                 
-                # Adiciona o termo limpo
                 candidatos_por_artigo.append(t_clean)
 
         if not candidatos_por_artigo: return []
@@ -212,5 +213,28 @@ def buscar_alvos_emergentes_pubmed(termo_base, email):
         contagem = Counter(candidatos_por_artigo)
         total_docs = max(1, len(artigos_raw))
         
-        # 6. RETORNO MASSIVO: Top 70 (Para garantir >60 na tela)
-        # Filtro de corte: Aceita termos
+        # Retorna Top 70 (Frequência < 90%)
+        return [termo for termo,freq in contagem.most_common(200) if (freq/total_docs)<0.90][:70]
+
+    except: return []
+
+# --- RADAR DE NOTÍCIAS ---
+def buscar_todas_noticias(lang='pt'):
+    try:
+        query = "(molecular biology OR pharmacology) AND (2024/09/01:2025/12/31[Date - Publication])"
+        handle = Entrez.esearch(db="pubmed", term=query, retmax=6, sort="pub_date")
+        record = Entrez.read(handle); handle.close()
+        handle = Entrez.efetch(db="pubmed", id=record["IdList"], rettype="medline", retmode="text")
+        dados = handle.read(); handle.close()
+        news = []
+        for art in dados.split("\n\nPMID-"):
+            tit, pmid, journal = "", "", ""
+            for line in art.split("\n"):
+                if line.startswith("TI  - "): tit = line[6:].strip()
+                if line.startswith("JT  - "): journal = line.replace("JT  - ", "").strip()
+                if line.strip().isdigit() and not pmid: pmid = line.strip()
+            if tit and pmid:
+                news.append({"titulo": tit, "fonte": journal[:30], "link": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/", "img":"https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=400"})
+        return news
+    except: return []
+                    
