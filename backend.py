@@ -25,7 +25,7 @@ def calcular_metricas_originais(freq, total_docs, n_alvo_total):
 @st.cache_data(ttl=3600, show_spinner=False)
 def buscar_todas_noticias(lang='pt'):
     try:
-        # Busca focada em 2025 para novidades moleculares e canais iônicos
+        # Busca focada em novidades moleculares recentes (2024-2026)
         query = "(bladder pharmacology OR ion channels OR purinergic signaling) AND (2024:2026[Date - Publication])"
         handle = Entrez.esearch(db="pubmed", term=query, retmax=6, sort="pub_date")
         record = Entrez.read(handle); handle.close()
@@ -59,7 +59,7 @@ def _faxina_ia_elite(lista_bruta):
     Input Data: {lista_bruta[:150]}
     TASK: Provide a Python list of the 40 MOST RELEVANT molecular targets and drugs.
     STRICT RULES:
-    1. INCLUDE: Specific ion channels (TRP, Piezo), Receptors, Signaling (SPHK1, ROCK), and specific compounds.
+    1. INCLUDE: Specific ion channels (TRP, Piezo), Receptors, Signaling (SPHK1, ROCK), and compounds.
     2. DELETE: General anatomy (Bladder, Muscle), animals (Toad, Frog), and generic biology (DNA, RNA).
     3. Output: Return ONLY the Python list [].
     """
@@ -116,7 +116,7 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
         return res_finais
     except: return []
 
-# --- 5. DETALHES E APOIO (FIX ATTRIBUTEERROR) ---
+# --- 5. DETALHES E APOIO (FIX TYPEERROR & ATTRIBUTEERROR) ---
 @st.cache_data(ttl=86400, show_spinner=False)
 def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
     if email: Entrez.email = email
@@ -140,15 +140,21 @@ def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
         return artigos
     except: return []
 
-def analisar_abstract_com_ia(titulo, dados, api_key):
-    prompt = f"Summarize mechanism of {titulo} in 15 words. Focus on molecular bench research. Context: {dados}."
+def analisar_abstract_com_ia(titulo, dados, api_key, lang='pt'):
+    """
+    Corrigida para aceitar 4 argumentos.
+    """
+    idioma = "Português" if lang == 'pt' else "Inglês"
+    prompt = f"Explain the mechanism of {titulo} in 15 words. Focus on molecular bench research. Context: {dados}. Language: {idioma}."
     headers = {'Content-Type': 'application/json'}
     data = {"contents": [{"parts": [{"text": prompt}]}]}
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
     try:
         resp = requests.post(url, headers=headers, json=data, timeout=12)
-        return resp.json()['candidates'][0]['content']['parts'][0]['text'].strip()
-    except: return "Analysis unavailable."
+        if resp.status_code == 200:
+            return resp.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+        return "Analysis unavailable."
+    except: return "AI Connection Error."
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def consultar_pubmed_count(termo, contexto, email, ano_ini, ano_fim):
