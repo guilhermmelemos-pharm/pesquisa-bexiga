@@ -11,39 +11,35 @@ from typing import List, Dict, Any
 # ================= CONFIGURAÇÃO =================
 Entrez.email = "pesquisador_guest@unifesp.br"
 
-# Modelos rápidos e econômicos
 MODELOS_ATIVOS = [
-    "gemini-2.5-flash",
-    "gemini-2.0-flash",
-    "gemini-2.0-flash-lite",
-    "gemini-1.5-flash"
+    "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"
 ]
 
-# LISTA NEGRA: O filtro de "Lixo" baseado no seu feedback
+# 1. LISTA NEGRA (O que deletar)
 BLACKLIST_MONSTRO = {
-    # Termos Metodológicos (O que vazou antes)
     "ASSOCIATION", "EVALUATION", "UNCOMMON", "INTRAUTERINE", "GERMLINE", 
     "COLLISION", "NOTABLY", "IMPACT", "FOLLOW-UP", "KEY", "FINDINGS",
     "LIMITATIONS", "BACKGROUND", "OBJECTIVE", "METHODS", "RESULTS", "CONCLUSION",
     "ABSTRACT", "INTRODUCTION", "STUDY", "ANALYSIS", "DATA", "STATISTICS",
     "SIGNIFICANT", "DIFFERENCE", "BETWEEN", "AMONG", "WITHIN", "DURING",
-    "PREVALENCE", "INCIDENCE", "RISK", "FACTOR", "ROLE", "POTENTIAL",
-    
-    # Siglas de Biologia Básica e Exames (Não são alvos)
-    "DNA", "RNA", "ATP", "ADP", "AMP", "PCR", "QPCR", "MRI", "CT", "PET", 
-    "RBE", "IMPT", "BCG", "GUERIN", "VIII", "HLA", "CAR", "UVJ", "VUR",
-    "BMI", "WHO", "HIC", "SCS", "TCS", "QTC", "AE", "AES", "SAE",
-    
-    # Clínico Geral
+    "PREVALENCE", "INCIDENCE", "RISK", "FACTOR", "ROLE", "POTENTIAL", "LEVEL",
     "PATIENT", "PATIENTS", "CLINICAL", "CASE", "REPORT", "REVIEW", "META",
     "SYSTEMATIC", "TREATMENT", "THERAPY", "SURGERY", "DIAGNOSIS", "PROGNOSIS",
     "QUALITY", "LIFE", "QOL", "SURVIVAL", "MORTALITY", "MORBIDITY", "SAFETY",
     "EFFICACY", "OUTCOME", "OUTCOMES", "PLACEBO", "CONTROL", "GROUP", "TOTAL",
-    
-    # Tempo e Lugar
     "JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST",
     "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER", "2020", "2021", "2022", 
-    "2023", "2024", "2025", "HOSPITAL", "UNIVERSITY", "NATIONAL", "INTERNATIONAL"
+    "2023", "2024", "2025", "HOSPITAL", "UNIVERSITY", "NATIONAL", "INTERNATIONAL",
+    "DNA", "RNA", "ATP", "MRI", "CT", "PET", "BCG", "BMI", "WHO", "HIC", "AE", "AES"
+}
+
+# 2. STOP WORDS (Palavras comuns do inglês para filtrar o regex solto)
+STOP_WORDS = {
+    "THE", "AND", "FOR", "NOT", "BUT", "WAS", "ARE", "HAS", "HAVE", "HAD",
+    "WITH", "WITHOUT", "FROM", "INTO", "ONTO", "VIA", "ALL", "ANY", "TWO", 
+    "ONE", "BOTH", "EACH", "WHICH", "THAT", "THIS", "THESE", "THOSE", "BEEN",
+    "WERE", "CAN", "MAY", "SHOULD", "COULD", "USING", "USED", "BASED", "HIGH",
+    "LOW", "NEW", "OLD", "NON", "ANTI", "PRO", "PRE", "POST", "SUB", "SUPRA"
 }
 
 MAPA_SINONIMOS_BASE = {
@@ -58,24 +54,17 @@ def clean_model_name(model_name: str) -> str:
     return model_name.replace("models/", "")
 
 def call_gemini_json(prompt: str, api_key: str) -> List[str]:
-    """Tenta extrair JSON. Se falhar, retorna lista vazia."""
     if not api_key: return []
-    
     headers = {"Content-Type": "application/json"}
     payload = {
         "contents": [{"parts": [{"text": prompt}]}], 
-        "generationConfig": {
-            "temperature": 0.1,
-            "response_mime_type": "application/json"
-        }
+        "generationConfig": {"temperature": 0.1, "response_mime_type": "application/json"}
     }
-    
     for modelo_raw in MODELOS_ATIVOS:
         modelo = clean_model_name(modelo_raw)
         try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={api_key.strip()}"
             resp = requests.post(url, headers=headers, json=payload, timeout=20)
-            
             if resp.status_code == 200:
                 try:
                     text = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
@@ -85,10 +74,8 @@ def call_gemini_json(prompt: str, api_key: str) -> List[str]:
                     if isinstance(parsed, dict): 
                         for v in parsed.values(): 
                             if isinstance(v, list): return [str(x) for x in v]
-                    return []
                 except: continue
-            elif resp.status_code == 429:
-                break 
+            elif resp.status_code == 429: break 
         except: continue
     return []
 
@@ -109,27 +96,17 @@ def simple_gemini_text(prompt: str, api_key: str) -> str:
         except: continue
     return ""
 
-# ================= MINERAÇÃO FILTRADA =================
+# ================= MINERAÇÃO ROBUSTA =================
 
 def ner_extraction_batch(titulos_keywords: List[str], api_key: str) -> List[str]:
-    """Prompt reforçado contra lixo metodológico."""
     if not titulos_keywords: return []
-    
     texto_input = "\n".join([f"- {t}" for t in titulos_keywords[:50]])
-    
     prompt = f"""
     Role: Molecular Pharmacologist.
-    Task: Extract strictly MOLECULAR TARGETS (Receptors, Enzymes, Channels) and DRUGS.
+    Task: Extract MOLECULAR TARGETS (Receptors, Enzymes, Genes) and DRUGS/COMPOUNDS.
     
-    STRICT EXCLUSIONS (Do NOT extract):
-    - Method words: "Association", "Evaluation", "Analysis", "Study", "Role".
-    - Common Bio: "DNA", "RNA", "ATP", "BCG", "MRI", "CT".
-    - Clinical: "Patients", "Diagnosis", "Prognosis", "Treatment".
-    
-    EXAMPLES TO KEEP:
-    - "HSP90", "SGLT2", "TRPV1", "P2X3" (Targets)
-    - "Alantolactone", "Mirabegron", "Cisplatin" (Drugs)
-    - "mTOR", "NF-kappaB", "VEGF" (Pathways)
+    IGNORE: "Study", "Analysis", "Patients", "Diagnosis", "Results".
+    KEEP: "HSP90", "SGLT2", "Alantolactone", "Cisplatin", "mTOR", "VEGF".
     
     INPUT:
     {texto_input}
@@ -144,17 +121,16 @@ def minerar_pubmed(termo_base: str, email: str, usar_ia: bool = True) -> Dict:
     Entrez.email = email
     
     termo_expandido = MAPA_SINONIMOS_BASE.get(termo_base.upper(), termo_base)
-    # Busca 100 artigos
+    # Aumentei para 120 para garantir volume
     query = f"({termo_expandido}) AND (2020:2026[Date])"
     
     try:
-        handle = Entrez.esearch(db="pubmed", term=query, retmax=100)
+        handle = Entrez.esearch(db="pubmed", term=query, retmax=120)
         record = Entrez.read(handle)
         handle.close()
         
         if not record["IdList"]: return {}
 
-        # Fetch apenas Title e Keywords
         handle = Entrez.efetch(db="pubmed", id=record["IdList"], rettype="medline", retmode="text")
         records = Medline.parse(handle)
         
@@ -165,80 +141,83 @@ def minerar_pubmed(termo_base: str, email: str, usar_ia: bool = True) -> Dict:
             titulo = r.get('TI', '')
             keywords = ' '.join(r.get('OT', []))
             texto_limpo = f"{titulo} . {keywords}"
-            
             if len(texto_limpo) > 5:
                 raw_texts.append(texto_limpo)
                 artigos_completos.append({"titulo": titulo, "texto": texto_limpo})
         
         entidades = []
         
-        # 1. IA (Prioritária)
+        # 1. IA
         if api_key and usar_ia:
             entidades = ner_extraction_batch(raw_texts, api_key)
         
-        # 2. Regex Fallback (Onde mora o perigo, agora controlado)
-        if True: 
-            texto_full = " ".join(raw_texts)
-            
-            # A: Códigos (Ex: HSP90AB1, SGLT2, P2X3) - Seguro
-            # Pega letras maiúsculas seguidas de números
-            regex_codigos = r'\b[A-Z]{2,}[0-9]+[A-Z0-9-]*\b'
-            candidatos_codigos = re.findall(regex_codigos, texto_full)
-            
-            # B: Fármacos e Químicos (Ex: Alantolactone, Cisplatin)
-            # TRUQUE: Exige sufixo farmacológico para evitar palavras comuns como "Association"
-            # Sufixos: -one (Alantolactone), -ine, -in, -mab, -ib, -ol, -ase, -ate
-            sufixos = r'(?:one|ine|in|mab|ib|ol|ase|ate|ide)\b'
-            regex_farmacos = r'\b[A-Z][a-z]{3,}' + sufixos
-            candidatos_farmacos = re.findall(regex_farmacos, texto_full)
-            
-            # C: Acrônimos Puros (Ex: VEGF, mTOR, TRPV)
-            # Filtra coisas de 3+ letras maiúsculas
-            regex_acronimos = r'\b[A-Z]{3,}\b'
-            candidatos_acronimos = re.findall(regex_acronimos, texto_full)
+        # 2. REGEX "REDE DE ARRASTÃO" (Agora pega tudo e filtra depois)
+        texto_full = " ".join(raw_texts)
+        
+        # A: Siglas Técnicas (Letras maiúsculas + números) -> P2X3, HSP90
+        regex_codigos = r'\b[A-Z]{2,}[0-9]+[A-Z0-9-]*\b'
+        candidatos_codigos = re.findall(regex_codigos, texto_full)
+        
+        # B: Palavras Capitalizadas (Candidates a nomes próprios/drogas)
+        # Pega qualquer palavra que comece com Maiúscula e tenha 4+ letras
+        regex_capitalizadas = r'\b[A-Z][a-z]{3,}\b' 
+        candidatos_capitalizadas = re.findall(regex_capitalizadas, texto_full)
+        
+        # C: Acrônimos (3+ Maiúsculas)
+        regex_acronimos = r'\b[A-Z]{3,}\b'
+        candidatos_acronimos = re.findall(regex_acronimos, texto_full)
 
-            entidades.extend(candidatos_codigos)
-            entidades.extend(candidatos_farmacos)
-            entidades.extend(candidatos_acronimos)
+        entidades.extend(candidatos_codigos)
+        entidades.extend(candidatos_capitalizadas)
+        entidades.extend(candidatos_acronimos)
 
-        # 3. Limpeza Final (O Pente Fino)
+        # 3. FILTRAGEM (Onde a mágica acontece)
         entidades_limpas = []
         for e in entidades:
             e = e.strip(".,-;:()[] ")
-            
             if len(e) < 3: continue 
             if e.isdigit(): continue
             
-            # Verifica Blacklist rigorosa
-            if e.upper() in BLACKLIST_MONSTRO: continue
+            e_upper = e.upper()
             
-            # Filtra palavras comuns de inglês que escapam do regex de acrônimos
-            if e.upper() in ["THE", "AND", "FOR", "NOT", "BUT", "WAS", "ARE", "HAS", "VIA", "ALL"]: continue
-
+            # Se estiver na Blacklist -> LIXO
+            if e_upper in BLACKLIST_MONSTRO: continue
+            
+            # Se for Stop Word (The, And, With) -> LIXO
+            if e_upper in STOP_WORDS: continue
+            
             entidades_limpas.append(e)
 
-        # 4. Estatística
+        # 4. CONTAGEM E RETORNO
         counts = Counter(entidades_limpas)
         
-        # Ordena e corta
+        # Se a IA não rodou, exigimos pelo menos 2 aparições para reduzir ruído
+        # MAS, se a lista estiver muito curta, aceitamos 1 aparição (Modo Resgate)
+        min_count = 2 if (not api_key) else 1
+        if len(counts) < 10: min_count = 1
+        
+        recorrentes = [e for e, c in counts.items() if c >= min_count]
+        recorrentes = sorted(recorrentes, key=lambda x: counts[x], reverse=True)
+        
+        # Deduplicação Final
         final = []
         seen = set()
-        # Most Common traz os mais relevantes primeiro
-        for item, count in counts.most_common(40):
+        for item in recorrentes:
             if item.lower() not in seen:
                 final.append(item)
                 seen.add(item.lower())
 
         return {
-            "termos_indicados": final,
+            "termos_indicados": final[:40],
             "counts": counts,
             "total_docs": len(artigos_completos),
             "artigos_originais": artigos_completos
         }
-    except Exception:
+    except Exception as e:
+        print(f"Erro no Backend: {e}") # Para debug no terminal
         return {}
 
-# ================= FUNÇÕES DE APOIO =================
+# ================= WRAPPERS =================
 
 def buscar_alvos_emergentes_pubmed(alvo: str, email: str, usar_ia: bool = True) -> List[str]:
     res = minerar_pubmed(alvo, email, usar_ia=usar_ia)
