@@ -53,7 +53,7 @@ MAPA_SINONIMOS_BASE = {
     "INFLAMMATION": "(Inflammation OR Cytokines OR NF-kappaB)"
 }
 
-# ================= GEMINI CORE (COM TRATAMENTO DE ERRO) =================
+# ================= GEMINI CORE (COM TRATAMENTO DE ERRO BLINDADO) =================
 
 def clean_model_name(model_name: str) -> str:
     return model_name.replace("models/", "")
@@ -86,21 +86,43 @@ def call_gemini_json(prompt: str, api_key: str) -> List[str]:
     return []
 
 def simple_gemini_text(prompt: str, api_key: str) -> str:
-    """Retorna texto puro. Se falhar, retorna None (para acionar fallback)."""
+    """
+    Tenta obter texto com insistência (Retry Logic). 
+    Se der erro de limite (429), espera e tenta de novo até 3 vezes por modelo.
+    """
     if not api_key: return None
+    
     headers = {"Content-Type": "application/json"}
     payload = {
         "contents": [{"parts": [{"text": prompt}]}], 
         "generationConfig": {"temperature": 0.3}
     }
+    
     for modelo_raw in MODELOS_ATIVOS:
         modelo = clean_model_name(modelo_raw)
-        try:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={api_key.strip()}"
-            resp = requests.post(url, headers=headers, json=payload, timeout=15)
-            if resp.status_code == 200:
-                return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
-        except: continue
+        
+        # Tenta até 3 vezes por modelo
+        for tentativa in range(3):
+            try:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={api_key.strip()}"
+                resp = requests.post(url, headers=headers, json=payload, timeout=15)
+                
+                if resp.status_code == 200:
+                    return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+                
+                elif resp.status_code == 429:
+                    # Cota excedida? Espera um pouco e tenta de novo
+                    time.sleep(2 + (tentativa * 1)) 
+                    continue 
+                
+                else:
+                    # Erro fatal no modelo, pula para o próximo
+                    break 
+                    
+            except Exception: 
+                time.sleep(1)
+                continue
+            
     return None
 
 # ================= MINERAÇÃO ESTRUTURADA =================
@@ -167,7 +189,6 @@ def minerar_pubmed(termo_base: str, email: str, usar_ia: bool = True) -> Dict:
             entidades = ner_extraction_batch(raw_texts, api_key)
         
         # 2. TENTATIVA VIA REGEX (Complementar/Fallback)
-        # Sempre rodamos isso para garantir que códigos como P2X3 não escapem
         if True:
             texto_full = " ".join(raw_texts)
             
@@ -176,7 +197,6 @@ def minerar_pubmed(termo_base: str, email: str, usar_ia: bool = True) -> Dict:
             candidatos_codigos = re.findall(regex_codigos, texto_full)
             
             # B: Fármacos (PascalCase + Sufixos Químicos)
-            # Evita palavras comuns, pega só o que parece química
             sufixos = r'(?:ine|in|mab|ib|ol|on|one|il|ide|ate|ase)\b'
             regex_farmacos = r'\b[A-Z][a-z]{3,}' + sufixos
             candidatos_farmacos = re.findall(regex_farmacos, texto_full)
@@ -189,7 +209,7 @@ def minerar_pubmed(termo_base: str, email: str, usar_ia: bool = True) -> Dict:
             entidades.extend(candidatos_farmacos)
             entidades.extend(candidatos_acronimos)
 
-        # 3. FILTRAGEM FINAL (Onde a Blacklist atua)
+        # 3. FILTRAGEM FINAL
         entidades_limpas = []
         for e in entidades:
             e = e.strip(".,-;:()[] ")
@@ -199,7 +219,7 @@ def minerar_pubmed(termo_base: str, email: str, usar_ia: bool = True) -> Dict:
             # Bloqueio explícito da Blacklist
             if e.upper() in BLACKLIST_MONSTRO: continue
             
-            # Bloqueio extra para preposições que escaparam
+            # Bloqueio extra para preposições
             if e.lower() in ["with", "from", "after", "during"]: continue
             
             entidades_limpas.append(e)
@@ -207,14 +227,13 @@ def minerar_pubmed(termo_base: str, email: str, usar_ia: bool = True) -> Dict:
         # 4. Contagem e Seleção
         counts = Counter(entidades_limpas)
         
-        # Limiar: Se tiver poucos dados, aceita frequência 1. Se tiver muitos, exige 2.
+        # Limiar adaptativo
         limit = 2 if len(counts) > 20 else 1
         recorrentes = [e for e, c in counts.items() if c >= limit]
         
-        # Ordenação
         recorrentes = sorted(recorrentes, key=lambda x: counts[x], reverse=True)
         
-        # Deduplicação (Case insensitive)
+        # Deduplicação
         final = []
         seen = set()
         for item in recorrentes:
@@ -271,12 +290,12 @@ def buscar_resumos_detalhados(termo: str, orgao: str, email: str, ano_ini: int, 
 def analisar_abstract_com_ia(titulo: str, dados_curtos: str, api_key: str, lang: str = 'pt') -> str:
     """Gera a Análise Lemos Lambda. Se a IA falhar, gera um resumo tático (Plano B)."""
     
-    # 1. Tenta via IA (Gemini)
+    # 1. Tenta via IA (Gemini) com Prompt OTIMIZADO (Menos tokens = Mais rápido)
     if api_key:
         prompt = f"""
-        Act as a Pharmacologist. Analyze this paper title: "{titulo}"
-        Output a concise 1-sentence summary in this format:
-        [MAIN DRUG/TARGET] acts on [MECHANISM] to improve [CONDITION].
+        Paper: "{titulo}"
+        Task: 1 short sentence summarizing mechanism.
+        Format: [TARGET] affects [PATHWAY] to improve [CONDITION].
         """
         resposta_ia = simple_gemini_text(prompt, api_key)
         
@@ -284,9 +303,7 @@ def analisar_abstract_com_ia(titulo: str, dados_curtos: str, api_key: str, lang:
             return resposta_ia.replace("\n", " ").strip()
 
     # 2. PLANO B (Fallback): Extração manual se a IA falhar
-    # Pega palavras longas e relevantes do título
     palavras = titulo.split()
-    # Filtra palavras curtas e que estão na blacklist
     palavras_chave = [p for p in palavras if len(p) > 5 and p.upper() not in BLACKLIST_MONSTRO]
     
     resumo_fallback = " | ".join(palavras_chave[:3])
