@@ -9,89 +9,60 @@ import ast
 # --- CONFIGURAÇÃO ---
 Entrez.email = "pesquisador_guest@unifesp.br"
 
-# --- LISTA DE MODELOS ATUALIZADA (Baseada na sua permissão) ---
-# Usei os mais potentes e rápidos da sua lista
+# --- MODELOS QUE VOCÊ CONFIRMOU POSSUIR ---
 MODELOS_ATIVOS = [
     "gemini-3-flash-preview",
     "gemini-2.5-flash",
-    "gemini-2.0-flash",
-    "gemini-flash-latest"
+    "gemini-2.0-flash"
 ]
 
-def montar_url(modelo, chave):
-    # Removendo prefixo 'models/' se existir para a URL
-    mod = modelo.replace("models/", "")
-    return f"https://generativelanguage.googleapis.com/v1beta/models/{mod}:generateContent?key={chave}"
-
-# --- 1. BLACKLIST RADICAL (Pré-IA) ---
+# --- 1. BLACKLIST DE EXTERMÍNIO (Termos que nem o Regex deixa passar) ---
 BLACKLIST_RADICAL = {
-    "URINARY", "BLADDER", "NEUROGENIC", "SWIM", "WITH", "DYSFUNCTION", "SPINAL", "LOWER", 
-    "ULTRASOUND", "COMMENT", "RECURRENT", "EDITORIAL", "IMAGING", "POSTERIOR", "ACUTE",
-    "RADIATION", "TISSUE", "EFFECT", "EFFECTS", "EXPRESSION", "INDUCED", "INFLAMMATORY"
+    "WITH", "AFTER", "SINGLE", "REPORT", "STUDY", "CASE", "MANAGEMENT", "PRIMARY",
+    "RADICAL", "POTENTIAL", "LONG", "AFTER", "UNDER", "BETWEEN", "TREATMENT",
+    "CLINICAL", "SURGERY", "ROBOTIC", "DIAGNOSIS", "OUTCOMES", "EFFICACY",
+    "BLADDER", "URINARY", "DETRUSOR", "UROTHELIUM", "KIDNEY", "PROSTATE"
 }
 
-# --- 2. FAXINEIRO IA (PROMPT EXPERIMENTAL) ---
+# --- 2. FAXINEIRO IA (PROMPT DE DOUTORADO) ---
 def _faxina_ia(lista_suja):
     api_key = st.session_state.get('api_key_usuario', '').strip()
-    if not api_key: return lista_suja[:40]
+    if not api_key: return lista_suja[:30]
 
+    # Só envia o que parece minimamente promissor para economizar cota e tempo
     prompt = f"""
-    ROLE: PhD Senior Pharmacologist (Expert in Organ Bath & Molecular Biology).
-    TASK: Review this list of terms.
-    GOAL: Keep ONLY specific molecular targets (receptors, channels, enzymes) and experimental drugs.
-    
+    ACT AS: Senior PhD Pharmacologist.
+    TASK: Extract ONLY specific molecular targets and drugs from this list.
     STRICT RULES:
-    - KEEP: Receptors (TRPV1, M3), Channels (BKCa), Enzymes (ROCK, mTOR), Drugs (Cyclophosphamide, Mirabegron), Signaling (ATP, cAMP).
-    - DELETE: Anatomy (bladder, spinal), Clinical concepts (dysfunction, imaging), Filler (with, effects, editorial).
-    - FOCUS: If it's not a molecule I can pipette or quantify in a Western Blot, DELETE it.
+    - KEEP: Receptors (M3, P2X, TRPV1), Enzymes (ROCK, mTOR), Drugs (Mirabegron, Cyclophosphamide), Ions (Ca2+, K+).
+    - DELETE: Anatomy, Clinical words, Verbs, Prepositions, General Bio terms.
+    - If it's not a molecule for an 'Organ Bath' experiment, DELETE it.
     
     INPUT: {", ".join(lista_suja)}
     
     OUTPUT: Return strictly a Python list of strings.
     """
     
-    payload = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"temperature": 0.1}}
+    payload = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"temperature": 0.0}}
     
     for m in MODELOS_ATIVOS:
         try:
-            url = montar_url(m, api_key)
-            resp = requests.post(url, json=payload, timeout=15)
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={api_key}"
+            resp = requests.post(url, json=payload, timeout=12)
             if resp.status_code == 200:
                 raw_text = resp.json()['candidates'][0]['content']['parts'][0]['text']
                 clean_list = re.sub(r'```[a-z]*', '', raw_text).replace('```', '').strip()
-                res = ast.literal_eval(clean_list)
-                return res
+                return ast.literal_eval(clean_list)
         except: continue
-    return lista_suja[:40]
+    return lista_suja[:30]
 
-# --- 3. ANÁLISE DE ABSTRACT (FOCO EM BANCADA) ---
-def analisar_abstract_com_ia(titulo, resumo_texto, api_key):
-    if not api_key: return "Chave API não configurada."
-    
-    prompt = f"""
-    Resuma como Doutor em Farmacologia (máx 20 palavras).
-    Foque no Alvo (Receptor/Via) e na Resposta Mecânica (Contração/Relaxamento).
-    Ignore dados epidemiológicos ou clínicos.
-    TÍTULO: {titulo}
-    TEXTO: {resumo_texto[:800]}
-    """
-    
-    for m in MODELOS_ATIVOS:
-        try:
-            url = montar_url(m, api_key)
-            resp = requests.post(url, json={"contents": [{"parts": [{"text": prompt}]}]}, timeout=10)
-            if resp.status_code == 200:
-                return resp.json()['candidates'][0]['content']['parts'][0]['text'].strip()
-        except: continue
-    return "Erro de conexão com modelos 2.5/3.0."
-
-# --- 4. BUSCA PUBMED ---
+# --- 3. MINERAÇÃO PUBMED (FILTRO CIRÚRGICO) ---
 def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
     if email: Entrez.email = email
-    query = f"({termo_base}) AND (2020:2026[Date - Publication]) NOT Review[pt]"
+    query = f"({termo_base}) AND (2021:2026[Date - Publication]) NOT Review[pt]"
     
     try:
-        handle = Entrez.esearch(db="pubmed", term=query, retmax=1000, sort="relevance")
+        handle = Entrez.esearch(db="pubmed", term=query, retmax=1200, sort="relevance")
         record = Entrez.read(handle); handle.close()
         if not record["IdList"]: return []
 
@@ -101,47 +72,56 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
         candidatos = []
         for line in lines:
             if line.startswith("TI  - ") or line.startswith("OT  - "):
-                found = re.findall(r'\b(?:[A-Z]{2,}[A-Z0-9-]*|[A-Z][a-z]{3,})\b', line)
+                # REGEX MELHORADO: 
+                # Pega siglas (3+ letras) OU palavras que terminam com sufixos farmacológicos
+                found = re.findall(r'\b(?:[A-Z]{3,}[A-Z0-9-]*|[A-Z][a-z]{3,}(?:in|one|ol|ide|ase|ant|receptor|channel))\b', line)
                 for f in found:
-                    if f.upper() not in BLACKLIST_RADICAL and len(f) > 2:
+                    f_up = f.upper()
+                    if f_up not in BLACKLIST_RADICAL and len(f) > 2:
                         candidatos.append(f)
         
-        top_terms = [t for t, count in Counter(candidatos).most_common(120)]
-        if usar_ia: return _faxina_ia(top_terms)
-        return top_terms[:60]
+        # Filtro de abundância: se o termo aparece pouco, pode ser sujeira
+        top_terms = [t for t, count in Counter(candidatos).most_common(100)]
+        
+        if usar_ia:
+            return _faxina_ia(top_terms)
+        return top_terms[:40]
     except: return []
 
-# --- 5. BUSCA RESUMOS PARA O FRONT ---
+# --- 4. ANALISAR ARTIGO (FOCO EM BANCADA) ---
+def analisar_abstract_com_ia(titulo, resumo_texto, api_key):
+    prompt = f"Extract molecular target and signaling pathway (max 15 words) from: {titulo}. Context: {resumo_texto[:600]}"
+    
+    for m in MODELOS_ATIVOS:
+        try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={api_key}"
+            resp = requests.post(url, json={"contents": [{"parts": [{"text": prompt}]}]}, timeout=8)
+            if resp.status_code == 200:
+                return resp.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+        except: continue
+    return "Erro nos modelos 2.5/3.0. Verifique sua cota."
+
+# --- FUNÇÕES SUPORTE ---
+def consultar_pubmed_count(termo, contexto, email, ano_ini, ano_fim):
+    query = f"({termo}) AND ({contexto}) AND ({ano_ini}:{ano_fim}[Date - Publication])"
+    try:
+        handle = Entrez.esearch(db="pubmed", term=query, retmax=0)
+        return int(Entrez.read(handle)["Count"])
+    except: return 0
+
 def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
-    if email: Entrez.email = email
     query = f"({termo}) AND ({orgao}) AND ({ano_ini}:{ano_fim}[Date - Publication])"
     try:
-        handle = Entrez.esearch(db="pubmed", term=query, retmax=5, sort="relevance")
-        record = Entrez.read(handle); handle.close()
-        if not record["IdList"]: return []
-        handle = Entrez.efetch(db="pubmed", id=record["IdList"], rettype="medline", retmode="text")
-        dados = handle.read(); handle.close()
+        handle = Entrez.esearch(db="pubmed", term=query, retmax=5)
+        ids = Entrez.read(handle)["IdList"]
+        handle = Entrez.efetch(db="pubmed", id=ids, rettype="medline", retmode="text")
+        dados = handle.read().split("\n\nPMID-")
         artigos = []
-        for raw in dados.split("\n\nPMID-"):
-            tit, abstract, pmid = "", "", ""
-            for line in raw.split("\n"):
-                if line.startswith("TI  - "): tit = line[6:].strip()
-                if line.startswith("AB  - "): abstract = line[6:500].strip()
-                if line.startswith("PMID- "): pmid = line[6:].strip()
-            if tit: artigos.append({"Title": tit, "Info_IA": abstract, "Link": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"})
+        for art in dados:
+            tit = re.search(r"TI  - (.*)", art)
+            ab = re.search(r"AB  - (.*)", art)
+            if tit: artigos.append({"Title": tit.group(1), "Info_IA": ab.group(1) if ab else "", "Link": "https://pubmed.ncbi.nlm.nih.gov/"})
         return artigos
     except: return []
 
-# --- 6. CONSULTA COUNT (FISHER) ---
-def consultar_pubmed_count(termo, contexto, email, ano_ini, ano_fim):
-    if email: Entrez.email = email
-    query = f"({termo})" + (f" AND ({contexto})" if contexto else "")
-    query += f" AND ({ano_ini}:{ano_fim}[Date - Publication]) AND (NOT Review[pt])"
-    try:
-        handle = Entrez.esearch(db="pubmed", term=query, retmax=0)
-        record = Entrez.read(handle); handle.close()
-        return int(record["Count"])
-    except: return 0
-
-def buscar_todas_noticias(lang='pt'):
-    return [] # Radar simplificado para focar no erro
+def buscar_todas_noticias(lang='pt'): return []
