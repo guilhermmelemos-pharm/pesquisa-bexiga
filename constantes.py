@@ -1,6 +1,6 @@
 # constantes.py
 # Configurações, Textos e Listas de Prospecção
-# Versão: 2.0
+# Versão: 2.5 (Ultimate Edition)
 
 TEXTOS = {
     "pt": {
@@ -15,7 +15,7 @@ TEXTOS = {
         "holder_email": "ex: guilherme@unifesp.br",
         "erro_email": "⚠️ E-mail é obrigatório para usar a API!",
         "label_alvo": "Alvo Principal (Órgão/Doença)",
-        "holder_alvo": "ex: Bladder, Urothelium, Detrusor",
+        "holder_alvo": "ex: Bladder, Urothelium, Detrusor, Heart",
         "erro_alvo": "⚠️ Defina o Alvo Principal primeiro!",
         "btn_auto": "🧠 AUTO-DETECTAR ALVOS & INICIAR",
         "expander_presets": "💎 Adicionar Fronteiras (Blue Ocean) & Presets",
@@ -46,7 +46,7 @@ TEXTOS = {
         "btn_executar": "🚀 EXECUTAR ANÁLISE ESTATÍSTICA",
         "toast_importado": "Importação concluída",
         "erro_arquivo": "Erro ao ler arquivo.",
-        "spinner_analise": "Calibrando estatística (Lemos Lambda v2.0)...",
+        "spinner_analise": "Calibrando estatística (Lemos Lambda v2.5)...",
         "titulo_processando": "## 🧬 Processando Estatística...",
 
         # --- RESULTADOS ---
@@ -171,13 +171,46 @@ TEXTOS = {
     }
 }
 
+# --- LISTAS DE PROSPECÇÃO (PRESETS) ---
 PRESETS_FRONTEIRA = {
-    "🔥 Gasotransmissores": ["Carbon Monoxide (CO)", "HO-1", "CORM-2", "CORM-401", "Hydrogen Sulfide (H2S)", "CBS", "CSE", "GYY4137", "AP39", "Hydrogen Gas (H2)", "Sulfur Dioxide (SO2)"],
-    "⚡ Mecanossensores & Canais": ["Piezo1", "Piezo2", "OSCA1", "TMEM63", "TRPA1", "TRPM8", "TRPV4", "TREK-1", "TREK-2", "TRAAK", "TMEM16A", "HCN1", "HCN4", "P2X3", "P2X7"],
-    "🧬 Epigenética & RNAs": ["TET2", "HDAC6 inhibitor", "DNMT1", "MALAT1", "HOTAIR", "miR-29b", "miR-132", "miR-145", "Exosomes"],
-    "🥑 Resolução & Lipídios": ["Resolvin D1", "Resolvin E1", "Maresin-1", "Lipoxin A4", "Anandamide (AEA)", "2-AG", "GPR55", "GPR18", "GPR120"],
-    "👻 Receptores Órfãos": ["GPR35", "GPR84", "GPR68", "OR51E2", "OR1D2", "TAS2R14", "TAS2R38"]
+    "🔥 Blockbusters & Inovação (2025)": [
+        "Semaglutide", "Tirzepatide", "Retatrutide", "Empagliflozin", "Dapagliflozin",
+        "Iptacopan", "Lecanemab", "Donanemab", "Zuranolone", "Resmetirom",
+        "TFEB", "TMAO", "PROTACs", "Molecular Glues", "Senolytics", "Finerenone", "Vericiguat"
+    ],
+    "❤️ Cardio-Renal & Metabólico": [
+        "SGLT2", "SGLT1", "GLP1R", "GIPR", "GCGR", "PCSK9", "NLRP3", 
+        "Neprilysin", "sGC", "HCN4", "RyR2", "SERCA2a", "Aldosterone Synthase", 
+        "Lp(a)", "ANGPTL3", "Factor XI", "CETP", "Adiponectin", "Leptin"
+    ],
+    "⚡ Mecanossensores & Canais (Core)": [
+        "Piezo1", "Piezo2", "TRPV1", "TRPV4", "TRPA1", "TRPM8", "P2X3", "P2X7", 
+        "Nav1.7", "Nav1.8", "Kv7.2/7.3", "BK Channel", "SK Channel", "TMEM16A", "OSCA1", "TMEM63", 
+        "HCN1", "TREK-1", "TREK-2", "TRAAK"
+    ],
+    "🌿 Canabinoides & Lipídios": [
+        "Cannabidiol (CBD)", "Tetrahydrocannabinol (THC)", "CB1 Receptor", "CB2 Receptor", 
+        "GPR55", "GPR18", "GPR119", "FAAH", "MAGL", "Anandamide (AEA)", "2-AG", 
+        "Resolvin D1", "Resolvin E1", "Maresin-1", "Lipoxin A4", "Sphingosine-1-Phosphate"
+    ],
+    "💨 Gasotransmissores & Doadores": [
+        "Carbon Monoxide (CO)", "HO-1", "CORM-2", "CORM-401", 
+        "Hydrogen Sulfide (H2S)", "CBS", "CSE", "GYY4137", "AP39", 
+        "Hydrogen Gas (H2)", "Sulfur Dioxide (SO2)", "Nitric Oxide (NO)", "sGC"
+    ],
+    "🧬 Epigenética, RNAs & Vias": [
+        "TET2", "HDAC6 inhibitor", "DNMT1", "MALAT1", "HOTAIR", "miR-29b", "miR-132", "miR-145", "Exosomes",
+        "YAP", "TAZ", "Hippo Pathway", "mTORC1", "AMPK", "STING", "cGAS", "Ferroptosis", "Autophagy"
+    ],
+    "👻 Receptores Órfãos": [
+        "GPR35", "GPR84", "GPR68", "GPR120", "OR51E2", "OR1D2", "TAS2R14", "TAS2R38"
+    ]
 }
-CANDIDATOS_MINERACAO = (PRESETS_FRONTEIRA["🔥 Gasotransmissores"] + PRESETS_FRONTEIRA["⚡ Mecanossensores & Canais"] + PRESETS_FRONTEIRA["👻 Receptores Órfãos"])
 
-BLACKLIST_GERAL = ["review", "meta-analysis", "rat", "mice", "human", "study"]
+# Constrói a lista mestra para uso interno se necessário
+CANDIDATOS_MINERACAO = []
+for lista in PRESETS_FRONTEIRA.values():
+    CANDIDATOS_MINERACAO.extend(lista)
+
+# Blacklist básica para garantir limpeza
+BLACKLIST_GERAL = ["review", "meta-analysis", "rat", "mice", "human", "study", "results", "conclusion", "patients", "placebo", "control", "group", "analysis", "data", "method", "using"]
