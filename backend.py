@@ -10,9 +10,7 @@ import math
 # --- CONFIGURAÇÃO ---
 Entrez.email = "pesquisador_guest@unifesp.br"
 
-MODELOS_ATIVOS = [
-    "gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-exp"
-]
+MODELOS_ATIVOS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-exp"]
 
 # --- 1. MOTOR DE MÉTRICAS ---
 def calcular_metricas_originais(freq, total_docs, n_alvo_total):
@@ -22,18 +20,26 @@ def calcular_metricas_originais(freq, total_docs, n_alvo_total):
     status = "Saturado" if blue_ocean < 25 else "Blue Ocean" if blue_ocean > 75 else "Competitivo"
     return lambda_score, p_value, blue_ocean, status
 
-# --- 2. DOUTORA INVESTIGADORA (FILTRO DE ALTO IMPACTO) ---
-def _chamar_ia_seletiva(prompt):
+# --- 2. FAXINEIRO IA (ORDEM DE EXTERMÍNIO) ---
+def _faxina_ia_sniper(lista_bruta):
     api_key = st.session_state.get('api_key_usuario', '').strip()
-    if not api_key: return []
+    if not api_key: return lista_bruta[:40]
+    
+    prompt = f"""
+    Como PhD em Farmacologia Molecular, analise esta lista: {lista_bruta[:150]}
+    Mantenha APENAS alvos moleculares específicos (ex: TRPV4, P2X3, NLRP3) e fármacos experimentais (GSK1016790A).
+    DELETE TUDO que for: fisiologia clássica, anatomia genérica, animais e termos de 100 anos atrás.
+    Exemplos de LIXO para DELETAR: Toads, Frogs, Dogs, Muscle, Water, Sodium, Isolated, Studies, Metabolism.
+    Output: Apenas lista Python [].
+    """
+    
     headers = {'Content-Type': 'application/json'}
-    # Temperatura zero para máxima precisão técnica
     data = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"temperature": 0.0}}
     
     for m in MODELOS_ATIVOS:
         try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={api_key}"
-            resp = requests.post(url, headers=headers, json=data, timeout=25)
+            resp = requests.post(url, headers=headers, json=data, timeout=20)
             if resp.status_code == 200:
                 texto = resp.json()['candidates'][0]['content']['parts'][0]['text']
                 match = re.search(r'\[.*\]', texto, re.DOTALL)
@@ -41,74 +47,76 @@ def _chamar_ia_seletiva(prompt):
         except: continue
     return []
 
-# --- 3. MINERAÇÃO COM FILTRO DE ÉPOCA E QUALIDADE ---
+# --- 3. MINERAÇÃO SNIPER (FOCO 2018-2026 E EXCLUSÃO DE ABSTRACT) ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
     if email: Entrez.email = email
     
-    # Brainstorming: A IA define o que é o "Estado da Arte" antes de ver o lixo do PubMed
-    alvos_elite = []
-    if usar_ia:
-        prompt_brain = f"""
-        Role: PhD Molecular Pharmacologist.
-        Task: List 60 specific molecular targets (channels, receptors, enzymes) and experimental drugs for "{termo_base}" based ONLY on 2020-2026 science.
-        STRICT EXCLUSION: No classic physiology (Toads, Frogs, Dogs, Sodium/Water transport).
-        CORE TARGETS: TRPV4, Piezo1, P2X3, ROCK, NLRP3, SPHK1, Rho-kinase, miRNAs.
-        Output: ONLY a Python list of strings [].
-        """
-        alvos_elite = _chamar_ia_seletiva(prompt_brain)
-    
-    # Busca PubMed: Só 2018 para frente. Isso mata a fisiologia clássica na fonte.
-    query = f"({termo_base} AND (Pharmacology OR Molecular OR Signaling)) AND (2018:2026[Date])"
+    # Corte temporal radical: 2018 para frente
+    query = f"({termo_base} AND (Pharmacology OR Molecular)) AND (2018:2026[Date])"
     try:
-        handle = Entrez.esearch(db="pubmed", term=query, retmax=1200, sort="relevance")
+        handle = Entrez.esearch(db="pubmed", term=query, retmax=1000, sort="relevance")
         record = Entrez.read(handle); handle.close()
         total_docs = int(record["Count"])
         
         handle = Entrez.efetch(db="pubmed", id=record["IdList"], rettype="medline", retmode="text")
         full_data = handle.read(); handle.close()
         
-        # Blacklist de termos que não são alvos de bancada modernos
-        lixo = {
-            'TOAD', 'FROG', 'DOG', 'RABBIT', 'SODIUM', 'WATER', 'TRANSPORT', 'KIDNEY', 
-            'STUDY', 'ROLE', 'LAB', 'EXPERIMENTAL', 'PHYSIOLOGY', 'HORMONES', 
-            'BLADDER', 'URINARY', 'EPITHELIUM', 'SYSTEM', 'ACTION', 'EFFECT'
+        # BLACKLIST DE EXTERMÍNIO (O que você não aguenta mais)
+        lixo_fatal = {
+            'TOAD', 'TOADS', 'FROG', 'FROGS', 'DOG', 'DOGS', 'RABBIT', 'SODIUM', 'WATER', 'TRANSPORT', 
+            'ALDOSTERONE', 'VASOPRESSIN', 'KIDNEY', 'RNA', 'DNA', 'CELL', 'STUDY', 'STUDIES', 'ROLE', 
+            'LAB', 'EXPERIMENTAL', 'PHYSIOLOGY', 'HORMONES', 'BLADDER', 'URINARY', 'EPITHELIUM', 
+            'SYSTEM', 'ACTION', 'EFFECT', 'ACTIVE', 'POSTERIOR', 'PITUITARY', 'ION', 'OSMOSIS', 
+            'PACAP', 'ABSORPTION', 'MUSCLE', 'NERVE', 'NERVOUS', 'STIMULATION', 'ACID', 'COMPOUNDS'
         }
         
         candidatos_pubmed = []
         for artigo in full_data.split("\n\nPMID-"):
-            texto_util = ""
-            for linha in artigo.split("\n"):
-                if linha.startswith("TI  - ") or linha.startswith("KW  - ") or linha.startswith("OT  - "):
-                    texto_util += linha[6:].strip() + " "
+            texto_sniper = ""
+            for line in artigo.split("\n"):
+                # SÓ OLHA TÍTULO (TI) E KEYWORDS (KW/OT)
+                if line.startswith("TI  - ") or line.startswith("KW  - ") or line.startswith("OT  - "):
+                    texto_sniper += line[6:].strip() + " "
             
-            siglas = re.findall(r'\b[A-Z0-9-]{3,12}\b', texto_util)
-            for s in siglas:
-                if s.upper() not in lixo:
-                    candidatos_pubmed.append(s.upper())
+            # Captura siglas e nomes químicos (3+ letras)
+            encontrados = re.findall(r'\b[A-Z0-9-]{3,12}\b', texto_sniper)
+            for t in encontrados:
+                t_up = t.upper()
+                if t_up not in lixo_fatal and not t_up.isdigit():
+                    candidatos_pubmed.append(t_up)
 
         contagem = Counter(candidatos_pubmed)
-        top_pubmed = [termo for termo, freq in contagem.most_common(150)]
+        top_bruto = [termo for termo, freq in contagem.most_common(180)]
         
-        # Cruzamento Rígido com ordem de extermínio
-        nomes_finais = []
-        if usar_ia:
-            lista_para_cruzamento = list(set(alvos_elite + top_pubmed))
-            prompt_cross = f"""
-            Analyze this list of terms from PubMed: {lista_para_cruzamento[:120]}.
-            MISSION: Keep ONLY specific Ion Channels, Receptors, Enzymes, and Novel Drugs.
-            DELETE 80% of the list: Remove general physiology, anatomy, and classic 20th-century terms.
-            Output: ONLY a Python list of strings [].
-            """
-            nomes_finais = _chamar_ia_seletiva(prompt_cross)
-        
-        if not nomes_finais: nomes_finais = top_pubmed[:60]
+        nomes_finais = _faxina_ia_sniper(top_bruto) if usar_ia else top_bruto[:60]
 
         res_finais = []
         for nome in nomes_finais:
-            if len(nome) < 3 or nome.upper() in lixo: continue
+            if nome.upper() in lixo_fatal: continue
             freq = contagem.get(nome.upper(), 1)
             l_score, p_val, b_ocean, status = calcular_metricas_originais(freq, total_docs, freq * 10)
             res_finais.append({"Alvo": nome, "Lambda": round(l_score, 2), "P-value": round(p_val, 4), "Blue Ocean": round(b_ocean, 1), "Status": status})
         return res_finais
+    except: return []
+
+# --- 4. RADAR DE NOTÍCIAS (FOCO EM CANAIS IÔNICOS 2025) ---
+@st.cache_data(ttl=3600, show_spinner=False)
+def buscar_todas_noticias(lang='pt'):
+    try:
+        query = "(bladder pharmacology OR urothelium ion channels OR mechanotransduction) AND (2024:2026[Date])"
+        handle = Entrez.esearch(db="pubmed", term=query, retmax=6, sort="pub_date")
+        record = Entrez.read(handle); handle.close()
+        handle = Entrez.efetch(db="pubmed", id=record["IdList"], rettype="medline", retmode="text")
+        dados = handle.read(); handle.close()
+        news = []
+        for art in dados.split("\n\nPMID-"):
+            tit, journal, pmid = "", "", ""
+            for line in art.split("\n"):
+                if line.startswith("TI  - "): tit = line[6:].strip()
+                if line.startswith("JT  - "): journal = line[3:].strip()
+                if line.strip().isdigit() and not pmid: pmid = line.strip()
+            if tit and pmid:
+                news.append({"titulo": tit, "fonte": journal[:40], "link": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"})
+        return news
     except: return []
