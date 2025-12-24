@@ -11,7 +11,7 @@ import ast
 # --- CONFIGURAÇÃO ---
 Entrez.email = "pesquisador_guest@unifesp.br"
 
-# --- 1. MODELOS PAID TIER (RESTORED) ---
+# --- 1. SEUS MODELOS (PAID TIER) ---
 MODELOS_ATIVOS = [
     "gemini-2.5-flash",          
     "gemini-2.0-flash",          
@@ -35,19 +35,19 @@ def _faxina_ia(lista_suja):
 
     lista_str = ", ".join(lista_suja)
     
-    # PROMPT PERSONA: DOUTORA DE LAB FOCO EM FARMACO/FISIO
     prompt = f"""
     Amiga, tu é uma doutora em farmacologia e fisiologia experiente. 
     Tu sabe que a gente quer o que é PROMISSOR para o laboratório (banho de órgãos e biologia molecular).
     
-    REGRAS DA DOUTORA:
-    1. IGNORE TOTALMENTE: Nomes de animais (Rats, Mice, Toad, Rabbit), termos médicos (OAB, LUTS, Surgery), anatomia genérica (Bladder, Urinary) e lixo de texto (Studies, Role, Effect, Action, The, And).
-    2. MANTENHA APENAS: Alvos Moleculares (TRPV4, P2X3, NLRP3, PPAR, Receptores, Canais, Genes) e Fármacos/Moléculas (ATP, Aldosterone, Agonistas, Inibidores, Metabolistas).
-    3. FOCO: Só deixa o que a gente pode manipular na bancada. Tu não é médica e nem vai escrever revisão, vacilão.
+    REGRAS DE EXTERMÍNIO DA DOUTORA:
+    1. DELETE SEM DÓ: Animais (Toad, Turtle, Rabbit, Mammalian), Termos de preenchimento (Studies, Role, Effect, Action, Biological, Experimental, Technique, Interpretation, Measurement, Properties, Responses, Responses, Movement, Water, Function, Pressure, Resistance, Consumption, Nervous).
+    2. DELETE: Metodologia e solventes (DMSO, Vitro, Cystometrography, EMG, Technique).
+    3. MANTENHA APENAS: Alvos (TRPV4, PIEZO1, SPHK1, NLRP3, Receptores, Genes) e Fármacos/Moléculas de ação (GSK1016790A, ATP, Aldosterone, Ouabain, Inibidores).
+    4. Tu não é médica e nem vai escrever revisão, vacilão. Foca na bancada.
     
     LISTA PARA FILTRAR: {lista_str}
     
-    OUTPUT: Retorne APENAS uma lista Python limpa. Exemplo: ['TRPV4', 'NLRP3', 'PPAR', 'ATP', 'TMAO']
+    OUTPUT: Retorne APENAS uma lista Python limpa. Exemplo: ['TRPV4', 'GSK1016790A', 'PIEZO1', 'SPHK1']
     """
     
     headers = {'Content-Type': 'application/json'}
@@ -73,10 +73,10 @@ def analisar_abstract_com_ia(titulo, dados_curtos, api_key, lang='pt'):
     Doutora, analise esse paper com foco em farmacologia e fisiologia de lab:
     ARTIGO: {titulo}. {dados_curtos}
     
-    FORMATO OBRIGATÓRIO (NÃO FUJA DISSO):
+    FORMATO OBRIGATÓRIO:
     Alvo: [Sigla do Alvo] | Fármaco: [O que usaram no lab] | Efeito: [Resposta funcional observada].
     
-    Máximo 20 palavras. Seja técnica e impiedosa com conversa de médico.
+    Máximo 20 palavras. Seja técnica e direta.
     Idioma: {idioma}.
     """
     
@@ -92,7 +92,7 @@ def analisar_abstract_com_ia(titulo, dados_curtos, api_key, lang='pt'):
         except: continue
     return "⚠️ IA indisponível."
 
-# --- 5. BUSCA PUBMED (CORE) ---
+# --- 5. BUSCA PUBMED ---
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
 def _fetch_pubmed_count(query):
     handle = Entrez.esearch(db="pubmed", term=query, retmax=0)
@@ -142,6 +142,15 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
         handle = Entrez.efetch(db="pubmed", id=record["IdList"], rettype="medline", retmode="text")
         full_data = handle.read(); handle.close()
         
+        # Blacklist Pesada de Termos Irrelevantes
+        blacklist = {
+            "THE", "AND", "ROLE", "EFFECT", "ACTION", "STUDIES", "STUDY", "DATA", "RESULTS",
+            "WATER", "PRESSURE", "RESISTANCE", "MOVEMENT", "CONSUMPTION", "EXPERIMENTAL",
+            "BIOLOGICAL", "PROPERTIES", "MEASUREMENT", "INTERPRETATION", "TECHNIQUE", "RESPONSE",
+            "RESPONSES", "VITRO", "VIVO", "MODEL", "MODELS", "RABBIT", "TURTLE", "MAMMALIAN",
+            "TOAD", "MOUSE", "MICE", "RAT", "RATS", "DMSO", "PBS", "SALINE"
+        }
+        
         candidatos = []
         for artigo in full_data.split("\n\nPMID-"):
             texto = ""
@@ -150,11 +159,10 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
             encontrados = re.findall(r'\b(?:[A-Z]{2,}[A-Z0-9-]*|[a-z]{1,2}[A-Z][a-zA-Z0-9-]*)\b', texto)
             for t in encontrados:
                 t_clean = re.sub(r'[^A-Z0-9]', '', t.upper())
-                if len(t_clean) >= 3: candidatos.append(t_clean)
+                if len(t_clean) >= 3 and t_clean not in blacklist: candidatos.append(t_clean)
 
         contagem = Counter(candidatos)
-        top = [termo for termo,freq in contagem.most_common(150)]
+        top = [termo for termo,freq in contagem.most_common(180)]
         
         return _faxina_ia(top) if usar_ia and st.session_state.get('api_key_usuario') else top[:30]
     except: return []
-                                     
