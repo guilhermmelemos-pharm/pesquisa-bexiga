@@ -25,20 +25,42 @@ def calcular_metricas_originais(freq, total_docs, n_alvo_total):
 def limpar_termo_para_pubmed(termo):
     return re.sub(r'^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$', '', termo.strip())
 
-# --- 4. MINERAÇÃO MASSIVA (FOCO RESTRITO A TI E KW) ---
+# --- 2. DOUTORA INVESTIGADORA (PROMPT RECALIBRADO) ---
+def _chamar_ia_estrita(prompt):
+    api_key = st.session_state.get('api_key_usuario', '').strip()
+    if not api_key: return []
+    headers = {'Content-Type': 'application/json'}
+    data = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"temperature": 0.1}}
+    
+    for m in MODELOS_ATIVOS:
+        try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={api_key}"
+            resp = requests.post(url, headers=headers, json=data, timeout=25)
+            if resp.status_code == 200:
+                texto = resp.json()['candidates'][0]['content']['parts'][0]['text']
+                match = re.search(r'\[.*\]', texto, re.DOTALL)
+                if match: return ast.literal_eval(match.group())
+        except: continue
+    return []
+
+# --- 3. MINERAÇÃO MASSIVA (PENEIRA DE 2025) ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
     if email: Entrez.email = email
     
-    # Passo 1: IA Proativa (Brainstorming)
+    # Brainstorming focado apenas no que é BOLA DA VEZ
     alvos_previstos = []
     if usar_ia:
-        # Prompt em inglês para maior estabilidade no Paid Tier
-        prompt_brain = f"As a PhD in Pharmacology, provide a Python list of 50 specific molecular targets (channels, receptors, enzymes) for research on {termo_base}. Focus on bench research (TRPV4, SPHK1, etc). No conversation, only []."
-        alvos_previstos = _chamar_ia_simples(prompt_brain)
+        prompt_brain = f"""
+        As a Senior PhD in Molecular Pharmacology, provide a Python list of 50 specific molecular targets (channels, receptors, enzymes) for research on {termo_base}.
+        STRICT EXCLUSION: No classic physiology (Sodium, Water, Toad, Frog, Vasopressin, Aldosterone).
+        FOCUS: Bench research, Ion Channels (TRP, Piezo, P2X), miRNAs, Inflammasomes.
+        Output: ONLY a Python list [].
+        """
+        alvos_previstos = _chamar_ia_estrita(prompt_brain)
     
-    # Passo 2: Busca PubMed com Filtro de Linha Real
-    query = f"({termo_base} AND (Pharmacology OR Molecular)) AND (2018:2026[Date])"
+    # Busca PubMed focada do ano 2000 para frente (mata os sapos de 1960)
+    query = f"({termo_base} AND (Pharmacology OR Molecular OR Signaling)) AND (2015:2026[Date])"
     try:
         handle = Entrez.esearch(db="pubmed", term=query, retmax=1000, sort="relevance")
         record = Entrez.read(handle); handle.close()
@@ -47,95 +69,45 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
         handle = Entrez.efetch(db="pubmed", id=record["IdList"], rettype="medline", retmode="text")
         full_data = handle.read(); handle.close()
         
-        # --- FILTRAGEM CIRÚRGICA DE LINHAS ---
-        candidatos_pubmed = []
-        # Lista de metadados para ignorar mesmo se aparecerem no título por erro
-        metadados_sistema = {'FAU', 'PMID', 'STAT', 'OWN', 'DCOM', 'JID', 'EDAT', 'MHDA', 'CRDT', 'PHST', 'AID', 'NLM', 'USA', 'HHS', 'NIH'}
+        # SUPER BLACKLIST DE EXTERMÍNIO
+        blacklist_pesada = {
+            'TOAD', 'FROG', 'DOG', 'RABBIT', 'SODIUM', 'WATER', 'TRANSPORT', 'PERMEABILITY',
+            'VASOPRESSIN', 'ALDOSTERONE', 'KIDNEY', 'PITUITARY', 'POSTERIOR', 'SYSTEM',
+            'ACTION', 'EFFECT', 'STUDY', 'THE', 'AND', 'MUSCLE', 'CELL', 'BIOLOGICAL',
+            'ISOLATED', 'EXPERIMENTAL', 'PHYSIOLOGY', 'HORMONES', 'ISOTOPES', 'ACID'
+        }
         
+        candidatos_pubmed = []
         for artigo in full_data.split("\n\nPMID-"):
-            texto_util_do_artigo = ""
+            texto_util = ""
             for linha in artigo.split("\n"):
-                # SÓ CONCATENA SE A LINHA COMEÇAR COM AS TAGS DE CONTEÚDO
-                # TI = Título, KW/OT = Keywords (onde estão os fármacos e alvos)
                 if linha.startswith("TI  - ") or linha.startswith("KW  - ") or linha.startswith("OT  - "):
-                    texto_util_do_artigo += linha[6:].strip() + " "
+                    texto_util += linha[6:].strip() + " "
             
-            # Agora aplicamos o Regex APENAS no texto que extraímos de TI e KW
-            # Ignoramos qualquer coisa com menos de 3 letras (limpa anos e siglas do sistema)
-            encontrados = re.findall(r'\b[A-Z-]{3,}\b', texto_util_do_artigo)
+            # Captura siglas técnicas (3+ letras)
+            encontrados = re.findall(r'\b[A-Z0-9-]{3,}\b', texto_util)
             for t in encontrados:
-                t_up = t.upper()
-                if t_up not in metadados_sistema:
-                    candidatos_pubmed.append(t_up)
+                if t.upper() not in blacklist_pesada:
+                    candidatos_pubmed.append(t.upper())
 
         contagem = Counter(candidatos_pubmed)
         top_pubmed = [termo for termo, freq in contagem.most_common(150)]
         
-        # Passo 3: Cruzamento via IA
+        # Cruzamento final: Hipótese (IA) vs Evidência (PubMed)
         nomes_finais = []
         if usar_ia:
             lista_cruzamento = list(set(alvos_previstos + top_pubmed))
-            prompt_cross = f"Cross-reference your knowledge with this list: {lista_cruzamento[:120]}. Keep only specific molecular targets and drugs for {termo_base}. Output: ONLY a Python list []."
-            nomes_finais = _chamar_ia_simples(prompt_cross)
+            prompt_cross = f"PhD Cross-reference: From this list {lista_cruzamento[:120]}, keep ONLY specific molecular targets and drugs for {termo_base}. Delete all general physiology and system terms. Output: ONLY a Python list []."
+            nomes_finais = _chamar_ia_estrita(prompt_cross)
         
-        # Redundância (se a IA falhar, o app não fica vazio)
         if not nomes_finais: nomes_finais = top_pubmed[:60]
 
         res_finais = []
         for nome in nomes_finais:
             n_limpo = limpar_termo_para_pubmed(nome)
+            if n_limpo.upper() in blacklist_pesada: continue
             freq = contagem.get(n_limpo.upper(), 1)
             l_score, p_val, b_ocean, status = calcular_metricas_originais(freq, total_docs, freq * 10)
             res_finais.append({"Alvo": n_limpo, "Lambda": round(l_score, 2), "P-value": round(p_val, 4), "Blue Ocean": round(b_ocean, 1), "Status": status})
         return res_finais
     except: return []
-
-# --- FUNÇÃO INTERNA PARA CHAMADA DE MODELOS (STABILITY) ---
-def _chamar_ia_simples(prompt):
-    api_key = st.session_state.get('api_key_usuario', '').strip()
-    if not api_key: return []
-    headers = {'Content-Type': 'application/json'}
-    data = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"temperature": 0.2}}
-    
-    for m in MODELOS_ATIVOS:
-        try:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={api_key}"
-            resp = requests.post(url, headers=headers, json=data, timeout=20)
-            if resp.status_code == 200:
-                texto = resp.json()['candidates'][0]['content']['parts'][0]['text']
-                match = re.search(r'\[.*\]', texto, re.DOTALL)
-                if match: return ast.literal_eval(match.group())
-        except: continue
-    return []
-
-# RADAR E APOIO (Mantidos conforme sua versão funcional)
-@st.cache_data(ttl=3600, show_spinner=False)
-def buscar_todas_noticias(lang='pt'):
-    try:
-        query = "(bladder physiology OR pharmacology OR molecular biology) AND (2024:2026[Date - Publication])"
-        handle = Entrez.esearch(db="pubmed", term=query, retmax=6, sort="pub_date")
-        record = Entrez.read(handle); handle.close()
-        handle = Entrez.efetch(db="pubmed", id=record["IdList"], rettype="medline", retmode="text")
-        dados = handle.read(); handle.close()
-        news = []
-        for art in dados.split("\n\nPMID-"):
-            tit, journal, pmid = "", "", ""
-            for line in art.split("\n"):
-                if line.startswith("TI  - "): tit = line[6:].strip()
-                if line.startswith("JT  - "): journal = line[6:].strip()
-                if line.strip().isdigit() and not pmid: pmid = line.strip()
-            if tit and pmid:
-                news.append({"titulo": tit, "fonte": journal[:40], "link": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"})
-        return news
-    except: return []
-
-@st.cache_data(ttl=86400, show_spinner=False)
-def consultar_pubmed_count(termo, contexto, email, ano_ini, ano_fim):
-    if email: Entrez.email = email
-    termo_limpo = limpar_termo_para_pubmed(termo)
-    query = f"({termo_limpo}) AND ({contexto}) AND ({ano_ini}:{ano_fim}[Date - Publication])"
-    try:
-        handle = Entrez.esearch(db="pubmed", term=query, retmax=0)
-        record = Entrez.read(handle); handle.close()
-        return int(record["Count"])
-    except: return 0
