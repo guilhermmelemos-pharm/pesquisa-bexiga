@@ -19,31 +19,45 @@ def calcular_metricas_originais(freq, total_docs, n_alvo_total):
     status = "Saturado" if blue_ocean < 25 else "Blue Ocean" if blue_ocean > 75 else "Competitivo"
     return lambda_score, p_value, blue_ocean, status
 
-# --- 2. EXTRATOR SNIPER (ALVO / FÁRMACO / AÇÃO) ---
+# --- 2. SNIPER DE TABELA (ALVO | FÁRMACO | AÇÃO) ---
 def analisar_abstract_com_ia(titulo, dados, api_key, lang='pt'):
     """
-    Substitui a função de resumo antiga. 
-    Agora ela extrai estritamente a relação Alvo/Fármaco/Ação do artigo.
+    Extrator de alta precisão para o formato Alvo | Fármaco | Ação.
     """
+    if not api_key: return "Erro | Key Ausente | Configure a API"
+    
     prompt = f"""
-    Baseado no Título: {titulo} e Dados: {dados}.
-    Extraia APENAS: Alvo Molecular | Fármaco | Ação.
-    Exemplo: TRPV4 | GSK1016790A | Agonista Urotelial.
-    Se não houver fármaco, coloque 'N/A'. Seja extremamente curto.
+    ANALISE MOLECULAR:
+    Título: {titulo}
+    Metadados: {dados}
+    
+    TASK: Retorne EXCLUSIVAMENTE no formato: ALVO | FÁRMACO | AÇÃO.
+    REGRAS: 
+    - Se não houver fármaco específico, use 'Endógeno'.
+    - Seja ultra-conciso (máximo 3 palavras por campo).
+    - FOCO: Alvos modernos (TRP, Piezo, P2X, ROCK).
+    - DELETE: Termos genéricos, métodos ou animais.
     """
+    
     headers = {'Content-Type': 'application/json'}
-    data = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"temperature": 0.1}}
+    data = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"temperature": 0.0}}
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
+    
     try:
-        resp = requests.post(url, headers=headers, json=data, timeout=10)
-        return resp.json()['candidates'][0]['content']['parts'][0]['text'].strip()
-    except: return "N/A | N/A | Erro na extração"
+        resp = requests.post(url, headers=headers, json=data, timeout=15)
+        if resp.status_code == 200:
+            res = resp.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+            # Garante que o separador existe no retorno
+            return res if "|" in res else f"{res} | N/A | N/A"
+        return "Erro | API | Status " + str(resp.status_code)
+    except:
+        return "N/A | N/A | Timeout da Extração"
 
 # --- 3. MINERAÇÃO SNIPER (SÓ TÍTULO/KW PÓS-2020) ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
     if email: Entrez.email = email
-    # CORTE TEMPORAL: Bloqueia qualquer coisa antes de 2020
+    # Bloqueio histórico: só 2020 para frente
     query = f"({termo_base} AND (Pharmacology OR Molecular)) AND (2020:2026[Date])"
     
     try:
@@ -54,14 +68,13 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
         handle = Entrez.efetch(db="pubmed", id=record["IdList"], rettype="medline", retmode="text")
         full_data = handle.read(); handle.close()
         
-        # Blacklist de lixo histórico e genérico
-        lixo = {'TOAD', 'FROG', 'DOG', 'RABBIT', 'SODIUM', 'WATER', 'MUSCLE', 'URINARY', 'CELL', 'DNA', 'RNA'}
+        # Blacklist agressiva para limpar a lista de tags
+        lixo = {'TOAD', 'FROG', 'DOG', 'RABBIT', 'SODIUM', 'WATER', 'MUSCLE', 'CELL', 'DNA', 'RNA', 'THE', 'AND', 'FOR'}
         
         candidatos = []
         for artigo in full_data.split("\n\nPMID-"):
             texto_sniper = ""
             for line in artigo.split("\n"):
-                # IGNORA O RESUMO (AB), foca em Título (TI) e Keywords (KW/OT)
                 if line.startswith("TI  - ") or line.startswith("KW  - ") or line.startswith("OT  - "):
                     texto_sniper += line[6:].strip() + " "
             
@@ -71,8 +84,7 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
                     candidatos.append(s.upper())
 
         contagem = Counter(candidatos)
-        # Retorna os top 15 alvos moleculares reais
-        top_nomes = [t for t, f in contagem.most_common(15)]
+        top_nomes = [t for t, f in contagem.most_common(20)] # Aumentado para 20 alvos
 
         res_finais = []
         for nome in top_nomes:
@@ -84,10 +96,10 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
         return res_finais
     except: return []
 
-# --- 4. RADAR E APOIO ---
+# --- 4. RADAR DE NOTÍCIAS (2025) ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def buscar_todas_noticias(lang='pt'):
-    query = "(bladder pharmacology OR ion channels) AND (2024:2026[Date])"
+    query = "(bladder pharmacology OR urothelium signaling) AND (2024:2026[Date])"
     try:
         handle = Entrez.esearch(db="pubmed", term=query, retmax=6, sort="pub_date")
         record = Entrez.read(handle); handle.close()
@@ -105,6 +117,7 @@ def buscar_todas_noticias(lang='pt'):
         return news
     except: return []
 
+# --- 5. DETALHES ---
 @st.cache_data(ttl=86400, show_spinner=False)
 def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
     if email: Entrez.email = email
