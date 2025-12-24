@@ -28,30 +28,31 @@ MAPA_SINONIMOS = {
     "BRAIN": "Brain AND (Physiology OR Pharmacology OR Molecular OR Neuron)",
 }
 
-# --- 3. A DOUTORA EM FARMACOLOGIA (FILTRO DE BANCADA) ---
+# --- 3. A DOUTORA EM FARMACOLOGIA (CURADORIA DE ALTA PERFORMANCE) ---
 def _faxina_ia(lista_suja):
     api_key = st.session_state.get('api_key_usuario', '')
-    if not api_key: return lista_suja[:40] 
+    if not api_key: return lista_suja[:50] 
 
     lista_str = ", ".join(lista_suja)
     
+    # PROMPT RECALIBRADO: MAIS ALVOS, MENOS LIXO
     prompt = f"""
     Amiga, tu é uma doutora em farmacologia e fisiologia experiente. 
-    Tu sabe que a gente quer o que é PROMISSOR para o laboratório (banho de órgãos e biologia molecular).
+    Tu sabe que a gente quer uma lista RICA de tudo que é PROMISSOR no laboratório.
     
-    REGRAS DE EXTERMÍNIO DA DOUTORA:
-    1. DELETE SEM DÓ: Animais (Toad, Turtle, Rabbit, Mammalian), Termos de preenchimento (Studies, Role, Effect, Action, Biological, Experimental, Technique, Interpretation, Measurement, Properties, Responses, Responses, Movement, Water, Function, Pressure, Resistance, Consumption, Nervous).
-    2. DELETE: Metodologia e solventes (DMSO, Vitro, Cystometrography, EMG, Technique).
-    3. MANTENHA APENAS: Alvos (TRPV4, PIEZO1, SPHK1, NLRP3, Receptores, Genes) e Fármacos/Moléculas de ação (GSK1016790A, ATP, Aldosterone, Ouabain, Inibidores).
-    4. Tu não é médica e nem vai escrever revisão, vacilão. Foca na bancada.
+    REGRAS DA DOUTORA:
+    1. SÓ EXCLUA o que for lixo óbvio: Animais (Toad, Turtle, Rabbit), conectivos (The, And, Role, Effect, Studies), e termos médicos gerais (OAB, LUTS, Surgery).
+    2. SEJA GENEROSA com: Alvos Moleculares, Receptores, Canais Iônicos, Enzimas, Genes, Proteínas de sinalização e Fármacos (Agonistas, Antagonistas, Inibidores específicos como GSK1016790A).
+    3. MANTENHA termos de fisiologia molecular que indicam mecanismos (Calcium, Ion, Signaling, Pathway).
+    4. Tu não é médica, foca na riqueza de dados para a bancada, vacilão.
     
     LISTA PARA FILTRAR: {lista_str}
     
-    OUTPUT: Retorne APENAS uma lista Python limpa. Exemplo: ['TRPV4', 'GSK1016790A', 'PIEZO1', 'SPHK1']
+    OUTPUT: Retorne apenas uma lista Python limpa. Exemplo: ['TRPV4', 'GSK1016790A', 'PIEZO1', 'SPHK1', 'ATP', 'Aldosterone', 'NLRP3']
     """
     
     headers = {'Content-Type': 'application/json'}
-    data = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"temperature": 0.1}}
+    data = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"temperature": 0.2}} # Temp 0.2 para mais criatividade/detecção
     
     for m in MODELOS_ATIVOS:
         try:
@@ -62,9 +63,9 @@ def _faxina_ia(lista_suja):
                 texto = texto.replace("```python", "").replace("```", "").strip()
                 return ast.literal_eval(texto)
         except: continue
-    return lista_suja[:30]
+    return lista_suja[:40]
 
-# --- 4. ANÁLISE DE RESUMOS (ALVO | FÁRMACO | EFEITO) ---
+# --- 4. ANÁLISE DE RESUMOS (O FORMATO QUE O FABIANO QUER VER) ---
 def analisar_abstract_com_ia(titulo, dados_curtos, api_key, lang='pt'):
     if not api_key: return "⚠️ Chave API necessária."
     
@@ -74,9 +75,9 @@ def analisar_abstract_com_ia(titulo, dados_curtos, api_key, lang='pt'):
     ARTIGO: {titulo}. {dados_curtos}
     
     FORMATO OBRIGATÓRIO:
-    Alvo: [Sigla do Alvo] | Fármaco: [O que usaram no lab] | Efeito: [Resposta funcional observada].
+    Alvo: [Sigla] | Fármaco: [O que usaram no lab] | Efeito: [Resposta funcional/fisiológica].
     
-    Máximo 20 palavras. Seja técnica e direta.
+    Máximo 20 palavras. Foco total em mecanismo.
     Idioma: {idioma}.
     """
     
@@ -130,7 +131,7 @@ def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
         return artigos
     except: return []
 
-# --- 6. MINERAÇÃO MASSIVA ---
+# --- 6. MINERAÇÃO MASSIVA (MÁXIMA RIQUEZA) ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
     if email: Entrez.email = email
@@ -142,27 +143,21 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
         handle = Entrez.efetch(db="pubmed", id=record["IdList"], rettype="medline", retmode="text")
         full_data = handle.read(); handle.close()
         
-        # Blacklist Pesada de Termos Irrelevantes
-        blacklist = {
-            "THE", "AND", "ROLE", "EFFECT", "ACTION", "STUDIES", "STUDY", "DATA", "RESULTS",
-            "WATER", "PRESSURE", "RESISTANCE", "MOVEMENT", "CONSUMPTION", "EXPERIMENTAL",
-            "BIOLOGICAL", "PROPERTIES", "MEASUREMENT", "INTERPRETATION", "TECHNIQUE", "RESPONSE",
-            "RESPONSES", "VITRO", "VIVO", "MODEL", "MODELS", "RABBIT", "TURTLE", "MAMMALIAN",
-            "TOAD", "MOUSE", "MICE", "RAT", "RATS", "DMSO", "PBS", "SALINE"
-        }
-        
         candidatos = []
         for artigo in full_data.split("\n\nPMID-"):
             texto = ""
             for line in artigo.split("\n"):
                 if line.startswith("TI  - ") or line.startswith("KW  - "): texto += line[6:].strip() + " "
+            # Pega termos moleculares e siglas
             encontrados = re.findall(r'\b(?:[A-Z]{2,}[A-Z0-9-]*|[a-z]{1,2}[A-Z][a-zA-Z0-9-]*)\b', texto)
             for t in encontrados:
                 t_clean = re.sub(r'[^A-Z0-9]', '', t.upper())
-                if len(t_clean) >= 3 and t_clean not in blacklist: candidatos.append(t_clean)
+                if len(t_clean) >= 3: candidatos.append(t_clean)
 
         contagem = Counter(candidatos)
-        top = [termo for termo,freq in contagem.most_common(180)]
+        # Sobe para 200 candidatos para a IA ter onde minerar as pepitas
+        top = [termo for termo,freq in contagem.most_common(200)]
         
-        return _faxina_ia(top) if usar_ia and st.session_state.get('api_key_usuario') else top[:30]
+        return _faxina_ia(top) if usar_ia and st.session_state.get('api_key_usuario') else top[:40]
     except: return []
+        
