@@ -12,7 +12,6 @@ from difflib import SequenceMatcher
 
 # ================= CONFIG =================
 Entrez.email = "pesquisador_guest@unifesp.br"
-
 MODELOS_ATIVOS = ["gemini-2.0-flash", "gemini-2.0-flash-exp"]
 
 MAPA_SINONIMOS_BASE = {
@@ -35,7 +34,7 @@ def call_gemini(prompt, api_key, temperature=0.0):
             if resp.status_code == 200:
                 return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
             elif resp.status_code == 429:
-                time.sleep(2)
+                time.sleep(1)
         except: continue
     return ""
 
@@ -43,41 +42,70 @@ def parse_structure(text, expected=list):
     if not text: return expected()
     text = re.sub(r"```.*?```", "", text, flags=re.DOTALL).strip()
     try:
-        pattern = r"\[.*\]" if expected == list else r"\{.*\}"
-        match = re.search(pattern, text, re.DOTALL)
+        match = re.search(r"\[.*\]" if expected == list else r"\{.*\}", text, re.DOTALL)
         if match:
             obj = ast.literal_eval(match.group(0))
             if isinstance(obj, expected): return obj
     except: pass
-    if expected == list:
-        names = re.findall(r"['\"]?([A-Z][A-Z0-9-]{2,15})['\"]?", text)
-        return list(set([n for n in names if len(n) > 2]))
     return expected()
 
-# ================= MOTOR DE MÉTRICAS (FIX P-VALUE) =================
+# ================= FILTRO DE ELITE (MATA BCG, MRI, LUTS) =================
+
+def ner_extraction_batch(artigos, api_key):
+    texto_input = "\n".join([f"- {a['texto']}" for a in artigos[:25]])
+    prompt = f"""
+    ROLE: Senior Molecular Pharmacologist.
+    TASK: Extract Molecular Targets and Experimental Drugs.
+    
+    STRICT EXCLUSION (DELETE):
+    - Clinical terms: BCG, MRI, NMIBC, FDG-PET, ICER, TURBT, Cystoscopy.
+    - Symptoms/Scores: LUTS, OAB, IPSS, QoL.
+    - General: Bladder, Patient, Study, Treatment.
+    
+    KEEP ONLY: Receptors, Channels, Enzymes, Signaling Proteins (e.g., HSP90, LRP5, NF-kB, TRPV4).
+    
+    TEXT:
+    {texto_input}
+    
+    OUTPUT: Python list of strings only.
+    """
+    raw = call_gemini(prompt, api_key, temperature=0.1)
+    return parse_structure(raw, list)
+
+# ================= ANALISAR ABSTRACT (FIX ERRO LINHA 260) =================
+
+def analisar_abstract_com_ia(titulo, dados_curtos, api_key, lang='pt'):
+    """
+    FIX: Agora aceita os 4 argumentos exigidos pelo app_doutorado.py
+    """
+    if not api_key: return "N/A | N/A | N/A"
+    idioma = "Português" if lang == 'pt' else "Inglês"
+    
+    prompt = f"""
+    Analyze: {titulo}. Context: {dados_curtos}. 
+    Extract: TARGET | DRUG | MECHANISM. 
+    Strictly one line. Language: {idioma}.
+    """
+    res = call_gemini(prompt, api_key)
+    return res.strip() if res else "N/A | N/A | N/A"
+
+# ================= MÉTRICAS E PIPELINE =================
 
 def calcular_metricas_originais(freq, total_docs, n_alvo_total):
-    """Garante p-values e scores realistas para o gráfico de bolhas."""
     lambda_score = (freq / total_docs) * 100 if total_docs > 0 else 0
-    # Cálculo de p-value baseado na distribuição de Poisson para eventos raros
-    # Evita o erro de 0.000000 ao limitar a sensibilidade
-    p_val = math.exp(-max(freq, 0.1) / 2.0) 
-    blue_ocean = max(5.0, 100 - (n_alvo_total * 2))
-    status = "Saturado" if blue_ocean < 30 else "Blue Ocean" if blue_ocean > 70 else "Competitivo"
-    return lambda_score, round(p_val, 4), round(blue_ocean, 2), status
-
-# ================= CORE PIPELINE =================
+    # Fix p-value: escala logarítmica para evitar zeros infinitos
+    p_val = math.exp(-freq/3.5) if freq > 0 else 1.0
+    blue_ocean = max(10, 100 - (n_alvo_total * 3))
+    return lambda_score, round(p_val, 4), round(blue_ocean, 2), "Competitivo"
 
 @st.cache_data(ttl=3600)
 def minerar_pubmed(termo_base, email):
     api_key = st.session_state.get("api_key_usuario", "").strip()
     Entrez.email = email
-    termo_base_upper = termo_base.upper()
-    termo_query = MAPA_SINONIMOS_BASE.get(termo_base_upper, termo_base)
+    query = f"({termo_base}) AND (2020:2026[Date])"
     
-    query = f"({termo_query}) AND (2020:2026[Date])"
     try:
-        handle = Entrez.esearch(db="pubmed", term=query, retmax=100)
+        handle = Entrez.esearch(db="pubmed", term=query, retmax=150)
         record = Entrez.read(handle); handle.close()
         if not record["IdList"]: return {}
 
@@ -89,20 +117,13 @@ def minerar_pubmed(termo_base, email):
             titulo, texto = "", ""
             for line in bloco.split("\n"):
                 if line.startswith("TI  - "): titulo = line[6:].strip()
-                if line.startswith(("TI  - ", "KW  - ", "OT  - ")):
-                    texto += line[6:].strip() + " "
+                if line.startswith(("TI  - ", "KW  - ", "OT  - ")): texto += line[6:].strip() + " "
             if texto: artigos.append({"titulo": titulo, "texto": texto})
 
-        # Batch NER
-        all_text = "\n".join([a['texto'] for a in artigos[:20]])
-        prompt = f"Extract a Python list of specific molecular targets and drugs from: {all_text}"
-        raw_ner = call_gemini(prompt, api_key)
-        entidades = parse_structure(raw_ner, list)
-
-        if not entidades: # Fallback determinístico
-            entidades = re.findall(r'\b[A-Z0-9-]{3,15}\b', all_text)
-
+        entidades = ner_extraction_batch(artigos, api_key) if api_key else []
         counts = Counter(entidades)
+        
+        # Filtro de recorrência inteligente
         recorrentes = [e for e, c in counts.items() if c >= 2] or [e for e, _ in counts.most_common(15)]
         
         def normalize(entities):
@@ -112,28 +133,23 @@ def minerar_pubmed(termo_base, email):
                     canon.append(e)
             return canon
 
-        alvos_final = normalize(recorrentes)
-        
         return {
-            "termos_indicados": alvos_final,
+            "termos_indicados": normalize(recorrentes),
             "counts": counts,
-            "total_docs": len(artigos)
+            "total_docs": len(artigos),
+            "artigos_originais": artigos
         }
-    except Exception as e:
-        st.error(f"Erro Pipeline: {e}")
-        return {}
+    except: return {}
 
-# ================= FUNÇÕES PONTE (PARA O FRONT NÃO QUEBRAR) =================
+# ================= FUNÇÕES DE APOIO (FRONTEND) =================
 
 def buscar_alvos_emergentes_pubmed(alvo, email, usar_ia=True):
-    """Ponte para carregar_lista_dinamica_smart no app_doutorado.py"""
     res = minerar_pubmed(alvo, email)
     return res.get("termos_indicados", [])
 
 @st.cache_data(ttl=3600)
 def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
-    """Ponte para a linha 242 do app_doutorado.py"""
-    if email: Entrez.email = email
+    Entrez.email = email
     query = f"({termo}) AND ({orgao}) AND ({ano_ini}:{ano_fim}[Date])"
     try:
         handle = Entrez.esearch(db="pubmed", term=query, retmax=5)
@@ -147,12 +163,9 @@ def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
                 if line.startswith("TI  - "): tit = line[6:].strip()
                 if line.startswith("AB  - "): abstract = line[6:500].strip()
                 if line.startswith("PMID- "): pmid = line[6:].strip()
-            if tit:
-                artigos.append({"Title": tit, "Info_IA": abstract, "Link": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"})
+            if tit: artigos.append({"Title": tit, "Info_IA": abstract, "Link": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"})
         return artigos
     except: return []
-
-# ================= NEWS & COUNT =================
 
 def consultar_pubmed_count(termo, contexto, email, ano_ini, ano_fim):
     Entrez.email = email
@@ -161,7 +174,6 @@ def consultar_pubmed_count(termo, contexto, email, ano_ini, ano_fim):
     record = Entrez.read(handle); handle.close()
     return int(record["Count"])
 
-@st.cache_data(ttl=3600)
 def buscar_todas_noticias(email):
     Entrez.email = email
     query = "(molecular pharmacology OR bladder) AND (2024:2026[Date])"
