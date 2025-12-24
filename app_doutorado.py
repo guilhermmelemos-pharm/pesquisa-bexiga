@@ -5,8 +5,13 @@ Licensed under the MIT License.
 """
 import streamlit as st
 
-# Configuração da página DEVE ser o primeiro comando Streamlit
-st.set_page_config(page_title="λ Lemos Lambda: Deep Science Prospector", page_icon="λ", layout="wide", initial_sidebar_state="collapsed")
+# --- 1. CONFIGURAÇÃO DA PÁGINA (Deve ser a primeira linha) ---
+st.set_page_config(
+    page_title="λ Lemos Lambda: Deep Science Prospector", 
+    page_icon="λ", 
+    layout="wide", 
+    initial_sidebar_state="collapsed"
+)
 
 import pandas as pd
 import plotly.express as px
@@ -14,38 +19,52 @@ from datetime import datetime
 import time
 import scipy.stats as stats
 import constantes as c
-import backend as bk
+import backend as bk  # O backend blindado que criamos
 
-# --- 2. ESTADO ---
+# --- 2. ESTADO E INICIALIZAÇÃO ---
 defaults = {
     'pagina': 'home', 'alvos_val': "", 'resultado_df': None, 'news_index': 0,
     'input_alvo': "", 'input_fonte': "", 'input_email': "", 'artigos_detalhe': None,
     'email_guardado': "", 'alvo_guardado': "", 'lang': 'pt',
-    'api_key_usuario': "", 'usar_ia_faxina': True # Novo estado padrão
+    'api_key_usuario': "", 'usar_ia_faxina': True 
 }
+
 for k, v in defaults.items():
     if k not in st.session_state: st.session_state[k] = v
 
-# Garante que a chave não suma ao recarregar
+# Garante persistência da chave
 if 'api_key_usuario' not in st.session_state:
     st.session_state.api_key_usuario = ""
 
 def get_textos(): return c.TEXTOS.get(st.session_state.lang, c.TEXTOS["pt"])
 t = get_textos()
 
-# --- 3. CSS ---
+# --- 3. CSS (ESTILIZAÇÃO) ---
 st.markdown("""
     <style>
+    /* Botões Padrão */
     .stButton button { border-radius: 12px; height: 50px; font-weight: bold; }
+    
+    /* Métricas Grandes */
     div[data-testid="stMetricValue"] { font-size: 1.8rem !important; }
+    
+    /* Imagens do Radar */
     div[data-testid="stImage"] { height: 160px !important; overflow: hidden !important; border-radius: 8px !important; }
     div[data-testid="stImage"] img { height: 160px !important; object-fit: cover !important; width: 100% !important; }
+    
+    /* Botão Vermelho Grande (Automático) */
     .big-button button { background-color: #FF4B4B !important; color: white !important; border: none; font-size: 1.1rem !important; }
+    
+    /* Área de Texto Monospaced */
     .stTextArea textarea { font-family: monospace; }
+    
+    /* Cabeçalho Personalizado */
+    .header-style { font-size: 2.5rem; font-weight: 700; color: #FAFAFA; margin-bottom: 0px; }
+    .sub-header-style { font-size: 1.2rem; font-weight: 400; color: #A0A0A0; margin-bottom: 20px; }
     </style>
 """, unsafe_allow_html=True)
 
-# ================= LÓGICA =================
+# ================= LÓGICA DO APP =================
 
 def mudar_idioma(novo_lang): 
     st.session_state.lang = novo_lang
@@ -70,7 +89,6 @@ def adicionar_termos_seguro(lista, textos):
 
 def carregar_lista_dinamica_smart(textos):
     email, alvo = st.session_state.input_email, st.session_state.input_alvo
-    # Pega o estado do botão de IA
     usar_ia = st.session_state.usar_ia_faxina
     
     if not alvo: st.error(textos["erro_alvo"]); return
@@ -79,13 +97,13 @@ def carregar_lista_dinamica_smart(textos):
     lista_mestra = list(set(existentes)) 
     
     with st.spinner(f"{textos['status_minerando']} {alvo}..."):
-        # Passa a preferência do usuário para o backend
+        # Chama o backend com a flag da IA
         novos = bk.buscar_alvos_emergentes_pubmed(alvo, email, usar_ia=usar_ia)
         
         if novos: 
             lista_mestra.extend(novos)
         else:
-            st.warning("Mineração retornou vazio. Carregando sugestões padrão...")
+            st.warning("Mineração retornou vazio (ou IA falhou). Carregando sugestões padrão...")
             for lista in c.PRESETS_FRONTEIRA.values():
                 lista_mestra.extend(lista)
     
@@ -180,15 +198,17 @@ def exibir_radar_cientifico(lang_code, textos):
                     st.link_button(textos["btn_ler"], n['link'], use_container_width=True)
     except: pass
 
-# --- HEADER ---
+# --- HEADER E IDIOMA ---
 c_logo, c_lang = st.columns([10, 2])
 with c_lang:
     c1, c2 = st.columns(2)
     with c1: st.button("🇧🇷", key="pt_btn", on_click=mudar_idioma, args=("pt",))
     with c2: st.button("🇺🇸", key="en_btn", on_click=mudar_idioma, args=("en",))
 
-# --- UI PRINCIPAL ---
+# ================= UI PRINCIPAL =================
+
 if st.session_state.pagina == 'resultados':
+    # --- PÁGINA DE RESULTADOS ---
     c_back, c_tit = st.columns([1, 5])
     with c_back: st.button(t["btn_voltar"], on_click=resetar_pesquisa, use_container_width=True)
     with c_tit: st.title(t["resultados"])
@@ -237,7 +257,10 @@ if st.session_state.pagina == 'resultados':
                     with c_link: st.link_button("🔗 Abrir no PubMed", art['Link'], use_container_width=True)
 
 else:
-    st.title(t["titulo_desk"]); st.caption(t["subtitulo"])
+    # --- PÁGINA HOME (COM CABEÇALHO RESTAURADO) ---
+    st.markdown(f'<p class="header-style">λ {t["titulo_desk"]}</p>', unsafe_allow_html=True)
+    st.markdown(f'<p class="sub-header-style">{t["subtitulo"]}</p>', unsafe_allow_html=True)
+    
     exibir_radar_cientifico(st.session_state.lang, t)
     st.divider()
     col_main, col_config = st.columns([2, 1])
@@ -268,7 +291,7 @@ else:
         with st.expander(t["expander_ia"], expanded=True):
             st.session_state.api_key_usuario = st.text_input("Google API Key", type="password", value=st.session_state.api_key_usuario)
             
-            # --- NOVO BOTÃO DE TOGGLE DA IA ---
+            # Switch da IA (Faxina)
             st.toggle("✨ Ativar Curadoria por IA", key="usar_ia_faxina", help="Usa a IA para limpar a lista de mineração, removendo termos clínicos irrelevantes.")
             
             st.markdown(f"[{t['link_key']}](https://aistudio.google.com/app/apikey)")
