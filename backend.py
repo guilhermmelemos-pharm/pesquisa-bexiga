@@ -12,34 +12,32 @@ from typing import List, Dict, Any
 Entrez.email = "pesquisador_guest@unifesp.br"
 
 MODELOS_ATIVOS = [
-    "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"
+    "gemini-2.5-flash", 
+    "gemini-2.0-flash", 
+    "gemini-1.5-flash"
 ]
 
-# 1. LISTA NEGRA (O que deletar)
+# LISTA NEGRA: Anatomia e Termos Clínicos (O que estava sujando sua lista)
 BLACKLIST_MONSTRO = {
-    "ASSOCIATION", "EVALUATION", "UNCOMMON", "INTRAUTERINE", "GERMLINE", 
-    "COLLISION", "NOTABLY", "IMPACT", "FOLLOW-UP", "KEY", "FINDINGS",
-    "LIMITATIONS", "BACKGROUND", "OBJECTIVE", "METHODS", "RESULTS", "CONCLUSION",
-    "ABSTRACT", "INTRODUCTION", "STUDY", "ANALYSIS", "DATA", "STATISTICS",
-    "SIGNIFICANT", "DIFFERENCE", "BETWEEN", "AMONG", "WITHIN", "DURING",
-    "PREVALENCE", "INCIDENCE", "RISK", "FACTOR", "ROLE", "POTENTIAL", "LEVEL",
-    "PATIENT", "PATIENTS", "CLINICAL", "CASE", "REPORT", "REVIEW", "META",
-    "SYSTEMATIC", "TREATMENT", "THERAPY", "SURGERY", "DIAGNOSIS", "PROGNOSIS",
-    "QUALITY", "LIFE", "QOL", "SURVIVAL", "MORTALITY", "MORBIDITY", "SAFETY",
-    "EFFICACY", "OUTCOME", "OUTCOMES", "PLACEBO", "CONTROL", "GROUP", "TOTAL",
-    "JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST",
-    "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER", "2020", "2021", "2022", 
-    "2023", "2024", "2025", "HOSPITAL", "UNIVERSITY", "NATIONAL", "INTERNATIONAL",
-    "DNA", "RNA", "ATP", "MRI", "CT", "PET", "BCG", "BMI", "WHO", "HIC", "AE", "AES"
-}
-
-# 2. STOP WORDS (Palavras comuns do inglês para filtrar o regex solto)
-STOP_WORDS = {
-    "THE", "AND", "FOR", "NOT", "BUT", "WAS", "ARE", "HAS", "HAVE", "HAD",
-    "WITH", "WITHOUT", "FROM", "INTO", "ONTO", "VIA", "ALL", "ANY", "TWO", 
-    "ONE", "BOTH", "EACH", "WHICH", "THAT", "THIS", "THESE", "THOSE", "BEEN",
-    "WERE", "CAN", "MAY", "SHOULD", "COULD", "USING", "USED", "BASED", "HIGH",
-    "LOW", "NEW", "OLD", "NON", "ANTI", "PRO", "PRE", "POST", "SUB", "SUPRA"
+    # Anatomia e Doença (O que você viu e não gostou)
+    "BLADDER", "CANCER", "URINARY", "UROTHELIAL", "MUSCLE", "OVERACTIVE", "TUMOR",
+    "CARCINOMA", "PELVIC", "URETHRAL", "UROLOGIC", "NEUROGENIC", "DIABETES",
+    "SJOGREN", "INTRAVESICAL", "VOID", "VOIDING", "DETRUSOR", "KIDNEY", "RENAL",
+    
+    # Metodologia e Tipos de Estudo
+    "NOVEL", "DIAGNOSTIC", "ARTIFICIAL", "MANAGEMENT", "LAPAROSCOPIC", "PROGNOSTIC",
+    "FACTORS", "NEOADJUVANT", "RANDOMIZED", "TYPE", "COHORT", "SURGICAL", 
+    "ASSOCIATIONS", "SYMPTOMS", "IMPLICATIONS", "ONCOLOGY", "TRIAL", "RETROSPECTIVE",
+    "EVALUATION", "REVIEW", "STUDY", "ANALYSIS", "DATA", "RESULTS", "CONCLUSION",
+    
+    # Grupos e Demografia
+    "CHILDREN", "PATIENT", "PATIENTS", "WOMEN", "MEN", "ADULT", "NHANES",
+    
+    # Nomes Próprios/Históricos (Que não são alvos moleculares)
+    "GUERIN", "CALMETTE", "BACILLUS", "BCG", 
+    
+    # Biologia Genérica
+    "DNA", "RNA", "ATP", "GENE", "PROTEIN", "CELL", "EXPRESSION"
 }
 
 MAPA_SINONIMOS_BASE = {
@@ -96,22 +94,30 @@ def simple_gemini_text(prompt: str, api_key: str) -> str:
         except: continue
     return ""
 
-# ================= MINERAÇÃO ROBUSTA =================
+# ================= MINERAÇÃO ESTRUTURADA =================
 
 def ner_extraction_batch(titulos_keywords: List[str], api_key: str) -> List[str]:
+    """Prompt específico para separar o joio do trigo."""
     if not titulos_keywords: return []
-    texto_input = "\n".join([f"- {t}" for t in titulos_keywords[:50]])
-    prompt = f"""
-    Role: Molecular Pharmacologist.
-    Task: Extract MOLECULAR TARGETS (Receptors, Enzymes, Genes) and DRUGS/COMPOUNDS.
     
-    IGNORE: "Study", "Analysis", "Patients", "Diagnosis", "Results".
-    KEEP: "HSP90", "SGLT2", "Alantolactone", "Cisplatin", "mTOR", "VEGF".
+    # Enviamos lotes pequenos de títulos
+    texto_input = "\n".join([f"- {t}" for t in titulos_keywords[:60]])
+    
+    prompt = f"""
+    You are a Pharmacologist. Analyze these paper titles.
+    
+    TASK: Extract strictly MOLECULAR TARGETS (Receptors, Enzymes, Channels, Genes) and DRUGS/COMPOUNDS.
+    
+    STRICT RULES:
+    1. IGNORE Anatomy (Bladder, Muscle, Urothelial).
+    2. IGNORE Disease types (Cancer, Carcinoma, Tumor).
+    3. IGNORE Study types (Cohort, Trial, Analysis).
+    4. EXTRACT ONLY Specific Targets (e.g., "HSP90", "P2X3", "mTOR") and Drugs (e.g., "Cisplatin", "Mirabegron").
     
     INPUT:
     {texto_input}
     
-    OUTPUT: JSON list of strings.
+    OUTPUT: JSON list of strings (Target/Drug names only).
     """
     return call_gemini_json(prompt, api_key)
 
@@ -121,11 +127,10 @@ def minerar_pubmed(termo_base: str, email: str, usar_ia: bool = True) -> Dict:
     Entrez.email = email
     
     termo_expandido = MAPA_SINONIMOS_BASE.get(termo_base.upper(), termo_base)
-    # Aumentei para 120 para garantir volume
     query = f"({termo_expandido}) AND (2020:2026[Date])"
     
     try:
-        handle = Entrez.esearch(db="pubmed", term=query, retmax=120)
+        handle = Entrez.esearch(db="pubmed", term=query, retmax=100)
         record = Entrez.read(handle)
         handle.close()
         
@@ -147,59 +152,59 @@ def minerar_pubmed(termo_base: str, email: str, usar_ia: bool = True) -> Dict:
         
         entidades = []
         
-        # 1. IA
+        # 1. IA (Primeira linha de defesa)
         if api_key and usar_ia:
             entidades = ner_extraction_batch(raw_texts, api_key)
         
-        # 2. REGEX "REDE DE ARRASTÃO" (Agora pega tudo e filtra depois)
-        texto_full = " ".join(raw_texts)
-        
-        # A: Siglas Técnicas (Letras maiúsculas + números) -> P2X3, HSP90
-        regex_codigos = r'\b[A-Z]{2,}[0-9]+[A-Z0-9-]*\b'
-        candidatos_codigos = re.findall(regex_codigos, texto_full)
-        
-        # B: Palavras Capitalizadas (Candidates a nomes próprios/drogas)
-        # Pega qualquer palavra que comece com Maiúscula e tenha 4+ letras
-        regex_capitalizadas = r'\b[A-Z][a-z]{3,}\b' 
-        candidatos_capitalizadas = re.findall(regex_capitalizadas, texto_full)
-        
-        # C: Acrônimos (3+ Maiúsculas)
-        regex_acronimos = r'\b[A-Z]{3,}\b'
-        candidatos_acronimos = re.findall(regex_acronimos, texto_full)
+        # 2. Regex Seguro (Só entra se a IA falhar ou para complementar)
+        # REMOVIDO: O regex genérico que pegava "Bladder" e "Cancer"
+        if True:
+            texto_full = " ".join(raw_texts)
+            
+            # A: Códigos (Letras maiúsculas + Números) -> P2X3, HSP90
+            regex_codigos = r'\b[A-Z]{2,}[0-9]+[A-Z0-9-]*\b'
+            candidatos_codigos = re.findall(regex_codigos, texto_full)
+            
+            # B: Fármacos via Sufixos Químicos (Segurança total)
+            # Pega palavras PascalCase que terminam com sufixos de drogas
+            sufixos = r'(?:ine|in|mab|ib|ol|on|one|il|ide|ate|ase)\b'
+            regex_farmacos = r'\b[A-Z][a-z]{3,}' + sufixos
+            candidatos_farmacos = re.findall(regex_farmacos, texto_full)
+            
+            # C: Acrônimos de Vias (mTOR, VEGF) - 3+ Letras Maiúsculas
+            regex_acronimos = r'\b[A-Z]{3,}\b'
+            candidatos_acronimos = re.findall(regex_acronimos, texto_full)
 
-        entidades.extend(candidatos_codigos)
-        entidades.extend(candidatos_capitalizadas)
-        entidades.extend(candidatos_acronimos)
+            entidades.extend(candidatos_codigos)
+            entidades.extend(candidatos_farmacos)
+            entidades.extend(candidatos_acronimos)
 
-        # 3. FILTRAGEM (Onde a mágica acontece)
+        # 3. Filtragem Final
         entidades_limpas = []
         for e in entidades:
             e = e.strip(".,-;:()[] ")
             if len(e) < 3: continue 
             if e.isdigit(): continue
             
-            e_upper = e.upper()
+            # Blacklist reforçada
+            if e.upper() in BLACKLIST_MONSTRO: continue
             
-            # Se estiver na Blacklist -> LIXO
-            if e_upper in BLACKLIST_MONSTRO: continue
-            
-            # Se for Stop Word (The, And, With) -> LIXO
-            if e_upper in STOP_WORDS: continue
+            # Filtro extra para preposições
+            if e.upper() in ["THE", "AND", "FOR", "NOT", "BUT", "VIA", "ALL"]: continue
             
             entidades_limpas.append(e)
 
-        # 4. CONTAGEM E RETORNO
+        # 4. Contagem
         counts = Counter(entidades_limpas)
         
-        # Se a IA não rodou, exigimos pelo menos 2 aparições para reduzir ruído
-        # MAS, se a lista estiver muito curta, aceitamos 1 aparição (Modo Resgate)
-        min_count = 2 if (not api_key) else 1
-        if len(counts) < 10: min_count = 1
+        # Exigimos pelo menos 2 ocorrências para limpar ruído (exceto se a lista for muito curta)
+        limit = 2 if len(counts) > 20 else 1
+        recorrentes = [e for e, c in counts.items() if c >= limit]
         
-        recorrentes = [e for e, c in counts.items() if c >= min_count]
+        # Ordenar por frequência
         recorrentes = sorted(recorrentes, key=lambda x: counts[x], reverse=True)
         
-        # Deduplicação Final
+        # Deduplicação
         final = []
         seen = set()
         for item in recorrentes:
@@ -213,8 +218,7 @@ def minerar_pubmed(termo_base: str, email: str, usar_ia: bool = True) -> Dict:
             "total_docs": len(artigos_completos),
             "artigos_originais": artigos_completos
         }
-    except Exception as e:
-        print(f"Erro no Backend: {e}") # Para debug no terminal
+    except Exception:
         return {}
 
 # ================= WRAPPERS =================
@@ -255,8 +259,10 @@ def buscar_resumos_detalhados(termo: str, orgao: str, email: str, ano_ini: int, 
     except: return []
 
 def analisar_abstract_com_ia(titulo: str, dados_curtos: str, api_key: str, lang: str = 'pt') -> str:
+    """Aqui é onde entra a 'Função' que você pediu, sob demanda."""
     if not api_key: return "Chave API necessária."
-    prompt = f"Analyze: {titulo}\nOutput one line: TARGET | DRUG | EFFECT"
+    # Prompt explícito para categorizar
+    prompt = f"Analyze: {titulo}\nOutput format: [TARGET/DRUG] | [MECHANISM/FUNCTION]"
     return simple_gemini_text(prompt, api_key).replace("\n", " ")
 
 def buscar_todas_noticias(lang_code: str) -> List[Dict]:
