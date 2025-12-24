@@ -26,7 +26,7 @@ MAPA_SINONIMOS = {
     "CANCER": "Cancer OR Tumor OR Oncology OR Carcinoma OR Metastasis OR Proliferation OR Angiogenesis OR Apoptosis OR Microenvironment"
 }
 
-# --- LISTA DE MODELOS (Seus modelos potentes) ---
+# --- LISTA DE MODELOS ---
 MODELOS_ATIVOS = [
     "gemini-2.5-flash",          
     "gemini-2.0-flash",          
@@ -35,45 +35,38 @@ MODELOS_ATIVOS = [
     "gemini-1.5-pro"
 ]
 
-# --- 2. FAXINEIRO IA (O CERÉBRO DA OPERAÇÃO) ---
+# --- 2. FAXINEIRO IA (PROMPT FARMACOFISIOLOGIA) ---
 def _faxina_ia(lista_suja):
-    """
-    Envia uma lista bruta gigante para a IA classificar semanticamente.
-    """
     api_key = st.session_state.get('api_key_usuario', '')
-    
-    # Se não tiver chave, infelizmente temos que retornar a lista suja (cortada)
-    if not api_key: return lista_suja[:40] 
+    if not api_key: return lista_suja[:30] 
 
-    # Transformamos a lista em string para o prompt
     lista_str = ", ".join(lista_suja)
     
+    # Prompt ajustado para a Persona de Pesquisadora
     prompt = f"""
-    ROLE: Expert Senior Pharmacologist & Data Scientist.
+    ACT AS: PhD Researcher in Pharmacophysiology.
+    TASK: Review this list of terms extracted from literature titles.
+    GOAL: Select terms relevant for basic science research (Mechanism of Action, Drug Discovery, Physiology).
     
-    INPUT: The following list of terms extracted from PubMed titles:
-    [{lista_str}]
+    INPUT LIST: {lista_str}
     
-    TASK: Filter this list rigorously. We are looking ONLY for Molecular Targets and Mechanisms.
+    INSTRUCTIONS FOR FILTERING:
     
-    CRITERIA FOR KEEPING (INCLUDE):
-    - Specific Genes (e.g., mTOR, TFEB, GATA3)
-    - Receptors & Channels (e.g., TRPV1, P2X3, Beta-3-AR)
-    - Signaling Molecules & Enzymes (e.g., ATP, NO, PGE2, COX2)
-    - Specific RNAs (e.g., miRNA-132)
-    - Drugs/Compounds (e.g., Mirabegron, Resiniferatoxin)
+    ✅ KEEP (Relevant for Research):
+    - Pharmacological Targets: Receptors (TRPV1, Beta-3), Channels (BK, P2X3), Enzymes (mTOR, COX2).
+    - Signaling Molecules: Cytokines (IL-6), Gasotransmitters (NO, H2S), Second Messengers (cAMP).
+    - Genes & RNAs: miRNA-132, GATA3, TERT.
+    - Drugs & Compounds: Agonists, Antagonists, Experimental Drugs, Natural Products.
+    - Specific Cell Types: Urothelium, Cardiomyocyte, Podocyte, Interstitial Cells.
     
-    CRITERIA FOR DELETING (EXCLUDE):
-    - Locations/Geography (e.g., China, USA, London)
-    - Clinical Conditions/Diseases (e.g., LUTS, OAB, Cancer, Infection, COVID)
-    - Medical Procedures (e.g., TURBT, MRI, Surgery, Injection)
-    - Study Types (e.g., RCT, Review, Meta-analysis)
-    - Organizations (e.g., AHA, WHO)
-    - General Biological Terms (e.g., Protein, Gene, Cell, Study, Data)
+    ❌ DELETE (Noise/Clinical):
+    - Clinical Diagnoses: LUTS, OAB, BPH, Cancer, SUI, UTI, Infection.
+    - Surgical/Medical Procedures: TURBT, BCG, SNM, Botox, Radiotherapy.
+    - Imaging/Scores: MRI, VIRADS, IPSS, Score, Grade.
+    - Study Types/Stats: RCT, Meta-analysis, Cohort, P-value, Ratio.
+    - General Anatomy/Subjects: Bladder, Patient, Rat, Mouse, Human.
     
-    OUTPUT FORMAT: 
-    Return strictly a Python List of strings containing ONLY the valid targets.
-    Example: ['TRPV1', 'NGF', 'ATP']
+    OUTPUT: Return strictly a Python list of strings containing ONLY the 'KEEP' items.
     """
     
     headers = {'Content-Type': 'application/json'}
@@ -88,39 +81,32 @@ def _faxina_ia(lista_suja):
     for m in MODELOS_ATIVOS:
         try:
             url = f"{base_url}/{m}:generateContent?key={api_key}"
-            resp = requests.post(url, headers=headers, data=json.dumps(data), timeout=15) # Mais tempo para processar lista grande
+            resp = requests.post(url, headers=headers, data=json.dumps(data), timeout=15)
             
             if resp.status_code == 200:
                 texto = resp.json()['candidates'][0]['content']['parts'][0]['text']
-                # Limpeza cirúrgica da resposta
                 texto = texto.replace("```python", "").replace("```json", "").replace("```", "").strip()
-                
-                # Tenta parsear a lista
                 if texto.startswith("[") and texto.endswith("]"):
                     lista_limpa = ast.literal_eval(texto)
                     if isinstance(lista_limpa, list) and len(lista_limpa) > 0:
-                        # Sucesso! Retorna a lista curada pela IA
                         return lista_limpa
         except: continue
     
-    # Fallback se a IA falhar
-    return lista_suja[:40]
+    return lista_suja[:30]
 
 # --- 3. ANÁLISE DE RESUMOS ---
 def analisar_abstract_com_ia(titulo, dados_curtos, api_key, lang='pt'):
     if not api_key: return "⚠️ Chave API não detectada."
-    
     idioma = "Português" if lang == 'pt' else "Inglês"
     
     prompt_text = f"""Atue como Pesquisador em Farmacologia. Analise:
     TITULO: {titulo}
     CONTEXTO: {dados_curtos}
-    TAREFA: Resuma o Alvo Molecular, o Fármaco e o Efeito. 
+    TAREFA: Resuma Alvo Molecular, Fármaco (se houver) e Efeito Fisiológico. 
     REGRAS: Máximo 20 palavras. Idioma: {idioma}."""
     
     headers = {'Content-Type': 'application/json'}
     data = {"contents": [{"parts": [{"text": prompt_text}]}]}
-    
     base_url = "[https://generativelanguage.googleapis.com/v1beta/models](https://generativelanguage.googleapis.com/v1beta/models)"
     
     for m in MODELOS_ATIVOS:
@@ -130,7 +116,6 @@ def analisar_abstract_com_ia(titulo, dados_curtos, api_key, lang='pt'):
             if resp.status_code == 200:
                 return resp.json()['candidates'][0]['content']['parts'][0]['text'].strip()
         except: continue
-            
     return "⚠️ IA indisponível."
 
 # --- 4. FUNÇÕES DE BUSCA ---
@@ -171,11 +156,15 @@ def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
                 if line.startswith("AB  - "): abstract = line[6:500].strip()
                 if line.startswith("OT  - ") or line.startswith("KW  - "): keywords += line[6:].strip() + ", "
             if tit:
-                artigos.append({"Title": tit, "Info_IA": f"{keywords} {abstract}", "Link": f"[https://pubmed.ncbi.nlm.nih.gov/](https://pubmed.ncbi.nlm.nih.gov/){pmid}/"})
+                artigos.append({
+                    "Title": tit, 
+                    "Info_IA": f"{keywords} {abstract}", 
+                    "Link": f"[https://pubmed.ncbi.nlm.nih.gov/](https://pubmed.ncbi.nlm.nih.gov/){pmid}/"
+                })
         return artigos
     except: return []
 
-# --- 5. MINERAÇÃO IA-CENTRIC (A Nova Lógica) ---
+# --- 5. MINERAÇÃO (FILTRO HÍBRIDO) ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
     if email: Entrez.email = email
@@ -183,7 +172,6 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
     termo_upper = termo_base.upper().strip()
     query_string = MAPA_SINONIMOS.get(termo_upper, f"{termo_base}[Title/Abstract]")
     
-    # 1. Busca Massiva (1500 abstracts)
     final_query = f"({query_string}) AND (2018:2030[Date - Publication]) AND (NOT Review[pt])"
     
     try:
@@ -195,41 +183,48 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
         full_data = handle.read(); handle.close()
         artigos_raw = full_data.split("\n\nPMID-")
 
-        # --- BLACKLIST MÍNIMA (SÓ LIXO GRAMATICAL) ---
-        # Não filtramos mais doenças ou procedimentos aqui. Deixamos a IA decidir.
-        # Filtramos apenas o que é OBVIAMENTE lixo linguístico para não gastar token.
-        blacklist_tecnica = {
-            "AND", "THE", "FOR", "NOT", "BUT", "WITH", "FROM", "THIS", "THAT", "THESE", "THOSE",
-            "WHICH", "WHAT", "WHEN", "WHERE", "WHO", "WHY", "HOW", "ANY", "ALL", "EACH", "EVERY",
-            "HAVE", "HAS", "HAD", "WAS", "WERE", "BEEN", "BEING", "ARE", "IS", "CAN", "COULD",
-            "SHOULD", "WOULD", "MAY", "MIGHT", "MUST", "WILL", "SHALL", "DOES", "DID", "DOING",
-            "VIA", "DUE", "BETWEEN", "AMONG", "WITHIN", "WITHOUT", "UNDER", "ABOVE", "BELOW", 
-            "AFTER", "BEFORE", "DURING", "SINCE", "UNTIL", "WHILE", "ONCE", "UPON", "INTO", "ONTO",
+        # --- LISTA NEGRA DE "EXTERMÍNIO" (Proteção contra lixo óbvio) ---
+        blacklist_exterminio = {
+            # Clínicos
+            "LUTS", "OAB", "BPH", "UTI", "IC", "BPS", "ICIRS", "LUT", "LUTD", "BOO", "SUI", "UUI", "MUI",
+            "COVID", "COVID19", "SARS", "VIRUS", "INFECTION", "SEPSIS", "CANCER", "TUMOR", "CIS", "MIBC", "NMIBC",
+            # Procedimentos
+            "BCG", "TURBT", "TURP", "SNM", "PTNS", "BOTOX", "INJECTION", "STENT", "CATHETER", "SLING", "MESH",
+            "TRANSPLANTATION", "NEPHRECTOMY", "LITHOTRIPSY", "HOLEP", "THULEP", "YAG", "LASER", 
+            "RADIOTHERAPY", "RADIATION", "TOXICITY", "SAFETY", "EFFICACY", "CLINICAL", "PRECLINICAL", "TRIAL",
+            # Diagnóstico
+            "VIRADS", "PIRADS", "CEUS", "MRI", "CT", "PET", "ULTRASOUND", "EMG", "URODYNAMICS", "CYSTOSCOPY",
+            "ACR", "AUC", "ROC", "CI", "OR", "HR", "P", "VALUE", "SCORE", "GRADE", "STAGE",
+            # Sujeira Geral
+            "PAF", "TVOR", "RTA", "COUB", "ARM", "PBS", "ALE", "FOR", "AND", "THE", "WITH", "FROM", "BUT", 
+            "SNAP25", "SV2", "VVF", "UVF", "SUFU", "ICS", "EAU", "AUA", "IUGA", "USA", "UK", "CHINA",
+            "UNIVERSITY", "DEPARTMENT", "HOSPITAL", "CENTER", "REVIEW", "META", "ANALYSIS", "STUDY", "DATA",
+            "PUBLISH", "ACCEPTED", "RECEIVED", "PII", "DOI", "ISSN", "PMID", "PMC", "ISBN", "COPYRIGHT",
             "TOTAL", "MEAN", "RATIO", "SD", "SEM", "YEAR", "MONTH", "DAY", "HOUR", "MIN", "SEC",
-            "USING", "USED", "USE", "DATA", "ANALYSIS", "STUDY", "RESULTS", "CONCLUSION", "BACKGROUND",
-            "METHODS", "OBJECTIVE", "AIM", "PURPOSE", "DEPARTMENT", "UNIVERSITY", "HOSPITAL",
-            "PUBLISH", "ACCEPTED", "RECEIVED", "REVISED", "CORRESPONDENCE", "EMAIL", "AUTHOR", "EDITOR",
-            "PII", "DOI", "ISSN", "PMID", "PMC", "ISBN", "COPYRIGHT", "VOLUME", "ISSUE", "PAGE",
-            "FIG", "FIGURE", "TABLE", "SUPPL", "TEXT", "FULL", "ABSTRACT", "TITLE"
+            "WESTERN", "BLOT", "PCR", "QPCR", "ELISA", "STAINING", "IMMUNO", "HISTOLOGY", "ASSAY"
         }
 
         candidatos_por_artigo = []
         for artigo in artigos_raw:
             texto_focado = ""
             for line in artigo.split("\n"):
-                # Foco em Título e Keywords
                 if line.startswith("TI  - "): texto_focado += line[6:].strip() + " "
                 elif line.startswith("OT  - ") or line.startswith("KW  - "): texto_focado += line[6:].strip() + " "
             
             if not texto_focado: continue
 
-            # Regex Permissivo: Pega qualquer coisa que pareça sigla ou termo técnico
             encontrados = re.findall(r'\b(?:[A-Z]{2,}[A-Z0-9-]*|[a-z]{1,2}[A-Z][a-zA-Z0-9-]*)\b', texto_focado)
             
             for t in encontrados:
                 t_clean = re.sub(r'[^a-zA-Z0-9]', '', t).upper()
-                if len(t_clean) < 3: continue 
-                if t_clean in blacklist_tecnica: continue # Só remove preposições
+                
+                # Regra 1: Tamanho mínimo (Proteção para gases)
+                if len(t_clean) < 3 and t_clean not in ["NO", "CO", "H2", "H2S"]: continue 
+                
+                # Regra 2: Blacklist de Extermínio
+                if t_clean in blacklist_exterminio: continue
+                
+                # Regra 3: Tira números puros ou o próprio termo de busca
                 if t_clean.isdigit(): continue
                 if t_clean == termo_upper.replace(" ", ""): continue
                 
@@ -237,21 +232,20 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
 
         if not candidatos_por_artigo: return []
         
-        # Estatística
         contagem = Counter(candidatos_por_artigo)
         total_docs = max(1, len(artigos_raw))
         
-        # PEGAMOS UMA AMOSTRA GRANDE (Top 150)
-        # Enviamos "lixo" junto (LUTS, OAB, TURBT) propositalmente para a IA filtrar
-        top_candidatos = [termo for termo,freq in contagem.most_common(150) if (freq/total_docs)<0.90]
+        # Amostra rica (120 termos) para a IA selecionar
+        top_candidatos = [termo for termo,freq in contagem.most_common(120) if (freq/total_docs)<0.90]
         
-        # --- A MÁGICA ACONTECE AQUI ---
+        # Filtro de Segurança Redundante
+        lista_para_ia = [t for t in top_candidatos if t not in blacklist_exterminio]
+        
         if usar_ia and st.session_state.get('api_key_usuario'):
-            # Envia o "Pacotão" de 150 termos para a IA limpar
-            return _faxina_ia(top_candidatos)
+            # Envia para a "Pesquisadora IA"
+            return _faxina_ia(lista_para_ia)
         else:
-            # Se não tiver IA, temos que ser conservadores e cortar em 30
-            return top_candidatos[:30]
+            return lista_para_ia[:30]
 
     except: return []
 
@@ -271,6 +265,12 @@ def buscar_todas_noticias(lang='pt'):
                 if line.startswith("JT  - "): journal = line.replace("JT  - ", "").strip()
                 if line.strip().isdigit() and not pmid: pmid = line.strip()
             if tit and pmid:
-                news.append({"titulo": tit, "fonte": journal[:30], "link": f"[https://pubmed.ncbi.nlm.nih.gov/](https://pubmed.ncbi.nlm.nih.gov/){pmid}/", "img":"[https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=400](https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=400)"})
+                # Link limpo para evitar erro de conexão
+                news.append({
+                    "titulo": tit, 
+                    "fonte": journal[:30], 
+                    "link": f"[https://pubmed.ncbi.nlm.nih.gov/](https://pubmed.ncbi.nlm.nih.gov/){pmid}/", 
+                    "img": "[https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=400](https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=400)"
+                })
         return news
     except: return []
