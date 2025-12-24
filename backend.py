@@ -46,24 +46,35 @@ def buscar_todas_noticias(lang='pt'):
                 if line.startswith("JT  - "): journal = line[6:].strip()
                 if line.strip().isdigit() and not pmid: pmid = line.strip()
             if tit and pmid:
-                news.append({"titulo": tit, "fonte": journal[:40], "link": f"https://pubmed.ncbi.gov/{pmid}/"})
+                news.append({"titulo": tit, "fonte": journal[:40], "link": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"})
         return news
     except: return []
 
-# --- 4. DOUTORA INVESTIGADORA (STRICT FILTER) ---
+# --- 4. DOUTORA INVESTIGADORA (ENGLISH PROMPT FOR STABILITY) ---
 def _doutora_investigadora(termo_base, lista_pubmed=None, fase="brainstorming"):
     api_key = st.session_state.get('api_key_usuario', '')
     if not api_key: return []
 
     if fase == "brainstorming":
-        prompt = f"Como PhD em farmacologia molecular, liste 50 alvos moleculares, fármacos e miRNAs para {termo_base}. Ex: TRPV4, GSK1016790A. Apenas lista Python []."
-    else:
-        lista_str = ", ".join(lista_pubmed[:100])
         prompt = f"""
-        Cruze seu conhecimento com estes termos PubMed: {lista_str}. 
-        ATENÇÃO: Ignore termos de metadados (PMID, FAU, NLM, JID). 
-        Extraia apenas ALVOS (canais, receptores, enzimas) e FÁRMACOS específicos. 
-        Apenas lista Python [].
+        Role: PhD Senior Scientist in Pharmacology.
+        Task: Provide a Python list of 50 high-potential molecular targets (channels, receptors, enzymes), specific drugs, and miRNAs for research on "{termo_base}".
+        Focus: Bench research, organ bath, and molecular biology.
+        Examples: TRPV4, GSK1016790A, SPHK1, NLRP3, miR-132, SNARE, PIEZO1, P2X3.
+        Output: ONLY a Python list of strings. No conversation.
+        """
+    else:
+        lista_str = ", ".join(lista_pubmed[:120])
+        prompt = f"""
+        Role: Senior Investigating Scientist.
+        Data: {lista_str}.
+        Task: Cross-reference your knowledge with this PubMed list.
+        Instructions: 
+        1. Extract ONLY specific pharmacological targets and drugs.
+        2. DELETE system metadata (PMID, FAU, NLM, JID, EDAT, etc.).
+        3. DELETE general clinical terms (Diabetes, Patients, Hospital).
+        4. Focus on bench-top relevance for "{termo_base}".
+        Output: ONLY a Python list of strings [].
         """
 
     headers = {'Content-Type': 'application/json'}
@@ -80,7 +91,7 @@ def _doutora_investigadora(termo_base, lista_pubmed=None, fase="brainstorming"):
         except: continue
     return []
 
-# --- 5. MINERAÇÃO E CRUZAMENTO (O CORAÇÃO DO FIX) ---
+# --- 5. MINERAÇÃO E CRUZAMENTO (ANTI-METADATA) ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
     if email: Entrez.email = email
@@ -96,25 +107,25 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
         handle = Entrez.efetch(db="pubmed", id=record["IdList"], rettype="medline", retmode="text")
         full_data = handle.read(); handle.close()
         
-        # --- NOVO FILTRO: EXTRAI APENAS TEXTO ÚTIL ---
+        # Filtro de tags do Medline
         blacklist_tags = {'FAU', 'PMID', 'NLM', 'DCOM', 'JID', 'EDAT', 'MHDA', 'CRDT', 'PST', 'HHS', 'NIH', 'NIDDK', 'LID', 'NID', 'PMC', 'PMCR', 'OTO', 'AUID', 'ORCID', 'PHST', 'AID'}
         
         candidatos_pubmed = []
         for artigo in full_data.split("\n\nPMID-"):
             texto_util = ""
             for line in artigo.split("\n"):
-                # SÓ OLHA TÍTULOS (TI), ABSTRACT (AB) E KEYWORDS (KW/OT)
+                # Captura apenas Título, Abstract e Keywords
                 if line.startswith("TI  - ") or line.startswith("AB  - ") or line.startswith("KW  - ") or line.startswith("OT  - "):
                     texto_util += line[6:].strip() + " "
             
-            # Captura siglas técnicos e fármacos no texto útil
+            # Captura siglas e fármacos no texto filtrado
             encontrados = re.findall(r'\b[A-Z0-9-]{3,}\b', texto_util)
             for t in encontrados:
                 if t.upper() not in blacklist_tags:
                     candidatos_pubmed.append(t.upper())
 
         contagem = Counter(candidatos_pubmed)
-        top_pubmed = [termo for termo, freq in contagem.most_common(150)]
+        top_pubmed = [termo for termo, freq in contagem.most_common(180)]
         
         nomes_finais = []
         if usar_ia:
@@ -137,8 +148,8 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
 
 # --- 6. ANÁLISE IA ---
 def analisar_abstract_com_ia(titulo, dados, api_key, lang='pt'):
-    if not api_key: return "Chave necessária."
-    prompt = f"Analise: {titulo}. Resuma Alvo, Fármaco e Efeito em 20 palavras."
+    if not api_key: return "API Key Required."
+    prompt = f"Summarize Target, Drug, and Functional Effect for: {titulo}. Context: {dados}. Limit: 20 words. Language: {'Portuguese' if lang=='pt' else 'English'}."
     headers = {'Content-Type': 'application/json'}
     data = {"contents": [{"parts": [{"text": prompt}]}]}
     for m in MODELOS_ATIVOS:
@@ -148,4 +159,4 @@ def analisar_abstract_com_ia(titulo, dados, api_key, lang='pt'):
             if resp.status_code == 200:
                 return resp.json()['candidates'][0]['content']['parts'][0]['text'].strip()
         except: continue
-    return "Erro IA."
+    return "AI Error."
