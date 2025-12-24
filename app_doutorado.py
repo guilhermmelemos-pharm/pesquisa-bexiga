@@ -2,28 +2,6 @@
 Lemos Lambda: Deep Science Prospector
 Copyright (c) 2025 Guilherme Lemos
 Licensed under the MIT License.
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-Author: Guilherme Lemos (Unifesp)
-Creation Date: December 2025
-Version: 2.0
 """
 import streamlit as st
 
@@ -43,7 +21,7 @@ defaults = {
     'pagina': 'home', 'alvos_val': "", 'resultado_df': None, 'news_index': 0,
     'input_alvo': "", 'input_fonte': "", 'input_email': "", 'artigos_detalhe': None,
     'email_guardado': "", 'alvo_guardado': "", 'lang': 'pt',
-    'api_key_usuario': "" 
+    'api_key_usuario': "", 'usar_ia_faxina': True # Novo estado padrão
 }
 for k, v in defaults.items():
     if k not in st.session_state: st.session_state[k] = v
@@ -63,7 +41,6 @@ st.markdown("""
     div[data-testid="stImage"] { height: 160px !important; overflow: hidden !important; border-radius: 8px !important; }
     div[data-testid="stImage"] img { height: 160px !important; object-fit: cover !important; width: 100% !important; }
     .big-button button { background-color: #FF4B4B !important; color: white !important; border: none; font-size: 1.1rem !important; }
-    .flag-btn button { background: none !important; border: none !important; font-size: 1.5rem !important; }
     .stTextArea textarea { font-family: monospace; }
     </style>
 """, unsafe_allow_html=True)
@@ -93,21 +70,21 @@ def adicionar_termos_seguro(lista, textos):
 
 def carregar_lista_dinamica_smart(textos):
     email, alvo = st.session_state.input_email, st.session_state.input_alvo
+    # Pega o estado do botão de IA
+    usar_ia = st.session_state.usar_ia_faxina
+    
     if not alvo: st.error(textos["erro_alvo"]); return
     
-    # CORREÇÃO 1: Carrega apenas o que já está na tela, sem forçar presets
     existentes = [x.strip() for x in st.session_state.alvos_val.split(",") if x.strip()]
     lista_mestra = list(set(existentes)) 
     
     with st.spinner(f"{textos['status_minerando']} {alvo}..."):
-        novos = bk.buscar_alvos_emergentes_pubmed(alvo, email)
+        # Passa a preferência do usuário para o backend
+        novos = bk.buscar_alvos_emergentes_pubmed(alvo, email, usar_ia=usar_ia)
         
-        # Lógica de decisão inteligente:
         if novos: 
-            # Se achou novidade, usa a novidade
             lista_mestra.extend(novos)
         else:
-            # Fallback: Se não achou nada (0), carrega os presets de segurança
             st.warning("Mineração retornou vazio. Carregando sugestões padrão...")
             for lista in c.PRESETS_FRONTEIRA.values():
                 lista_mestra.extend(lista)
@@ -123,7 +100,6 @@ def ir_para_analise(email, contexto, alvo, y_ini, y_fim, textos):
     res = []
     
     with st.spinner(textos["spinner_analise"]):
-        # Busca o n_total_alvo de forma absoluta no PubMed
         n_total_alvo = bk.consultar_pubmed_count(alvo, "", email, 1900, 2030)
         if n_total_alvo == 0: n_total_alvo = 1
     
@@ -135,7 +111,6 @@ def ir_para_analise(email, contexto, alvo, y_ini, y_fim, textos):
     
     for i, item in enumerate(lista):
         time.sleep(0.01) 
-        # Busca Global sem o filtro do contexto para garantir Hits Global > Hits Alvo
         n_global = bk.consultar_pubmed_count(item, "", email, y_ini, y_fim)
         n_especifico = bk.consultar_pubmed_count(item, alvo, email, y_ini, y_fim)
         
@@ -220,75 +195,46 @@ if st.session_state.pagina == 'resultados':
     
     df = st.session_state.resultado_df
     if df is not None and not df.empty:
-        # Métricas do Top 1
         top = df.iloc[0]
         c1, c2, c3 = st.columns(3)
         c1.metric(t["metric_top"], top[t["col_mol"]], delta=top[t["col_status"]])
         c2.metric(t["metric_score"], top[t["col_ratio"]])
         c3.metric("P-Valor", top["P-Value"])
         
-        # Heatmap e Tabela
         st.subheader(t["header_heatmap"])
         st.plotly_chart(px.bar(df.drop(columns=["_sort"]).head(25), x=t["col_mol"], y=t["col_ratio"], color=t["col_status"]), use_container_width=True)
         st.dataframe(df.drop(columns=["_sort"]), use_container_width=True, hide_index=True)
         
         st.divider()
-        
-        # --- INVESTIGAÇÃO SOB DEMANDA (NOVA LÓGICA V2.0) ---
         st.subheader(t["header_leitura"])
         lista_alvos = sorted(df[t["col_mol"]].unique().tolist())
         
-        # Seleção e Busca Inicial (Sem IA)
         c_sel, c_btn = st.columns([3, 1], vertical_alignment="bottom")
         with c_sel: sel = st.selectbox(t["label_investigar"], lista_alvos)
         with c_btn: 
             if st.button(f"🔎 Buscar Papers", use_container_width=True):
                 with st.spinner(t["spinner_investigando"]):
-                    # Busca 5 artigos no PubMed (rápido e leve) e guarda os dados (incluindo Info_IA)
                     st.session_state.artigos_detalhe = bk.buscar_resumos_detalhados(sel, st.session_state.alvo_guardado, st.session_state.email_guardado, 2015, 2025)
                     st.rerun()
 
-        # Renderização dos Cards com IA "Click-to-Analyze"
         if st.session_state.artigos_detalhe:
             st.info(f"Foram encontrados {len(st.session_state.artigos_detalhe)} artigos recentes sobre {sel}.")
-            
             for i, art in enumerate(st.session_state.artigos_detalhe):
                 with st.expander(f"📄 {art['Title']}", expanded=False):
-                    # Mostra os dados brutos (Keywords ou início do abstract)
                     st.caption(f"**Keywords/Contexto:** {art.get('Info_IA', 'N/A')[:200]}...")
-                    
                     c_ia, c_link = st.columns([1, 1])
-                    
-                    # Coluna de Interação com IA (Lógica Ajustada)
                     with c_ia:
-                        # Se não tiver chave, mostra o campo de input ali mesmo
                         if not st.session_state.api_key_usuario:
-                            nova_chave = st.text_input("Cole sua Google API Key:", type="password", key=f"key_input_{i}", help="Cole a chave e pressione Enter para liberar a análise.")
+                            nova_chave = st.text_input("Cole sua Google API Key:", type="password", key=f"key_input_{i}", help="Necessário para análise.")
                             if nova_chave:
                                 st.session_state.api_key_usuario = nova_chave
                                 st.rerun()
-                        
-                        # Se já tiver chave (ou acabou de colocar), mostra o botão de análise
                         if st.session_state.api_key_usuario:
                             if st.button(f"🤖 Analisar este artigo", key=f"btn_ia_{i}"):
                                 with st.spinner("Analisando..."):
-                                    # Chama a função leve do backend passando Info_IA
-                                    resumo = bk.analisar_abstract_com_ia(
-                                        art['Title'], 
-                                        art.get('Info_IA', ''), 
-                                        st.session_state.api_key_usuario, 
-                                        st.session_state.lang
-                                    )
-                                    # Mostra o resultado imediatamente com VISUAL DARK MODE (Caixa Escura / Texto Branco)
-                                    st.markdown(f"""
-                                    <div style='background-color: #262730; color: #ffffff; padding: 15px; border-radius: 8px; border-left: 5px solid #FF4B4B; margin-top: 10px;'>
-                                        <small style='color: #FF4B4B;'>🧠 <b>Análise Lemos Lambda:</b></small><br>
-                                        <span style='font-size: 1.1em;'>{resumo}</span>
-                                    </div>
-                                    """, unsafe_allow_html=True)
-                    
-                    with c_link:
-                        st.link_button("🔗 Abrir no PubMed", art['Link'], use_container_width=True)
+                                    resumo = bk.analisar_abstract_com_ia(art['Title'], art.get('Info_IA', ''), st.session_state.api_key_usuario, st.session_state.lang)
+                                    st.markdown(f"<div style='background-color: #262730; color: #ffffff; padding: 15px; border-radius: 8px; border-left: 5px solid #FF4B4B; margin-top: 10px;'><small style='color: #FF4B4B;'>🧠 <b>Análise Lemos Lambda:</b></small><br><span style='font-size: 1.1em;'>{resumo}</span></div>", unsafe_allow_html=True)
+                    with c_link: st.link_button("🔗 Abrir no PubMed", art['Link'], use_container_width=True)
 
 else:
     st.title(t["titulo_desk"]); st.caption(t["subtitulo"])
@@ -321,7 +267,12 @@ else:
         st.subheader(t["header_config"])
         with st.expander(t["expander_ia"], expanded=True):
             st.session_state.api_key_usuario = st.text_input("Google API Key", type="password", value=st.session_state.api_key_usuario)
+            
+            # --- NOVO BOTÃO DE TOGGLE DA IA ---
+            st.toggle("✨ Ativar Curadoria por IA", key="usar_ia_faxina", help="Usa a IA para limpar a lista de mineração, removendo termos clínicos irrelevantes.")
+            
             st.markdown(f"[{t['link_key']}](https://aistudio.google.com/app/apikey)")
+            
         st.divider()
         anos = st.slider(t["slider_tempo"], 2000, datetime.now().year, (2015, datetime.now().year))
         st.text_input(t["label_contexto"], key="input_fonte")
@@ -332,8 +283,6 @@ else:
         st.success(f"✅ {len(st.session_state.alvos_val.split(','))} alvos prontos.")
         with st.expander(t["expander_lista"]):
             st.text_area("", key="alvos_val", height=150)
-            
-            # CORREÇÃO 2: Botão agora usa Callback para evitar erro de widget
             st.button("termos indicados", on_click=limpar_lista_total)
 
         if st.button(t["btn_executar"], type="primary", use_container_width=True):
@@ -348,4 +297,3 @@ with cf1:
 with cf2:
     st.caption(t["apoio_titulo"])
     st.text_input("Chave Pix:", value="960f3f16-06ce-4e71-9b5f-6915b2a10b5a", disabled=False)
-        
