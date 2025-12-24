@@ -35,35 +35,34 @@ MODELOS_ATIVOS = [
     "gemini-flash-latest"
 ]
 
-# --- 2. FAXINEIRO IA (PROMPT MOLECULAR PURO) ---
+# --- 2. FAXINEIRO IA (PROMPT MOLECULAR) ---
 def _faxina_ia(lista_suja):
-    # Limpeza preventiva da chave
     api_key = st.session_state.get('api_key_usuario', '').strip()
     if not api_key: return lista_suja[:30] 
 
     lista_str = ", ".join(lista_suja)
     
-    # PROMPT REFINADO: Separando o "Onde" do "Quem"
+    # Prompt focado em Inovação Molecular
     prompt = f"""
     ACT AS: Senior Pharmacologist & Molecular Biologist.
-    CONTEXT: We are mining literature for Specific Molecular Targets and Signaling Pathways.
+    CONTEXT: We are filtering PubMed terms to find NOVEL MOLECULAR TARGETS.
     
     INPUT LIST: {lista_str}
     
-    TASK: Filter the list strictly.
+    TASK: Classify and Filter.
     
-    ✅ KEEP ONLY (SPECIFIC MOLECULES & PATHWAYS):
-    - Specific Receptors: TRPV1, P2X3, Beta-3-AR, M3 Receptor, CB2.
-    - Specific Signaling Pathways/Proteins: mTOR, PI3K/Akt, NF-kB, Rho-Kinase, cAMP.
-    - Specific Enzymes: COX-2, PDE5, NOS, Monoamine Oxidase.
-    - Specific Drugs/Compounds: Mirabegron, Tadalafil, Resveratrol, Trehalose, TMAO.
-    - Specific Genes/RNAs: GATA3, TFEB, miRNA-132.
+    ✅ KEEP (SPECIFIC TARGETS & COMPOUNDS):
+    - Specific Receptors/Channels: TRPV1, P2X3, Beta-3-AR, Piezo1, BK channels.
+    - Specific Enzymes/Kinases: mTOR, ROCK, PDE5, COX2.
+    - Innovative Metabolites/Small Molecules: Trehalose, TMAO, Resveratrol, Short-chain fatty acids.
+    - Specific Genes/Regulators: TFEB, NRF2, HIF-1a, GATA3.
+    - Specific Experimental Drugs: GYY4137, Mirabegron (only if specific).
     
     ❌ DELETE IMMEDIATELY (VAGUE / ANATOMY / CLASSES):
     - Tissues/Anatomy: Detrusor, Urothelium, Nerve, Bladder, Mucosa, Smooth Muscle, Ganglion.
     - Drug Classes (General): Anticholinergics, Antimuscarinics, Agonists, Blockers, Inhibitors.
     - Physiological Systems: Autonomic, Immune, Sensory, Sympathetic.
-    - Clinical/Diseases: LUTS, OAB, Cancer, Infection, Inflammation.
+    - Clinical/Diseases: LUTS, OAB, BPH, Cancer, Infection, Inflammation.
     - Common Molecules: ATP, DNA, RNA, Water, Oxygen.
     
     OUTPUT: Return strictly a Python list of strings.
@@ -76,12 +75,14 @@ def _faxina_ia(lista_suja):
         "generationConfig": {"temperature": 0.0}
     }
     
-    # URL BLINDADA (Sem formatação markdown)
+    # URL BASE LIMPA (Sem formatação)
     base_url = "https://generativelanguage.googleapis.com/v1beta/models"
 
     for m in MODELOS_ATIVOS:
         try:
+            # Construção manual da URL para evitar erro de adapter
             url = f"{base_url}/{m}:generateContent?key={api_key}"
+            
             resp = requests.post(url, headers=headers, data=json.dumps(data), timeout=20)
             
             if resp.status_code == 200:
@@ -106,12 +107,15 @@ def analisar_abstract_com_ia(titulo, dados_curtos, api_key, lang='pt'):
     headers = {'Content-Type': 'application/json'}
     data = {"contents": [{"parts": [{"text": prompt_text}]}]}
     
+    # URL BASE LIMPA
     base_url = "[https://generativelanguage.googleapis.com/v1beta/models](https://generativelanguage.googleapis.com/v1beta/models)"
     ultimo_erro = ""
 
     for m in MODELOS_ATIVOS:
         try:
+            # Construção manual da URL
             url = f"{base_url}/{m}:generateContent?key={key}"
+            
             resp = requests.post(url, headers=headers, data=json.dumps(data), timeout=10)
             if resp.status_code == 200:
                 return resp.json()['candidates'][0]['content']['parts'][0]['text'].strip()
