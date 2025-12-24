@@ -19,7 +19,7 @@ from datetime import datetime
 import time
 import scipy.stats as stats
 import constantes as c
-import backend as bk  # O backend blindado que criamos
+import backend as bk  # Backend com filtro passivo e suporte a Gemini 2.5/3.0
 
 # --- 2. ESTADO E INICIALIZAÇÃO ---
 defaults = {
@@ -32,33 +32,22 @@ defaults = {
 for k, v in defaults.items():
     if k not in st.session_state: st.session_state[k] = v
 
-# Garante persistência da chave
+# Garante persistência da chave API
 if 'api_key_usuario' not in st.session_state:
     st.session_state.api_key_usuario = ""
 
 def get_textos(): return c.TEXTOS.get(st.session_state.lang, c.TEXTOS["pt"])
 t = get_textos()
 
-# --- 3. CSS (ESTILIZAÇÃO) ---
+# --- 3. CSS (ESTILIZAÇÃO UNIFESP-READY) ---
 st.markdown("""
     <style>
-    /* Botões Padrão */
     .stButton button { border-radius: 12px; height: 50px; font-weight: bold; }
-    
-    /* Métricas Grandes */
     div[data-testid="stMetricValue"] { font-size: 1.8rem !important; }
-    
-    /* Imagens do Radar */
     div[data-testid="stImage"] { height: 160px !important; overflow: hidden !important; border-radius: 8px !important; }
     div[data-testid="stImage"] img { height: 160px !important; object-fit: cover !important; width: 100% !important; }
-    
-    /* Botão Vermelho Grande (Automático) */
     .big-button button { background-color: #FF4B4B !important; color: white !important; border: none; font-size: 1.1rem !important; }
-    
-    /* Área de Texto Monospaced */
     .stTextArea textarea { font-family: monospace; }
-    
-    /* Cabeçalho Personalizado */
     .header-style { font-size: 2.5rem; font-weight: 700; color: #FAFAFA; margin-bottom: 0px; }
     .sub-header-style { font-size: 1.2rem; font-weight: 400; color: #A0A0A0; margin-bottom: 20px; }
     </style>
@@ -97,13 +86,12 @@ def carregar_lista_dinamica_smart(textos):
     lista_mestra = list(set(existentes)) 
     
     with st.spinner(f"{textos['status_minerando']} {alvo}..."):
-        # Chama o backend com a flag da IA
         novos = bk.buscar_alvos_emergentes_pubmed(alvo, email, usar_ia=usar_ia)
         
         if novos: 
             lista_mestra.extend(novos)
         else:
-            st.warning("Mineração retornou vazio (ou IA falhou). Carregando sugestões padrão...")
+            st.warning("Mineração retornou vazio. Carregando sugestões padrão...")
             for lista in c.PRESETS_FRONTEIRA.values():
                 lista_mestra.extend(lista)
     
@@ -238,26 +226,23 @@ if st.session_state.pagina == 'resultados':
                     st.rerun()
 
         if st.session_state.artigos_detalhe:
-            st.info(f"Foram encontrados {len(st.session_state.artigos_detalhe)} artigos recentes sobre {sel}.")
+            st.info(f"Artigos recentes sobre {sel}:")
             for i, art in enumerate(st.session_state.artigos_detalhe):
                 with st.expander(f"📄 {art['Title']}", expanded=False):
-                    st.caption(f"**Keywords/Contexto:** {art.get('Info_IA', 'N/A')[:200]}...")
+                    st.caption(f"**Snippet:** {art.get('Info_IA', 'N/A')[:250]}...")
                     c_ia, c_link = st.columns([1, 1])
                     with c_ia:
                         if not st.session_state.api_key_usuario:
-                            nova_chave = st.text_input("Cole sua Google API Key:", type="password", key=f"key_input_{i}", help="Necessário para análise.")
-                            if nova_chave:
-                                st.session_state.api_key_usuario = nova_chave
-                                st.rerun()
-                        if st.session_state.api_key_usuario:
-                            if st.button(f"🤖 Analisar este artigo", key=f"btn_ia_{i}"):
-                                with st.spinner("Analisando..."):
-                                    resumo = bk.analisar_abstract_com_ia(art['Title'], art.get('Info_IA', ''), st.session_state.api_key_usuario, st.session_state.lang)
-                                    st.markdown(f"<div style='background-color: #262730; color: #ffffff; padding: 15px; border-radius: 8px; border-left: 5px solid #FF4B4B; margin-top: 10px;'><small style='color: #FF4B4B;'>🧠 <b>Análise Lemos Lambda:</b></small><br><span style='font-size: 1.1em;'>{resumo}</span></div>", unsafe_allow_html=True)
+                            st.warning("Insira sua Google API Key nas configurações para analisar.")
+                        else:
+                            if st.button(f"🤖 Analisar Alvo & Mecanismo", key=f"btn_ia_{i}"):
+                                with st.spinner("Analisando sinalização molecular..."):
+                                    resumo = bk.analisar_abstract_com_ia(art['Title'], art.get('Info_IA', ''), st.session_state.api_key_usuario)
+                                    st.markdown(f"<div style='background-color: #262730; color: #ffffff; padding: 15px; border-radius: 8px; border-left: 5px solid #FF4B4B; margin-top: 10px;'><small style='color: #FF4B4B;'>🧠 <b>Análise de Bancada:</b></small><br><span style='font-size: 1.1em;'>{resumo}</span></div>", unsafe_allow_html=True)
                     with c_link: st.link_button("🔗 Abrir no PubMed", art['Link'], use_container_width=True)
 
 else:
-    # --- PÁGINA HOME (COM CABEÇALHO RESTAURADO) ---
+    # --- PÁGINA HOME (CABEÇALHO λ) ---
     st.markdown(f'<p class="header-style">λ {t["titulo_desk"]}</p>', unsafe_allow_html=True)
     st.markdown(f'<p class="sub-header-style">{t["subtitulo"]}</p>', unsafe_allow_html=True)
     
@@ -290,20 +275,17 @@ else:
         st.subheader(t["header_config"])
         with st.expander(t["expander_ia"], expanded=True):
             st.session_state.api_key_usuario = st.text_input("Google API Key", type="password", value=st.session_state.api_key_usuario)
-            
-            # Switch da IA (Faxina)
-            st.toggle("✨ Ativar Curadoria por IA", key="usar_ia_faxina", help="Usa a IA para limpar a lista de mineração, removendo termos clínicos irrelevantes.")
-            
+            st.toggle("✨ Ativar Curadoria Molecular por IA", key="usar_ia_faxina", help="Usa modelos Gemini 2.5/3.0 para filtrar alvos experimentais.")
             st.markdown(f"[{t['link_key']}](https://aistudio.google.com/app/apikey)")
             
         st.divider()
-        anos = st.slider(t["slider_tempo"], 2000, datetime.now().year, (2015, datetime.now().year))
+        anos = st.slider(t["slider_tempo"], 2000, datetime.now().year, (2020, datetime.now().year))
         st.text_input(t["label_contexto"], key="input_fonte")
         st.file_uploader(t["uploader_label"], type=["csv", "txt"], key="uploader_key", on_change=processar_upload, args=(t,))
 
     st.divider()
     if st.session_state.alvos_val:
-        st.success(f"✅ {len(st.session_state.alvos_val.split(','))} alvos prontos.")
+        st.success(f"✅ {len(st.session_state.alvos_val.split(','))} alvos moleculares prontos.")
         with st.expander(t["expander_lista"]):
             st.text_area("", key="alvos_val", height=150)
             st.button("termos indicados", on_click=limpar_lista_total)
@@ -319,4 +301,4 @@ with cf1:
     with st.expander(t["citar_titulo"]): st.code(t["citar_texto"], language="text")
 with cf2:
     st.caption(t["apoio_titulo"])
-    st.text_input("Chave Pix:", value="960f3f16-06ce-4e71-9b5f-6915b2a10b5a", disabled=False)
+    st.text_input("Chave Pix para suporte:", value="960f3f16-06ce-4e71-9b5f-6915b2a10b5a", disabled=False)
