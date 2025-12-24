@@ -80,7 +80,12 @@ def adicionar_termos_seguro(lista, textos):
     blacklist = [b.lower() for b in c.BLACKLIST_GERAL]
     add = []
     for item in lista:
-        cl = item.strip()
+        # CORREÇÃO PARA ATRIBUTO 'STRIP' EM DICIONÁRIOS
+        if isinstance(item, dict):
+            cl = item.get("Alvo", "").strip()
+        else:
+            cl = item.strip()
+            
         if not cl or any(b in cl.lower() for b in blacklist): continue
         if cl.upper() not in atuais_up:
             atuais.append(cl); atuais_up.append(cl.upper()); add.append(cl)
