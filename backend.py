@@ -35,35 +35,33 @@ MODELOS_ATIVOS = [
     "gemini-flash-latest"
 ]
 
-# --- 2. FAXINEIRO IA (PROMPT MOLECULAR) ---
+# --- 2. FAXINEIRO IA (MODO "BANCADA OU NADA") ---
 def _faxina_ia(lista_suja):
     api_key = st.session_state.get('api_key_usuario', '').strip()
     if not api_key: return lista_suja[:30] 
 
     lista_str = ", ".join(lista_suja)
     
-    # Prompt focado em Inovação Molecular
+    # Prompt agressivo contra termos clínicos e abstratos
     prompt = f"""
     ACT AS: Senior Pharmacologist & Molecular Biologist.
-    CONTEXT: We are filtering PubMed terms to find NOVEL MOLECULAR TARGETS.
-    
+    CONTEXT: We are filtering terms from PubMed titles.
     INPUT LIST: {lista_str}
     
-    TASK: Classify and Filter.
+    TASK: STRICTLY Filter this list. Keep ONLY concrete molecular entities.
     
-    ✅ KEEP (SPECIFIC TARGETS & COMPOUNDS):
-    - Specific Receptors/Channels: TRPV1, P2X3, Beta-3-AR, Piezo1, BK channels.
-    - Specific Enzymes/Kinases: mTOR, ROCK, PDE5, COX2.
-    - Innovative Metabolites/Small Molecules: Trehalose, TMAO, Resveratrol, Short-chain fatty acids.
-    - Specific Genes/Regulators: TFEB, NRF2, HIF-1a, GATA3.
-    - Specific Experimental Drugs: GYY4137, Mirabegron (only if specific).
+    ✅ KEEP (Physical Entities you can pipet or sequence):
+    - Specific Receptors/Channels (TRPV1, P2X3, Beta-3-AR)
+    - Enzymes/Kinases (mTOR, ROCK, COX-2)
+    - Signaling Molecules (cAMP, ATP, NO, PGE2)
+    - Genes/RNAs (miRNA-132, GATA3)
+    - Specific Drugs/Compounds (Mirabegron, Trehalose, Resveratrol, TMAO)
     
-    ❌ DELETE IMMEDIATELY (VAGUE / ANATOMY / CLASSES):
-    - Tissues/Anatomy: Detrusor, Urothelium, Nerve, Bladder, Mucosa, Smooth Muscle, Ganglion.
-    - Drug Classes (General): Anticholinergics, Antimuscarinics, Agonists, Blockers, Inhibitors.
-    - Physiological Systems: Autonomic, Immune, Sensory, Sympathetic.
-    - Clinical/Diseases: LUTS, OAB, BPH, Cancer, Infection, Inflammation.
-    - Common Molecules: ATP, DNA, RNA, Water, Oxygen.
+    ❌ DELETE (Concepts, Anatomy, Clinical words):
+    - NO ANATOMY: Bladder, Detrusor, Urothelium, Nerve, Pelvic, Tract.
+    - NO CLINICAL TERMS: Incontinence, Overactive, Syndrome, Dysfunction, Neurogenic.
+    - NO PROCEDURES: Treatment, Management, Diagnosis, Imaging, Botox.
+    - NO ACADEMIC FLUFF: Role, Current, Systemic, What, Case, Clinical, Efficacy.
     
     OUTPUT: Return strictly a Python list of strings.
     """
@@ -75,14 +73,11 @@ def _faxina_ia(lista_suja):
         "generationConfig": {"temperature": 0.0}
     }
     
-    # URL BASE LIMPA (Sem formatação)
     base_url = "https://generativelanguage.googleapis.com/v1beta/models"
 
     for m in MODELOS_ATIVOS:
         try:
-            # Construção manual da URL para evitar erro de adapter
             url = f"{base_url}/{m}:generateContent?key={api_key}"
-            
             resp = requests.post(url, headers=headers, data=json.dumps(data), timeout=20)
             
             if resp.status_code == 200:
@@ -107,15 +102,12 @@ def analisar_abstract_com_ia(titulo, dados_curtos, api_key, lang='pt'):
     headers = {'Content-Type': 'application/json'}
     data = {"contents": [{"parts": [{"text": prompt_text}]}]}
     
-    # URL BASE LIMPA
     base_url = "[https://generativelanguage.googleapis.com/v1beta/models](https://generativelanguage.googleapis.com/v1beta/models)"
     ultimo_erro = ""
 
     for m in MODELOS_ATIVOS:
         try:
-            # Construção manual da URL
             url = f"{base_url}/{m}:generateContent?key={key}"
-            
             resp = requests.post(url, headers=headers, data=json.dumps(data), timeout=10)
             if resp.status_code == 200:
                 return resp.json()['candidates'][0]['content']['parts'][0]['text'].strip()
@@ -173,14 +165,13 @@ def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
         return artigos
     except: return []
 
-# --- 5. MINERAÇÃO (CORE) ---
+# --- 5. MINERAÇÃO (AGRESSIVA + FILTRO NUCLEAR) ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
     if email: Entrez.email = email
     termo_upper = termo_base.upper().strip()
     query_string = MAPA_SINONIMOS.get(termo_upper, f"{termo_base}[Title/Abstract]")
     
-    # Busca 2000 artigos para garantir profundidade
     final_query = f"({query_string}) AND (2018:2030[Date - Publication]) AND (NOT Review[pt])"
     
     try:
@@ -192,33 +183,32 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
         full_data = handle.read(); handle.close()
         artigos_raw = full_data.split("\n\nPMID-")
 
-        # --- LISTA NEGRA MANUAL (Camada Extra de Segurança) ---
+        # --- BLACKLIST NUCLEAR (EXTERMÍNIO TOTAL DE LIXO SEMÂNTICO) ---
         blacklist_exterminio = {
-            # Anatomia e Tecidos (Alvos errados)
+            # Anatomia e Tecidos (O que não é alvo molecular)
             "DETRUSOR", "UROTHELIUM", "NERVE", "IMMUNE", "AUTONOMIC", "SENSORY", "MUCOSA", "SMOOTH", "MUSCLE",
-            "GANGLION", "EPITHELIUM", "TISSUE", "CELL", "VESICAL", "URETHRA",
+            "GANGLION", "EPITHELIUM", "TISSUE", "CELL", "VESICAL", "URETHRA", "URINARY", "TRACT", "PELVIC",
+            "SACRAL", "INTERSTITIAL", "FEMALE", "MALE", "HUMAN", "RAT", "MOUSE", "BLADDER", "BODY",
             
-            # Classes de Drogas Genéricas
-            "ANTICHOLINERGIC", "ANTIMUSCARINIC", "ANTIMUSCARINICS", "AGONIST", "ANTAGONIST", 
-            "INHIBITOR", "BLOCKER", "ACTIVATOR", "MODULATOR", "RECEPTOR", "CHANNEL",
+            # Palavras Acadêmicas/Genéricas (O "Lixo de Título")
+            "CURRENT", "ROLE", "WHAT", "CASE", "SYSTEMATIC", "CLINICAL", "EFFICACY", "SYMPTOMS", "MOLECULAR",
+            "RADICAL", "NOVEL", "NEW", "POTENTIAL", "EFFECT", "EFFECTS", "STUDY", "ANALYSIS", "REVIEW", "META",
+            "DATA", "RESULTS", "CONCLUSION", "BACKGROUND", "METHODS", "OBJECTIVE", "AIM", "PURPOSE", "HYPOTHESIS",
+            "INVESTIGATION", "EVALUATION", "ASSESSMENT", "COMPARISON", "DURING", "AFTER", "BEFORE", "WITHIN",
             
-            # Genéricos Biológicos
-            "ATP", "DNA", "RNA", "NO", "ROS", "CO2", "H2O", "PGE", "PGE2", "VEGF", "PD1", "PDL1", "HER2", "CALCIUM",
-            "UPEC", "HBP", "SGC", "PDE5", "ALK", "TP63", "DHEA", "CD44", "IFN", "MIRNAS", "PRP", "SVF",
-            
-            # Clínicos & Doenças
-            "LUTS", "OAB", "BPH", "UTI", "IC", "BPS", "ICIRS", "LUT", "LUTD", "BOO", "SUI", "UUI", "MUI",
-            "COVID", "COVID19", "SARS", "VIRUS", "INFECTION", "SEPSIS", "CANCER", "TUMOR", "CIS", "MIBC", "NMIBC",
-            
-            # Procedimentos & Diagnóstico
+            # Termos Clínicos, Diagnósticos e Procedimentos
+            "TREATMENT", "MANAGEMENT", "DIAGNOSIS", "IMAGING", "DYSFUNCTION", "SURGICAL", "INCONTINENCE",
+            "NEUROMODULATION", "TRANSURETHRAL", "CARCINOMA", "UROLOGY", "THERAPY", "CHRONIC", "BENIGN", "SYNDROME",
+            "OVERACTIVE", "NEUROGENIC", "BOTULINUM", "CYSTITIS", "LUTS", "OAB", "BPH", "UTI", "IC", "BPS",
             "BCG", "TURBT", "TURP", "SNM", "PTNS", "BOTOX", "INJECTION", "STENT", "CATHETER", "MRI", "CT", "PET",
-            "VIRADS", "PIRADS", "CEUS", "ULTRASOUND", "EMG", "URODYNAMICS", "ACR", "AUC", "ROC", "CI", "OR",
             
-            # Lixo Gramatical
-            "THE", "AND", "WITH", "FOR", "BUT", "NOT", "FROM", "USED", "USING", "DATA", "STUDY", "RESULTS", "GROUP",
-            "UNIVERSITY", "DEPARTMENT", "CENTER", "HOSPITAL", "PUBLISH", "ACCEPTED", "RECEIVED", "PMC", "PMID",
-            "WESTERN", "BLOT", "PCR", "ELISA", "ANALYSIS", "REVIEW", "META", "TRIAL", "COHORT", "CONTROL",
-            "TOTAL", "MEAN", "RATIO", "YEAR", "MONTH", "DAY", "HOUR", "MIN", "SEC", "HIGH", "LOW", "LEVEL"
+            # Classes Farmacológicas Genéricas (Não são alvos específicos)
+            "ANTICHOLINERGIC", "ANTIMUSCARINIC", "ANTIMUSCARINICS", "AGONIST", "ANTAGONIST", "INHIBITOR", "BLOCKER",
+            "AGENT", "DRUG", "COMPOUND", "MEDICATION", "PLACEBO",
+            
+            # Genéricos Biológicos "Feijão com Arroz"
+            "ATP", "DNA", "RNA", "NO", "ROS", "CO2", "H2O", "PGE", "VEGF", "CALCIUM", "PROTEIN", "GENE",
+            "EXPRESSION", "LEVEL", "PATHWAY", "MECHANISM", "ACTIVITY", "ACTION", "FUNCTION"
         }
 
         candidatos_por_artigo = []
@@ -230,7 +220,9 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
             
             if not texto_focado: continue
 
-            # REGEX: Pega Siglas (TRPV1) e Palavras Químicas (Trehalose, Resveratrol)
+            # REGEX HÍBRIDO: 
+            # 1. Siglas (TRPV1, P2X3)
+            # 2. Nomes Químicos/Próprios (Trehalose, Mirabegron - Capitalized)
             encontrados = re.findall(r'\b(?:[A-Z]{2,}[A-Z0-9-]*|[A-Z][a-z]{3,}[a-z0-9-]*)\b', texto_focado)
             
             for t in encontrados:
@@ -240,11 +232,11 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
                 # Regra 1: Tamanho mínimo
                 if len(t_clean) < 3: continue 
                 
-                # Regra 2: Blacklist (Case Insensitive Check)
+                # Regra 2: Blacklist (A mais rigorosa até agora)
                 if t_upper in blacklist_exterminio: continue
                 if t_upper == termo_upper.replace(" ", ""): continue
                 
-                # Regra 3: Title Case para químicos (Trehalose)
+                # Regra 3: Adiciona à lista
                 candidatos_por_artigo.append(t_clean)
 
         if not candidatos_por_artigo: return []
@@ -252,10 +244,10 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
         contagem = Counter(candidatos_por_artigo)
         total_docs = max(1, len(artigos_raw))
         
-        # Pega Top 200 para dar material para a IA trabalhar
-        top_candidatos = [termo for termo,freq in contagem.most_common(200) if (freq/total_docs)<0.90]
+        # Pega Top 150 para a IA refinar
+        top_candidatos = [termo for termo,freq in contagem.most_common(150) if (freq/total_docs)<0.90]
         
-        # Filtra redundante
+        # Filtro de Segurança
         lista_para_ia = [t for t in top_candidatos if t.upper() not in blacklist_exterminio]
         
         if usar_ia and st.session_state.get('api_key_usuario'):
