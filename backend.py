@@ -35,20 +35,33 @@ MODELOS_ATIVOS = [
     "gemini-flash-latest"
 ]
 
-# --- 2. FAXINEIRO IA (SEU PROMPT CIENTÍFICO) ---
+# --- FUNÇÃO AUXILIAR PARA LIMPAR URL (SEGURANÇA MÁXIMA) ---
+def montar_url_limpa(modelo, chave):
+    # Quebramos a URL em partes para o chat não criar hyperlink automático
+    parte1 = "https://generativelanguage"
+    parte2 = ".googleapis.com/v1beta/models"
+    base = parte1 + parte2
+    
+    url = f"{base}/{modelo}:generateContent?key={chave}"
+    
+    # Remove qualquer lixo de formatação markdown que tenha sobrado
+    url = url.replace("[", "").replace("]", "").replace("(", "").replace(")", "").strip()
+    return url
+
+# --- 2. FAXINEIRO IA (PROMPT CIENTISTA DE BANCADA) ---
 def _faxina_ia(lista_suja):
     api_key = st.session_state.get('api_key_usuario', '').strip()
     if not api_key: return lista_suja[:30] 
 
     lista_str = ", ".join(lista_suja)
     
-    # SEU PROMPT TRANSFORMADO EM INSTRUÇÃO TÉCNICA
+    # SEU PROMPT PERSONALIZADO
     prompt = f"""
     ROLE: Senior Scientist in Pharmacology & Physiopathology (Organ Bath & Molecular Biology focus).
     
     INPUT LIST: {lista_str}
     
-    TASK: You received these files from PubMed. You need to analyze them for organ bath tests and molecular biology.
+    TASK: You received these files from PubMed. Analyze them for organ bath tests and molecular biology relevance.
     
     STRICT FILTERING RULES:
     1. IGNORE medical/daily terms. Focus ONLY on Pharmacology and Physiopathology.
@@ -75,14 +88,13 @@ def _faxina_ia(lista_suja):
         "safetySettings": [{"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}],
         "generationConfig": {"temperature": 0.0}
     }
-    
-    # URL BLINDADA
-    base_url = "https://generativelanguage.googleapis.com/v1beta/models"
 
     for m in MODELOS_ATIVOS:
         try:
-            url = f"{base_url}/{m}:generateContent?key={api_key}"
-            resp = requests.post(url, headers=headers, data=json.dumps(data), timeout=20)
+            # Usa a função blindada para montar a URL
+            url_final = montar_url_limpa(m, api_key)
+            
+            resp = requests.post(url_final, headers=headers, data=json.dumps(data), timeout=20)
             
             if resp.status_code == 200:
                 texto = resp.json()['candidates'][0]['content']['parts'][0]['text']
@@ -106,13 +118,14 @@ def analisar_abstract_com_ia(titulo, dados_curtos, api_key, lang='pt'):
     headers = {'Content-Type': 'application/json'}
     data = {"contents": [{"parts": [{"text": prompt_text}]}]}
     
-    base_url = "[https://generativelanguage.googleapis.com/v1beta/models](https://generativelanguage.googleapis.com/v1beta/models)"
     ultimo_erro = ""
 
     for m in MODELOS_ATIVOS:
         try:
-            url = f"{base_url}/{m}:generateContent?key={key}"
-            resp = requests.post(url, headers=headers, data=json.dumps(data), timeout=10)
+            # Usa a função blindada para montar a URL
+            url_final = montar_url_limpa(m, key)
+            
+            resp = requests.post(url_final, headers=headers, data=json.dumps(data), timeout=10)
             if resp.status_code == 200:
                 return resp.json()['candidates'][0]['content']['parts'][0]['text'].strip()
             else:
