@@ -2,17 +2,26 @@ import streamlit as st
 from Bio import Entrez
 import requests
 import json
+from tenacity import retry, stop_after_attempt, wait_exponential
 import re
 from collections import Counter
+import time
 import ast
 import math
-from tenacity import retry, stop_after_attempt, wait_exponential
 
 # --- CONFIGURAÇÃO ---
 Entrez.email = "pesquisador_guest@unifesp.br"
 
-# MODELOS DO SEU PAID TIER
+MAPA_SINONIMOS = {
+    "BLADDER": "Bladder OR Urothelium OR Detrusor OR Vesical OR Urethra OR Micturition OR LUTS OR Cystitis OR Overactive Bladder OR OAB OR Urinary Tract",
+    "PAIN": "Pain OR Nociception OR Analgesia OR Neuropathic OR Hyperalgesia OR TRP Channels",
+    "INFLAMMATION": "Inflammation OR Cytokine OR Macrophage OR Sepsis OR Inflammasome OR NF-kB"
+}
+
 MODELOS_ATIVOS = ["gemini-2.0-flash", "gemini-2.0-flash-exp", "gemini-flash-latest"]
+
+def montar_url_limpa(modelo, chave):
+    return f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={chave.strip()}"
 
 # --- 1. MOTOR DE MÉTRICAS ---
 def calcular_metricas_originais(freq, total_docs, n_alvo_total):
@@ -22,92 +31,143 @@ def calcular_metricas_originais(freq, total_docs, n_alvo_total):
     status = "Saturado" if blue_ocean < 25 else "Blue Ocean" if blue_ocean > 75 else "Competitivo"
     return lambda_score, p_value, blue_ocean, status
 
-# --- 2. FAXINEIRO IA (ORDEM DE EXTERMÍNIO E FORMATAÇÃO) ---
-def _faxina_ia_elite(lista_bruta):
-    api_key = st.session_state.get('api_key_usuario', '').strip()
-    if not api_key: return []
+# --- 2. SNIPER IA: ALVO | FÁRMACO | AÇÃO ---
+def analisar_abstract_com_ia(titulo, dados, api_key, lang='pt'):
+    key = api_key.strip()
+    if not key: return "Erro | Key Ausente"
     
     prompt = f"""
-    ROLE: Senior PhD in Pharmacology (Molecular Biology focus).
-    INPUT: {lista_bruta[:120]}
-    
-    TASK: Extract exactly 20 specific molecular targets and drugs.
-    STRICT FORMAT: Return a Python list of dictionaries:
-    [{"Alvo": "TRPV4", "Farmaco": "GSK1016790A", "Acao": "Agonista"}, ...]
-    
-    RULES:
-    1. DELETE: Toads, Frogs, Dogs, Sodium, Water, Muscle, Cell, Urinary, Metabolism.
-    2. DELETE: General anatomy (Bladder, Kidney) and clinical terms (Botox, Surgery).
-    3. KEEP: Receptors, Channels, Enzymes, and specific experimental compounds.
+    ROLE: Senior PhD Pharmacologist.
+    INPUT: Title: {titulo} | Data: {dados}
+    TASK: Extract strictly: ALVO | FÁRMACO | AÇÃO. 
+    RULES: Maximum 3 words per field. Use 'Endógeno' if no drug. No conversational text.
     """
     
     headers = {'Content-Type': 'application/json'}
-    data = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"temperature": 0.1}}
+    data = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"temperature": 0.0}}
     
     for m in MODELOS_ATIVOS:
         try:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={api_key}"
+            url = montar_url_limpa(m, key)
+            resp = requests.post(url, headers=headers, json=data, timeout=12)
+            if resp.status_code == 200:
+                return resp.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+        except: continue
+    return "N/A | N/A | N/A"
+
+# --- 3. FAXINEIRO IA (REFRENA A LISTA DE TAGS) ---
+def _faxina_ia(lista_suja):
+    api_key = st.session_state.get('api_key_usuario', '').strip()
+    if not api_key: return lista_suja[:30]
+    
+    prompt = f"""
+    ROLE: Senior Scientist in Pharmacology.
+    INPUT: {", ".join(lista_suja)}
+    TASK: Keep ONLY specific pharmacological targets (Channels, Receptors, Enzymes) and specific drugs.
+    DELETE: Animals, anatomy, clinical jargon, and general biology.
+    OUTPUT: Strictly a Python list [].
+    """
+    
+    headers = {'Content-Type': 'application/json'}
+    data = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"temperature": 0.0}}
+    
+    for m in MODELOS_ATIVOS:
+        try:
+            url = montar_url_limpa(m, api_key)
             resp = requests.post(url, headers=headers, json=data, timeout=20)
             if resp.status_code == 200:
                 texto = resp.json()['candidates'][0]['content']['parts'][0]['text']
                 match = re.search(r'\[.*\]', texto, re.DOTALL)
                 if match: return ast.literal_eval(match.group())
         except: continue
-    return []
+    return lista_suja[:30]
 
-# --- 3. MINERAÇÃO E BUSCA (ESTATÍSTICA + SNIPER) ---
+# --- 4. BUSCA E CONTAGEM (FILTRO TEMPORAL FIXO) ---
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
+def _fetch_pubmed_count(query):
+    handle = Entrez.esearch(db="pubmed", term=query, retmax=0)
+    record = Entrez.read(handle); handle.close()
+    return int(record["Count"])
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def consultar_pubmed_count(termo, contexto, email, ano_ini=2015, ano_fim=2026):
+    if email: Entrez.email = email
+    # Forçamos a query a ignorar o lixo de 100 anos atrás
+    query = f"({termo}) AND (2015:2026[Date - Publication])"
+    if contexto:
+        q_contexto = MAPA_SINONIMOS.get(contexto.upper(), contexto)
+        query += f" AND ({q_contexto})"
+    try: return _fetch_pubmed_count(query)
+    except: return 0
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
+    if email: Entrez.email = email
+    q_orgao = MAPA_SINONIMOS.get(orgao.upper(), orgao)
+    query = f"({termo}) AND ({q_orgao}) AND (2015:2026[Date - Publication])"
+    try:
+        handle = Entrez.esearch(db="pubmed", term=query, retmax=5, sort="relevance")
+        record = Entrez.read(handle); handle.close()
+        if not record["IdList"]: return []
+        handle = Entrez.efetch(db="pubmed", id=record["IdList"], rettype="medline", retmode="text")
+        dados = handle.read(); handle.close()
+        artigos = []
+        for raw in dados.split("\n\nPMID-"):
+            tit, pmid, keywords, abstract = "", "", "", ""
+            for line in raw.split("\n"):
+                if line.startswith("TI  - "): tit = line[6:].strip()
+                if line.startswith("AB  - "): abstract = line[6:500].strip()
+                if line.startswith("OT  - ") or line.startswith("KW  - "): keywords += line[6:].strip() + ", "
+            if tit:
+                artigos.append({"Title": tit, "Info_IA": f"{keywords} {abstract}", "Link": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"})
+        return artigos
+    except: return []
+
+# --- 5. MINERAÇÃO (CORE COM COUNTER E BLACKLIST) ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
     if email: Entrez.email = email
+    termo_upper = termo_base.upper().strip()
+    query_string = MAPA_SINONIMOS.get(termo_upper, f"{termo_base}[Title/Abstract]")
     
-    # BUSCA RESTRITA: 2020-2026 para matar estudos de 100 anos atrás
-    query = f"({termo_base} AND (Pharmacology OR Molecular OR Signaling)) AND (2020:2026[Date])"
+    # BUSCA MODERNA (2018-2026)
+    final_query = f"({query_string}) AND (2018:2026[Date - Publication]) AND (NOT Review[pt])"
     
     try:
-        handle = Entrez.esearch(db="pubmed", term=query, retmax=1000, sort="relevance")
+        handle = Entrez.esearch(db="pubmed", term=final_query, retmax=1000, sort="relevance")
         record = Entrez.read(handle); handle.close()
-        total_docs = int(record["Count"])
-        
+        if not record["IdList"]: return []
+
         handle = Entrez.efetch(db="pubmed", id=record["IdList"], rettype="medline", retmode="text")
         full_data = handle.read(); handle.close()
         
-        # Blacklist de Extermínio (Fundida com a sua versão anterior)
         blacklist = {
-            'TOAD', 'FROG', 'DOG', 'RABBIT', 'SODIUM', 'WATER', 'TRANSPORT', 'CELL', 'MUSCLE', 
-            'BLADDER', 'URINARY', 'EPITHELIUM', 'STUDY', 'ROLE', 'SYSTEM', 'ACTION', 'EFFECT',
-            'DNA', 'RNA', 'PROTEIN', 'GENE', 'PATIENT', 'HUMAN', 'CLINICAL', 'TREATMENT'
+            'TOAD', 'FROG', 'DOG', 'RABBIT', 'SODIUM', 'WATER', 'TRANSPORT', 'CELL', 'MUSCLE', 'BLADDER',
+            'URINARY', 'EPITHELIUM', 'DNA', 'RNA', 'PROTEIN', 'GENE', 'PATIENT', 'CLINICAL', 'ROLE', 'EFFECT'
         }
-        
-        candidatos_raw = []
+
+        candidatos = []
         for artigo in full_data.split("\n\nPMID-"):
-            texto_focado = ""
+            texto_sniper = ""
             for line in artigo.split("\n"):
                 if line.startswith("TI  - ") or line.startswith("KW  - ") or line.startswith("OT  - "):
-                    texto_focado += line[6:].strip() + " "
+                    texto_sniper += line[6:].strip() + " "
             
-            siglas = re.findall(r'\b[A-Z0-9-]{3,15}\b', texto_focado)
+            # Pega siglas (ex: TRPV4, P2X3)
+            siglas = re.findall(r'\b[A-Z0-9-]{3,15}\b', texto_sniper)
             for s in siglas:
                 if s.upper() not in blacklist and not s.isdigit():
-                    candidatos_raw.append(s.upper())
+                    candidatos.append(s.upper())
 
-        contagem = Counter(candidatos_raw)
+        contagem = Counter(candidatos)
         top_nomes = [t for t, f in contagem.most_common(150)]
         
-        if usar_ia:
-            entidades = _faxina_ia_elite(top_nomes)
-            res_finais = []
-            for ent in entidades:
-                freq = contagem.get(ent['Alvo'].upper(), 1)
-                l_score, p_val, b_ocean, status = calcular_metricas_originais(freq, total_docs, freq*10)
-                res_finais.append({
-                    "Alvo": ent['Alvo'], "Farmaco": ent['Farmaco'], "Acao": ent['Acao'],
-                    "Lambda": round(l_score, 2), "Blue Ocean": round(b_ocean, 1), "Status": status
-                })
-            return res_finais
-        return []
+        if usar_ia and st.session_state.get('api_key_usuario'):
+            return _faxina_ia(top_nomes)
+        return top_nomes[:40]
     except: return []
 
-# --- 4. RADAR E APOIO ---
+# --- 6. RADAR DE NOTÍCIAS 2025 ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def buscar_todas_noticias(lang='pt'):
     try:
@@ -124,46 +184,6 @@ def buscar_todas_noticias(lang='pt'):
                 if line.startswith("JT  - "): journal = line[3:].strip()
                 if line.strip().isdigit() and not pmid: pmid = line.strip()
             if tit:
-                news.append({"titulo": tit, "fonte": journal[:40], "link": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"})
+                news.append({"titulo": tit, "fonte": journal[:35], "link": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"})
         return news
     except: return []
-
-@st.cache_data(ttl=86400, show_spinner=False)
-def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
-    query = f"({termo}) AND ({orgao}) AND (2020:2026[Date])"
-    try:
-        handle = Entrez.esearch(db="pubmed", term=query, retmax=5, sort="relevance")
-        record = Entrez.read(handle); handle.close()
-        handle = Entrez.efetch(db="pubmed", id=record["IdList"], rettype="medline", retmode="text")
-        dados = handle.read(); handle.close()
-        artigos = []
-        for raw in dados.split("\n\nPMID-"):
-            tit, pmid, abstract = "", "", ""
-            for line in raw.split("\n"):
-                if line.startswith("TI  - "): tit = line[6:].strip()
-                if line.startswith("AB  - "): abstract = line[6:400].strip()
-                if line.startswith("PMID- "): pmid = line[6:].strip()
-            if tit:
-                artigos.append({"Title": tit, "Info_IA": abstract, "Link": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"})
-        return artigos
-    except: return []
-
-def analisar_abstract_com_ia(titulo, dados, api_key, lang='pt'):
-    # Retorna o formato Alvo | Fármaco | Ação para os detalhes
-    prompt = f"Based on {titulo} {dados}, extract: Target | Drug | Action. Concise."
-    headers = {'Content-Type': 'application/json'}
-    data = {"contents": [{"parts": [{"text": prompt}]}]}
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
-    try:
-        resp = requests.post(url, headers=headers, json=data, timeout=10)
-        return resp.json()['candidates'][0]['content']['parts'][0]['text'].strip()
-    except: return "N/A | N/A | N/A"
-
-def consultar_pubmed_count(termo, contexto, email, ano_ini=2020, ano_fim=2026):
-    if email: Entrez.email = email
-    query = f"({termo}) AND ({ano_ini}:{ano_fim}[Date])"
-    try:
-        handle = Entrez.esearch(db="pubmed", term=query, retmax=0)
-        record = Entrez.read(handle); handle.close()
-        return int(record["Count"])
-    except: return 0
