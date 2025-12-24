@@ -99,16 +99,16 @@ def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
         return artigos
     except: return []
 
-# --- MOTOR DE MINERAÇÃO (CORRIGIDO: FILTRO DE CONTEÚDO) ---
+# --- MOTOR DE MINERAÇÃO (CALIBRADO V4.0 - FILTRO DE INGLÊS E MAIÚSCULAS) ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def buscar_alvos_emergentes_pubmed(termo_base, email):
     if email: Entrez.email = email
     
-    # Busca agressiva: 200 artigos recentes
+    # Busca 150 artigos (equilibrio velocidade/precisao)
     query = f"({termo_base}[Title/Abstract]) AND (2018:2030[Date - Publication]) AND (NOT Review[pt])"
     
     try:
-        handle = Entrez.esearch(db="pubmed", term=query, retmax=200, sort="relevance")
+        handle = Entrez.esearch(db="pubmed", term=query, retmax=150, sort="relevance")
         record = Entrez.read(handle); handle.close()
         if not record["IdList"]: return []
 
@@ -116,28 +116,27 @@ def buscar_alvos_emergentes_pubmed(termo_base, email):
         full_data = handle.read(); handle.close()
         artigos_raw = full_data.split("\n\nPMID-")
 
-        # NOVA BLACKLIST DE METADADOS (Remove o lixo que você encontrou)
+        # BLACKLIST DE INGLES COMUM E TERMOS CLINICOS
         blacklist = {
-            "PII", "DOI", "ISSN", "PMID", "PPUBLISH", "ACCEPTED", "RECEIVED", "REVISED", "COPYRIGHT", 
-            "AUTHOR", "AUTHORS", "EDITOR", "EMAIL", "CORRESPONDENCE", "DEPARTMENT", "UNIVERSITY", 
-            "PUBMED", "MEDLINE", "PMC", "NIHMS", "ARTICLE", "JOURNAL", "UROLOGY", "NEPHROLOGY", 
-            "PHARMACOLOGY", "SCIENCE", "REPORTS", "NATURE", "CELL", "PLOS", "ONE", "FRONTIERS",
-            "AND", "THE", "FOR", "NOT", "BUT", "WITH", "FROM", "STUDY", "RESULTS", "CELLS", "WAS", "WERE",
-            "USING", "USED", "DATA", "ANALYSIS", "GROUP", "CONTROL", "MODEL", "RATS", "MICE", "HUMAN",
-            "PATIENTS", "CLINICAL", "TREATMENT", "EFFECTS", "LEVELS", "EXPRESSION", "INCREASED", "DECREASED",
-            "SIGNIFICANTLY", "CONCLUSION", "BACKGROUND", "METHODS", "OBJECTIVE", "AIM", "PURPOSE",
-            "AFTER", "BEFORE", "DURING", "WITHIN", "BETWEEN", "AMONG", "UNDER", "ABOVE", "BELOW",
-            "ACUTE", "CHRONIC", "DISEASE", "SYNDROME", "DISORDER", "INJURY", "HEALTH", "CARE", "RISK",
-            "TOTAL", "MEAN", "RATIO", "SCORE", "FACTOR", "TYPE", "CASE", "SERIES", "TRIAL", "REVIEW"
+            "PII", "DOI", "ISSN", "PMID", "THIS", "THAT", "HAVE", "HAS", "HAD", "ARE", "WAS", "WERE", 
+            "BEEN", "BEING", "CAN", "COULD", "SHOULD", "WOULD", "MAY", "MIGHT", "MUST", "WILL", "SHALL", 
+            "DOES", "DID", "DOING", "WHICH", "WHAT", "WHEN", "WHERE", "WHO", "WHOM", "WHOSE", "WHY", 
+            "HOW", "AND", "THE", "FOR", "NOT", "BUT", "WITH", "FROM", "STUDY", "RESULTS", "CELLS", 
+            "USING", "USED", "DATA", "ANALYSIS", "GROUP", "CONTROL", "MODEL", "RATS", "MICE", "HUMAN", 
+            "PATIENTS", "CLINICAL", "TREATMENT", "EFFECTS", "LEVELS", "EXPRESSION", "INCREASED", "DECREASED", 
+            "SIGNIFICANTLY", "CONCLUSION", "BACKGROUND", "METHODS", "OBJECTIVE", "AIM", "PURPOSE", "AFTER", 
+            "BEFORE", "DURING", "WITHIN", "BETWEEN", "AMONG", "UNDER", "ABOVE", "BELOW", "ACUTE", "CHRONIC", 
+            "DISEASE", "SYNDROME", "DISORDER", "INJURY", "HEALTH", "CARE", "RISK", "TOTAL", "MEAN", "RATIO", 
+            "SCORE", "FACTOR", "TYPE", "CASE", "SERIES", "TRIAL", "REVIEW", "FAILURE", "MANAGEMENT", 
+            "CARDIAC", "SYSTOLIC", "DIASTOLIC", "FUNCTION", "PRESSURE", "VOLUME", "EJECTION", "FRACTION",
+            "UNIVERSITY", "DEPARTMENT", "RECEIVED", "ACCEPTED", "PUBLISH", "CORRESPONDENCE"
         } 
         
         candidatos_por_artigo = []
         for artigo in artigos_raw:
-            # --- MUDANÇA CRÍTICA: LÊ APENAS TÍTULO (TI) E ABSTRACT (AB) ---
-            # Isso evita ler datas, códigos de publicação e afiliações
+            # 1. Extração Cirúrgica: Só TI (Título) e AB (Abstract)
             linhas_uteis = []
             lendo_abstract = False
-            
             for line in artigo.split("\n"):
                 if line.startswith("TI  - "):
                     linhas_uteis.append(line[6:].strip())
@@ -145,36 +144,37 @@ def buscar_alvos_emergentes_pubmed(termo_base, email):
                 elif line.startswith("AB  - "):
                     linhas_uteis.append(line[6:].strip())
                     lendo_abstract = True
-                elif lendo_abstract and line.startswith("      "): # Continuação do abstract
+                elif lendo_abstract and line.startswith("      "):
                     linhas_uteis.append(line.strip())
-                elif line.startswith(" ") is False: # Nova tag começou (ex: FAU -)
+                elif not line.startswith(" "):
                     lendo_abstract = False
-
-            texto_focado = " ".join(linhas_uteis).upper()
             
-            # Extrai siglas apenas do texto focado (Titulo + Abstract)
-            encontrados = re.findall(r'\b[A-Z][A-Z0-9-]{2,14}\b', texto_focado)
+            # NÃO USAMOS .upper() NO TEXTO INTEIRO AQUI!
+            texto_focado = " ".join(linhas_uteis) 
             
-            candidatos_locais = set()
+            # 2. REGEX INTELIGENTE (Case Sensitive)
+            # Captura apenas palavras que tenham PELO MENOS 2 letras maiúsculas ou números
+            # Ex: "TRPV1" (Ok), "ATP" (Ok), "mRNA" (Ok), "Cardiac" (Ignora), "Failure" (Ignora)
+            encontrados = re.findall(r'\b(?:[A-Z]{2,}[A-Z0-9-]*|[A-Z][A-Z0-9-]*[0-9][A-Z0-9-]*)\b', texto_focado)
+            
             for t in encontrados:
-                t_clean = re.sub(r'[^A-Z0-9]', '', t)
+                # Agora sim normalizamos para comparar com a blacklist
+                t_clean = re.sub(r'[^A-Z0-9]', '', t).upper()
                 
-                # Filtros Rigorosos
                 if t_clean in blacklist: continue
                 if len(t_clean) < 3: continue 
                 if t_clean == termo_base.upper().replace(" ", ""): continue
                 if t_clean.isdigit(): continue 
                 
-                candidatos_locais.add(t_clean)
-            candidatos_por_artigo.extend(list(candidatos_locais))
+                candidatos_por_artigo.append(t_clean)
 
         if not candidatos_por_artigo: return []
         
         contagem = Counter(candidatos_por_artigo)
         total_docs = max(1, len(artigos_raw))
         
-        # Filtro final: Top 50 candidatos, frequência < 80%
-        return [termo for termo,freq in contagem.most_common(50) if (freq/total_docs)<0.80][:10]
+        # Filtro: Top 50 candidatos, frequência < 90% (Bem permissivo para não voltar vazio)
+        return [termo for termo,freq in contagem.most_common(50) if (freq/total_docs)<0.90][:10]
     except: return []
 
 # --- RADAR ---
@@ -196,4 +196,4 @@ def buscar_todas_noticias(lang='pt'):
                 news.append({"titulo": tit, "fonte": journal[:30], "link": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/", "img":"https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=400"})
         return news
     except: return []
-            
+        
