@@ -28,31 +28,32 @@ MAPA_SINONIMOS = {
     "BRAIN": "Brain AND (Physiology OR Pharmacology OR Molecular OR Neuron)",
 }
 
-# --- 3. A DOUTORA EM FARMACOLOGIA (CURADORIA DE ALTA PERFORMANCE) ---
+# --- 3. A DOUTORA EM FARMACOLOGIA (CURADORIA EXPLORADORA) ---
 def _faxina_ia(lista_suja):
     api_key = st.session_state.get('api_key_usuario', '')
-    if not api_key: return lista_suja[:50] 
+    if not api_key: return lista_suja[:60] 
 
     lista_str = ", ".join(lista_suja)
     
-    # PROMPT RECALIBRADO: MAIS ALVOS, MENOS LIXO
+    # PROMPT RECALIBRADO: BUSCA EXAUSTIVA POR ALVOS
     prompt = f"""
-    Amiga, tu é uma doutora em farmacologia e fisiologia experiente. 
-    Tu sabe que a gente quer uma lista RICA de tudo que é PROMISSOR no laboratório.
+    Amiga, tu é uma doutora em farmacologia e fisiologia focada em descoberta de alvos. 
+    Não seja restrita! Eu quero uma lista COMPLETA e RICA de tudo que pode ser promissor na bancada.
     
-    REGRAS DA DOUTORA:
-    1. SÓ EXCLUA o que for lixo óbvio: Animais (Toad, Turtle, Rabbit), conectivos (The, And, Role, Effect, Studies), e termos médicos gerais (OAB, LUTS, Surgery).
-    2. SEJA GENEROSA com: Alvos Moleculares, Receptores, Canais Iônicos, Enzimas, Genes, Proteínas de sinalização e Fármacos (Agonistas, Antagonistas, Inibidores específicos como GSK1016790A).
-    3. MANTENHA termos de fisiologia molecular que indicam mecanismos (Calcium, Ion, Signaling, Pathway).
-    4. Tu não é médica, foca na riqueza de dados para a bancada, vacilão.
+    INSTRUÇÕES DA DOUTORA:
+    1. MANTENHA TUDO que for biologia molecular: Receptores, Canais Iônicos, Enzimas, Genes, Proteínas, Isoformas (ex: AQP3, TRPV2), microRNAs (ex: MIR132), e fatores de transcrição.
+    2. MANTENHA FÁRMACOS e substâncias ativas: Agonistas, Inibidores, Peptídeos, Metabolistas (ex: TMAO, GSK1016790A).
+    3. SÓ DELETE o que for lixo de texto puro (The, And, Role, Effect, Studies) ou animais (Turtle, Toad). 
+    4. Termos como 'Signaling' ou 'Pathway' são importantes para o contexto, mantenha se estiverem ligados a um alvo.
+    5. Tu sabe que no lab a gente testa de tudo, então não economiza na lista, vacilão.
     
     LISTA PARA FILTRAR: {lista_str}
     
-    OUTPUT: Retorne apenas uma lista Python limpa. Exemplo: ['TRPV4', 'GSK1016790A', 'PIEZO1', 'SPHK1', 'ATP', 'Aldosterone', 'NLRP3']
+    OUTPUT: Retorne APENAS uma lista Python. Exemplo: ['TRPV4', 'GSK1016790A', 'MIR132', 'SNARE', 'AQP3', 'MAPK', 'SIGNALING']
     """
     
     headers = {'Content-Type': 'application/json'}
-    data = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"temperature": 0.2}} # Temp 0.2 para mais criatividade/detecção
+    data = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"temperature": 0.3}} # Temp 0.3 para maior sensibilidade
     
     for m in MODELOS_ATIVOS:
         try:
@@ -63,26 +64,25 @@ def _faxina_ia(lista_suja):
                 texto = texto.replace("```python", "").replace("```", "").strip()
                 return ast.literal_eval(texto)
         except: continue
-    return lista_suja[:40]
+    return lista_suja[:50]
 
-# --- 4. ANÁLISE DE RESUMOS (O FORMATO QUE O FABIANO QUER VER) ---
+# --- 4. ANÁLISE DE RESUMOS (ALVO | FÁRMACO | EFEITO) ---
 def analisar_abstract_com_ia(titulo, dados_curtos, api_key, lang='pt'):
     if not api_key: return "⚠️ Chave API necessária."
     
     idioma = "Português" if lang == 'pt' else "Inglês"
     prompt_text = f"""
-    Doutora, analise esse paper com foco em farmacologia e fisiologia de lab:
+    Doutora, analise esse paper. Extraia o máximo de informação molecular:
     ARTIGO: {titulo}. {dados_curtos}
     
-    FORMATO OBRIGATÓRIO:
-    Alvo: [Sigla] | Fármaco: [O que usaram no lab] | Efeito: [Resposta funcional/fisiológica].
+    FORMATO:
+    Alvo: [Siglas de TODOS os alvos citados] | Fármaco: [O que usaram] | Efeito: [Resposta funcional].
     
-    Máximo 20 palavras. Foco total em mecanismo.
-    Idioma: {idioma}.
+    Máximo 25 palavras. Seja técnica. Idioma: {idioma}.
     """
     
     headers = {'Content-Type': 'application/json'}
-    data = {"contents": [{"parts": [{"text": prompt_text}]}]}
+    data = {"contents": [{"parts": [{"text": prompt_text}]}], "generationConfig": {"temperature": 0.1}}
     
     for m in MODELOS_ATIVOS:
         try:
@@ -131,7 +131,7 @@ def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
         return artigos
     except: return []
 
-# --- 6. MINERAÇÃO MASSIVA (MÁXIMA RIQUEZA) ---
+# --- 6. MINERAÇÃO MASSIVA E EXPLORATÓRIA ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
     if email: Entrez.email = email
@@ -148,16 +148,16 @@ def buscar_alvos_emergentes_pubmed(termo_base, email, usar_ia=True):
             texto = ""
             for line in artigo.split("\n"):
                 if line.startswith("TI  - ") or line.startswith("KW  - "): texto += line[6:].strip() + " "
-            # Pega termos moleculares e siglas
-            encontrados = re.findall(r'\b(?:[A-Z]{2,}[A-Z0-9-]*|[a-z]{1,2}[A-Z][a-zA-Z0-9-]*)\b', texto)
+            
+            # REGEX AMPLIADO: Captura termos como AQP3, miR-132, p-AKT, etc.
+            encontrados = re.findall(r'\b(?:[A-Z0-9-]{2,}|[a-z]{1,2}-[A-Z0-9]{2,}|[a-z]{1,2}[A-Z][a-zA-Z0-9-]*)\b', texto)
             for t in encontrados:
-                t_clean = re.sub(r'[^A-Z0-9]', '', t.upper())
-                if len(t_clean) >= 3: candidatos.append(t_clean)
+                t_clean = t.strip("-").upper()
+                if len(t_clean) >= 2: candidatos.append(t_clean)
 
         contagem = Counter(candidatos)
-        # Sobe para 200 candidatos para a IA ter onde minerar as pepitas
-        top = [termo for termo,freq in contagem.most_common(200)]
+        # Passamos 250 termos para a IA não perder nada importante
+        top = [termo for termo,freq in contagem.most_common(250)]
         
-        return _faxina_ia(top) if usar_ia and st.session_state.get('api_key_usuario') else top[:40]
+        return _faxina_ia(top) if usar_ia and st.session_state.get('api_key_usuario') else top[:50]
     except: return []
-        
