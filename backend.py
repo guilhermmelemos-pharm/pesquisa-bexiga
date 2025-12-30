@@ -1,5 +1,5 @@
 """
-Lemos Lambda Backend v2.0 - Final Fix
+Lemos Lambda Backend v2.2 - Ultra Stable Build
 Hybrid Deterministic-LLM Pipeline for Pharmacological Discovery
 """
 import streamlit as st
@@ -12,10 +12,10 @@ from typing import List, Dict, Any
 
 # --- CONFIGURAÇÃO ---
 Entrez.email = "pesquisador_guest@unifesp.br"
-# Ordem de prioridade para garantir estabilidade
+# Prioridade para o Flash que é mais estável para requisições rápidas
 MODELOS_ATIVOS = ["gemini-1.5-flash", "gemini-2.0-flash"]
 
-# --- BLACKLIST CATEGORIZADA (Limpeza de Ruído Metodológico) ---
+# --- BLACKLIST CATEGORIZADA ---
 BLACKLIST_TOTAL = {
     "metodologia": {"STUDY", "ANALYSIS", "REVIEW", "DATA", "RESULTS", "CONCLUSION", "METHODS", "TRIAL", "RCT", "COHORT"},
     "estatistica": {"P-VALUE", "ANOVA", "RATIO", "ODDS", "STATISTICS", "SIGNIFICANT", "DIFFERENCE", "BASELINE", "SCORE", "KAPLAN"},
@@ -33,10 +33,10 @@ REGEX_PATTERNS = [
     r'\b[A-Z][a-z]{3,}(?:ine|mab|ib|ol|on|one|ide|ate|ase|an)\b' # Mirabegron
 ]
 
-# ================= MOTORES DE IA =================
+# ================= MOTORES DE IA (VERSÃO ULTRA STABLE) =================
 
 def call_gemini_api(prompt: str, api_key: str, is_json: bool = False) -> str:
-    """Motor universal com tratamento de erro e fallback de modelo."""
+    """Motor universal com tratamento de erro detalhado."""
     if not api_key: return ""
     
     headers = {"Content-Type": "application/json"}
@@ -49,29 +49,29 @@ def call_gemini_api(prompt: str, api_key: str, is_json: bool = False) -> str:
 
     for modelo in MODELOS_ATIVOS:
         try:
-            # URL padronizada para evitar erro 404
+            # URL padronizada com timeout estendido para abstracts longos
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={api_key.strip()}"
-            resp = requests.post(url, headers=headers, json=payload, timeout=15)
+            resp = requests.post(url, headers=headers, json=payload, timeout=20)
+            
             if resp.status_code == 200:
                 data = resp.json()
-                if "candidates" in data:
+                if "candidates" in data and len(data["candidates"]) > 0:
                     return data["candidates"][0]["content"]["parts"][0]["text"].strip()
-        except:
-            continue
+            elif resp.status_code == 429:
+                return "Erro: Limite de cota atingido (Rate Limit). Aguarde 60s."
+        except Exception as e:
+            continue # Tenta o próximo modelo disponível
     return ""
 
 def validar_com_ia(candidatos: List[str], api_key: str, contexto: str) -> List[str]:
-    """IA como Juíza: valida se os termos do Regex são realmente fármacos/alvos."""
+    """IA como Juíza: valida os termos minerados."""
     if not candidatos: return []
-    prompt = f"""
-    Expert Pharmacologist Review. Context: {contexto}.
-    Task: From the list below, return ONLY valid Drugs, Chemical Compounds, or Molecular Targets (Receptors/Channels/Enzymes).
-    Format: Pure JSON string list.
-    List: {", ".join(candidatos[:120])}
-    """
+    prompt = f"Pharmacologist Review for {contexto}. Return ONLY a JSON list of valid Drugs or Molecular Targets from: {', '.join(candidatos[:120])}"
+    
     res = call_gemini_api(prompt, api_key, is_json=True)
     try:
         if res:
+            # Proteção contra blocos de código markdown que a IA às vezes envia
             clean_text = re.sub(r"```json|```", "", res).strip()
             return json.loads(clean_text)
     except:
@@ -104,7 +104,6 @@ def minerar_pubmed(termo_base: str, email: str, usar_ia: bool = True) -> Dict:
         for p in REGEX_PATTERNS:
             raw_found.extend(re.findall(p, full_text))
         
-        # Normalização e filtro de Blacklist
         normalized = [f.strip().upper().replace("-", "").replace(" ", "") for f in raw_found]
         cleaned = [n for n in normalized if n not in UNIFIED_BLACKLIST and len(n) > 2]
         
@@ -113,17 +112,15 @@ def minerar_pubmed(termo_base: str, email: str, usar_ia: bool = True) -> Dict:
         
         if api_key and usar_ia:
             validated = validar_com_ia(candidates_to_validate, api_key, termo_base)
-            if not validated: validated = candidates_to_validate[:50] # Fallback
+            if not validated: validated = candidates_to_validate[:50]
         else:
             validated = candidates_to_validate[:50]
 
-        return {
-            "termos_indicados": validated[:50],
-            "metadata": {"total_articles": total_docs}
-        }
-    except Exception: return {}
+        return {"termos_indicados": validated[:50], "metadata": {"total_articles": total_docs}}
+    except Exception as e:
+        return {"termos_indicados": [], "error": str(e)}
 
-# ================= ANÁLISE DE ABSTRACT (CORRIGIDA) =================
+# ================= ANÁLISE DE ABSTRACT (ÓRGÃO - ALVO - AÇÃO) =================
 
 def analisar_abstract_com_ia(titulo: str, dados_curtos: str, api_key: str, lang: str = 'pt') -> str:
     """Análise dedutiva PhD: Órgão - Alvo - Ação."""
@@ -131,26 +128,23 @@ def analisar_abstract_com_ia(titulo: str, dados_curtos: str, api_key: str, lang:
     
     prompt = f"""
     Você é uma Doutora em Farmacologia (PhD).
-    Analise o título e o resumo técnico abaixo e DEDUZA o mecanismo farmacológico.
+    Deduza e extraia o mecanismo farmacológico seguindo ESTE MODELO de uma única linha:
+    Órgão/Tecido - Alvo Molecular - Ação Farmacológica
     
     TÍTULO: "{titulo}"
     RESUMO: "{dados_curtos}"
-    
-    SUA TAREFA:
-    Extraia e descreva seguindo EXATAMENTE este modelo de uma única linha:
-    Órgão/Tecido - Alvo Molecular (Receptor/Enzima/Canal) - Ação Farmacológica (Agonista/Inibidor/Expressão)
-    
-    Responda apenas a linha, sem comentários extras.
     """
     
-    # Chama o motor universal (is_json=False para texto livre)
-    resposta = call_gemini_api(prompt, api_key, is_json=False)
-    
-    if resposta:
-        # Limpa possíveis formatações da IA e retorna apenas a primeira linha
-        return resposta.split('\n')[0].replace("*", "").strip()
-    
-    return "Análise indisponível no momento. Verifique sua chave API."
+    # Tentativa de resposta com timeout e erro amigável
+    try:
+        resposta = call_gemini_api(prompt, api_key, is_json=False)
+        if resposta:
+            # Retorna apenas a primeira linha e remove asteriscos
+            return resposta.split('\n')[0].replace("*", "").strip()
+        else:
+            return "A IA não conseguiu processar este abstract (Cota ou Conexão)."
+    except Exception as e:
+        return f"Análise indisponível: {str(e)}"
 
 # ================= WRAPPERS COMPATIBILIDADE =================
 
