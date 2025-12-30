@@ -16,50 +16,55 @@ MODELOS_ATIVOS = [
     "gemini-1.5-flash"
 ]
 
-# LISTA NEGRA: A Curadora Implacável v4.2 (Neuro-Clean)
+# LISTA NEGRA UNIVERSAL: O Exterminador de Ruído Metodológico
 BLACKLIST_MONSTRO = {
-    # 1. Termos Genéricos de Pesquisa
+    # 1. Termos Metodológicos e de Publicação
     "STUDY", "ANALYSIS", "REVIEW", "META-ANALYSIS", "DATA", "RESULTS", "CONCLUSION",
     "BACKGROUND", "METHODS", "OBJECTIVE", "AIM", "HYPOTHESIS", "INTRODUCTION",
-    "SIGNIFICANT", "DIFFERENCE", "INCREASED", "DECREASED", "LEVELS", "EXPRESSION",
+    "CASE", "REPORT", "SERIES", "SURVEY", "QUESTIONNAIRE", "TRIAL", "RCT", "COHORT",
+    "RETROSPECTIVE", "PROSPECTIVE", "CROSS-SECTIONAL", "MULTICENTER", "PILOT",
+    
+    # 2. Estatística e Métricas (Ruído Matemático)
+    "P-VALUE", "ANOVA", "RATIO", "ODDS", "CONFIDENCE", "INTERVAL", "STATISTICS",
+    "SIGNIFICANT", "DIFFERENCE", "INCREASED", "DECREASED", "LEVELS", "SCORE", 
+    "SCALE", "INDEX", "MENDELIAN", "RANDOMIZATION", "MULTIVARIATE", "UNIVARIATE", 
+    "VALIDATION", "BASELINE", "PREDICTION", "SIMULATION", "PRECISION", "ACCURACY",
+    "SENSITIVITY", "SPECIFICITY", "PERCENT", "TOTAL", "SAMPLE", "SIZE",
+    
+    # 3. Verbos e Termos de Processo Biológico Genérico
     "ROLE", "EFFECT", "IMPACT", "POTENTIAL", "NOVEL", "ASSOCIATION", "EVALUATION",
     "IDENTIFICATION", "ACTIVATION", "DIVISION", "REGULATION", "FUNCTION", "ACTION",
     "PATHOGENESIS", "DEVELOPMENT", "PROGRESSION", "CHARACTERIZATION", "INVESTIGATION",
-    "DISTRIBUTION", "ACCUMULATION", "ORIGIN", "PRESERVATION", "CORRECTION",
+    "MODULATION", "INTERACTION", "OBSERVATION", "DEMONSTRATION", "DISTRIBUTION",
+    "EXPRESSION", "ACCUMULATION", "ORIGIN", "PRESERVATION", "CORRECTION", "SYNERGY",
     
-    # 2. Estatística e Métricas
-    "P-VALUE", "ANOVA", "RATIO", "ODDS", "CONFIDENCE", "INTERVAL", "STATISTICS",
-    "COHORT", "POPULATION", "SAMPLE", "SIZE", "BASELINE", "PREDICTION", "SIMULATION",
-    "PRECISION", "ACCURACY", "SENSITIVITY", "SPECIFICITY", "SCORE", "SCALE", "INDEX",
-    "MENDELIAN", "RANDOMIZATION", "MULTIVARIATE", "UNIVARIATE", "VALIDATION",
-    
-    # 3. Procedimentos, Clínica e Processos (Neuro Noise)
+    # 4. Contexto Clínico e Hospitalar (Não são alvos)
     "SURGERY", "RESECTION", "INCISION", "OPERATION", "TRANSPLANT", "GRAFT", "STENT",
     "CATHETER", "BIOPSY", "IMAGING", "MRI", "CT", "PET", "ULTRASOUND", "DIAGNOSIS",
     "PROGNOSIS", "MANAGEMENT", "THERAPY", "TREATMENT", "PROTOCOL", "GUIDELINE",
     "COMPLICATION", "INFECTION", "DYSFUNCTION", "SYNDROME", "DISORDER", "DISEASE",
     "PATIENT", "PARTICIPANT", "CHILDREN", "ADULT", "WOMEN", "MEN", "ELDERLY",
-    "HOSPITAL", "CLINIC", "CENTER", "DEPARTMENT", "UNIVERSITY",
-    "COGNITION", "MEMORY", "LEARNING", "BEHAVIOR", "ANXIETY", "DEPRESSION", # Sintomas
-    "INFLAMMATION", "NEUROINFLAMMATION", "STRESS", "RAMADAN", "FASTING", # Processos
-    "COVID-19", "COVID", "SARS-COV-2", "PANDEMIC", "VIRUS",
+    "HOSPITAL", "CLINIC", "CENTER", "DEPARTMENT", "UNIVERSITY", "OUTCOME", "SAFETY",
+    "EFFICACY", "MORTALITY", "SURVIVAL", "ADMISSION", "DISCHARGE",
     
-    # 4. Termos Específicos/Linhagens (Lixo Contextual)
-    "PROSTATE", "KIDNEY", "LIVER", "HEART", "LUNG", 
-    "PARKINSON", "ALZHEIMER", "DIABETES", "T2DM", "OBESITY", "INSULIN",
-    "GUERIN", "BACILLUS", "CALMETTE", "BCG", 
-    "PLACEBO", "CONTROL", "SHAM", "VEHICLE", "SALINE",
+    # 5. Termos Biológicos Genéricos (Apenas Ruído de fundo)
     "DNA", "RNA", "MRNA", "PROTEIN", "CELL", "TISSUE", "SERUM", "PLASMA", "URINE", "BLOOD",
     "HISTONE", "FACTOR", "COMPONENT", "SYSTEM", "MODEL", "PATHWAY", "MECHANISM",
-    "METHAMPHETAMINE", "COCAINE", "ALCOHOL", "ETHANOL", # Drogas de abuso (geralmente não são o alvo terapêutico)
-    "U-87", "HEK293", "SH-SY5Y", "PC12", "BV2" # Linhagens celulares comuns em neuro
+    "GUERIN", "BACILLUS", "CALMETTE", "BCG", "PLACEBO", "CONTROL", "SHAM", "VEHICLE", 
+    "SALINE", "BUFFER", "IN-VITRO", "IN-VIVO", "ANIMAL", "HUMAN", "MICE", "RAT",
+    
+    # 6. Outros (Lixo de extração comum)
+    "COVID-19", "COVID", "SARS-COV-2", "PANDEMIC", "VIRUS", "YEAR", "MONTH", "DAY",
+    "HIGH", "LOW", "NEW", "OLD", "FIRST", "SECOND", "THIRD", "AMONG", "BETWEEN"
 }
 
+# Mapa de Sinônimos focado em melhorar a busca inicial do PubMed
 MAPA_SINONIMOS_BASE = {
     "BLADDER": "(Bladder OR Urothelial OR Urothelium OR Detrusor)",
-    "PAIN": "(Pain OR Nociception OR Analgesia)",
-    "INFLAMMATION": "(Inflammation OR Cytokines OR NF-kappaB)",
-    "BRAIN": "(Brain OR Cerebral OR CNS OR Neuron OR Glia)" # Sinônimos para Cérebro
+    "KIDNEY": "(Kidney OR Renal OR Nephron OR Glomerulus)",
+    "BRAIN": "(Brain OR Cerebral OR CNS OR Neuron OR Glia)",
+    "HEART": "(Heart OR Cardiac OR Myocardium)",
+    "LIVER": "(Liver OR Hepatic OR Hepatocyte)"
 }
 
 # ================= GEMINI CORE =================
@@ -115,28 +120,27 @@ def simple_gemini_text(prompt: str, api_key: str) -> str:
 def ner_extraction_batch(textos_completos: List[str], api_key: str, contexto_alvo: str) -> List[str]:
     if not textos_completos: return []
     
-    texto_input = "\n---\n".join(textos_completos[:50]) 
+    texto_input = "\n---\n".join(textos_completos[:60]) 
     
+    # Prompt focado em QUALQUER área, mas APENAS em agentes químicos/alvos
     prompt = f"""
-    ROLE: Elite Pharmacologist & Chemical Data Curator.
-    TARGET ORGAN/DISEASE: {contexto_alvo.upper()}.
+    ROLE: Elite Pharmacological Data Curator.
+    TARGET CONTEXT: {contexto_alvo.upper()}.
     
-    TASK: Scan the abstracts provided below. Extract ONLY:
-    1. SPECIFIC DRUG NAMES (e.g., Mirabegron, Tadalafil, Resiniferatoxin).
-    2. EXPERIMENTAL COMPOUNDS (codes like GYY4137, BAY-1234, AL-353).
-    3. SPECIFIC MOLECULAR TARGETS (Receptors/Channels/Enzymes like P2X3, TRPV1, mTOR).
+    TASK: Scan the abstracts. Extract ONLY specific chemical agents and molecular targets.
     
-    CRITICAL EXCLUSION RULES (IGNORE THESE):
-    - NO Clinical Procedures (Surgery, Resection, Injection).
-    - NO Study Types (RCT, Review, Meta-analysis, Mendelian Randomization).
-    - NO General Biological Terms (Gene, Protein, Cell, Pathway, Expression, Activation, Identification, Inflammation).
-    - NO Outcomes (Cognition, Memory, Behavior, Death).
-    - NO "Standard of Care" drugs unless used in a NOVEL way.
+    EXTRACT:
+    1. DRUG NAMES (Approved, Experimental, Toxins, or Drugs of Abuse).
+    2. CHEMICAL COMPOUNDS (e.g., GYY4137, Nimbolide, Curcumin).
+    3. MOLECULAR ALVOS (Receptors, Ion Channels, Enzymes like TRPV1, P2X3, mTOR).
     
-    YOUR OUTPUT FORMAT:
-    A pure JSON list of strings. Example: ["Mirabegron", "P2X3", "GYY4137", "Trealose"]
+    STRICTLY IGNORE:
+    - NO Clinical procedures, NO study methodologies, NO general biological processes.
+    - NO anatomical parts unless they are part of a drug name.
     
-    INPUT DATA:
+    OUTPUT FORMAT: JSON list of strings only.
+    
+    INPUT:
     {texto_input}
     """
     return call_gemini_json(prompt, api_key)
@@ -147,11 +151,10 @@ def minerar_pubmed(termo_base: str, email: str, usar_ia: bool = True) -> Dict:
     Entrez.email = email
     
     termo_expandido = MAPA_SINONIMOS_BASE.get(termo_base.upper(), termo_base)
-    # Busca 200 artigos
-    query = f"({termo_expandido}) AND (drug OR inhibitor OR agonist OR antagonist OR compound) AND (2020:2026[Date])"
+    query = f"({termo_expandido}) AND (drug OR inhibitor OR agonist OR antagonist OR compound OR agent) AND (2020:2026[Date])"
     
     try:
-        handle = Entrez.esearch(db="pubmed", term=query, retmax=200)
+        handle = Entrez.esearch(db="pubmed", term=query, retmax=250)
         record = Entrez.read(handle); handle.close()
         
         if not record["IdList"]: return {}
@@ -166,73 +169,53 @@ def minerar_pubmed(termo_base: str, email: str, usar_ia: bool = True) -> Dict:
             titulo = r.get('TI', '')
             abstract = r.get('AB', '')
             keywords = ' '.join(r.get('OT', []))
-            
-            # Smart Snippet: Título + Início + Fim do Abstract
-            intro = abstract[:250] if len(abstract) > 250 else abstract
-            conclusao = abstract[-250:] if len(abstract) > 250 else ""
-            texto_rico = f"TITLE: {titulo}\nABSTRACT_START: {intro}\nABSTRACT_END: {conclusao}\nKEYWORDS: {keywords}"
-            
+            intro = abstract[:300] if len(abstract) > 300 else abstract
+            conclusao = abstract[-300:] if len(abstract) > 300 else ""
+            texto_rico = f"TITLE: {titulo}\nCONTEXT: {intro} ... {conclusao}\nKEYWORDS: {keywords}"
             raw_texts_for_ai.append(texto_rico)
             artigos_completos.append({"titulo": titulo, "texto": texto_rico})
         
         entidades = []
-        
-        # 1. IA
         if api_key and usar_ia:
             entidades = ner_extraction_batch(raw_texts_for_ai, api_key, termo_base)
         
-        # 2. REGEX DE APOIO
+        # Regex de segurança para capturar o que a IA possa pular
         if True: 
             texto_full = " ".join([a['texto'] for a in artigos_completos])
-            
-            # Códigos Experimentais (GYY4137, AL-353)
-            regex_codigos = r'\b[A-Z]{2,4}[- ]?[0-9]{3,5}\b'
+            regex_codigos = r'\b[A-Z]{2,4}[- ]?[0-9]{3,6}\b'
             entidades.extend(re.findall(regex_codigos, texto_full))
-            
-            # Sufixos Farmacológicos
             sufixos = r'\b[A-Z][a-z]{3,}(?:ine|in|mab|ib|ol|on|one|il|ide|ate|ase|an)\b'
             entidades.extend(re.findall(sufixos, texto_full))
-            
-            # Alvos (Receptores/Canais)
             regex_alvos = r'\b[A-Z0-9-]{3,8}\b'
             candidatos = re.findall(regex_alvos, texto_full)
-            # Filtra apenas o que parece alvo (tem numero ou termina com R)
             candidatos = [c for c in candidatos if (re.search(r'\d', c) or c.endswith("R")) and len(c)>2]
             entidades.extend(candidatos)
 
-        # 3. FILTRAGEM FINAL
+        # FILTRAGEM COM A BLACKLIST UNIVERSAL
         entidades_limpas = []
         for e in entidades:
             e = e.strip(".,-;:()[] ")
-            if len(e) < 3: continue 
-            if e.isdigit(): continue
+            if len(e) < 3 or e.isdigit(): continue
             if e.upper() in BLACKLIST_MONSTRO: continue
-            
-            # Remove palavras comuns
             if e.lower() in ["with", "from", "after", "during", "high", "low", "using", "treated", "group", "sham"]: continue
-            
             entidades_limpas.append(e)
 
         counts = Counter(entidades_limpas)
-        limit = 1 
-        recorrentes = sorted([e for e, c in counts.items() if c >= limit], key=lambda x: counts[x], reverse=True)
+        recorrentes = sorted([e for e, c in counts.items() if c >= 1], key=lambda x: counts[x], reverse=True)
         
         final = []
         seen = set()
         for item in recorrentes:
             if item.lower() not in seen:
-                final.append(item)
-                seen.add(item.lower())
+                final.append(item); seen.add(item.lower())
 
         return {
-            "termos_indicados": final[:50],
+            "termos_indicados": final[:55],
             "counts": counts,
             "total_docs": len(artigos_completos),
             "artigos_originais": artigos_completos
         }
-    except Exception as e: 
-        print(f"Erro mineração: {e}")
-        return {}
+    except Exception: return {}
 
 # ================= WRAPPERS =================
 def buscar_alvos_emergentes_pubmed(alvo: str, email: str, usar_ia: bool = True) -> List[str]:
@@ -268,23 +251,17 @@ def buscar_resumos_detalhados(termo: str, orgao: str, email: str, ano_ini: int, 
         return artigos
     except: return []
 
-# ================= ANÁLISE DETALHADA =================
-
 def analisar_abstract_com_ia(titulo: str, dados_curtos: str, api_key: str, lang: str = 'pt') -> str:
     if api_key:
         prompt = f"""
         Você é Doutora em Farmacologia (PhD).
-        Leia o texto e DEDUZA o mecanismo.
+        DEDUZA o mecanismo farmacológico principal.
         TÍTULO: "{titulo}"
         RESUMO: "{dados_curtos}"
-        
-        SAÍDA (Uma linha): Órgão - Alvo - Ação (Fármaco)
-        Se não houver fármaco explícito, deduza pelo mecanismo.
-        Ex: Bexiga - Receptor Beta-3 - Agonista (Mirabegron)
+        SAÍDA: Órgão - Alvo - Ação (Fármaco/Composto)
         """
         resposta_ia = simple_gemini_text(prompt, api_key)
-        if resposta_ia:
-            return resposta_ia.replace("\n", " ").strip().replace("Output:", "").replace("*", "")
+        if resposta_ia: return resposta_ia.strip()
     return "Análise pendente."
 
 def buscar_todas_noticias(lang_code: str) -> List[Dict]:
