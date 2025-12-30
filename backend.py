@@ -16,15 +16,16 @@ MODELOS_ATIVOS = [
     "gemini-1.5-flash"
 ]
 
-# LISTA NEGRA: A Curadora Implacável v4.1 (Final Polish)
+# LISTA NEGRA: A Curadora Implacável v4.2 (Neuro-Clean)
 BLACKLIST_MONSTRO = {
-    # 1. Termos Genéricos de Pesquisa (Reforçado)
+    # 1. Termos Genéricos de Pesquisa
     "STUDY", "ANALYSIS", "REVIEW", "META-ANALYSIS", "DATA", "RESULTS", "CONCLUSION",
     "BACKGROUND", "METHODS", "OBJECTIVE", "AIM", "HYPOTHESIS", "INTRODUCTION",
     "SIGNIFICANT", "DIFFERENCE", "INCREASED", "DECREASED", "LEVELS", "EXPRESSION",
     "ROLE", "EFFECT", "IMPACT", "POTENTIAL", "NOVEL", "ASSOCIATION", "EVALUATION",
     "IDENTIFICATION", "ACTIVATION", "DIVISION", "REGULATION", "FUNCTION", "ACTION",
     "PATHOGENESIS", "DEVELOPMENT", "PROGRESSION", "CHARACTERIZATION", "INVESTIGATION",
+    "DISTRIBUTION", "ACCUMULATION", "ORIGIN", "PRESERVATION", "CORRECTION",
     
     # 2. Estatística e Métricas
     "P-VALUE", "ANOVA", "RATIO", "ODDS", "CONFIDENCE", "INTERVAL", "STATISTICS",
@@ -32,28 +33,33 @@ BLACKLIST_MONSTRO = {
     "PRECISION", "ACCURACY", "SENSITIVITY", "SPECIFICITY", "SCORE", "SCALE", "INDEX",
     "MENDELIAN", "RANDOMIZATION", "MULTIVARIATE", "UNIVARIATE", "VALIDATION",
     
-    # 3. Procedimentos e Clínica
+    # 3. Procedimentos, Clínica e Processos (Neuro Noise)
     "SURGERY", "RESECTION", "INCISION", "OPERATION", "TRANSPLANT", "GRAFT", "STENT",
     "CATHETER", "BIOPSY", "IMAGING", "MRI", "CT", "PET", "ULTRASOUND", "DIAGNOSIS",
     "PROGNOSIS", "MANAGEMENT", "THERAPY", "TREATMENT", "PROTOCOL", "GUIDELINE",
     "COMPLICATION", "INFECTION", "DYSFUNCTION", "SYNDROME", "DISORDER", "DISEASE",
     "PATIENT", "PARTICIPANT", "CHILDREN", "ADULT", "WOMEN", "MEN", "ELDERLY",
     "HOSPITAL", "CLINIC", "CENTER", "DEPARTMENT", "UNIVERSITY",
+    "COGNITION", "MEMORY", "LEARNING", "BEHAVIOR", "ANXIETY", "DEPRESSION", # Sintomas
+    "INFLAMMATION", "NEUROINFLAMMATION", "STRESS", "RAMADAN", "FASTING", # Processos
+    "COVID-19", "COVID", "SARS-COV-2", "PANDEMIC", "VIRUS",
     
-    # 4. Termos Específicos/Doenças (Lixo Contextual)
-    "PROSTATE", "KIDNEY", "LIVER", "HEART", "LUNG", "BRAIN", 
-    "COVID", "SARS-COV-2", "PANDEMIC", "VIRUS",
+    # 4. Termos Específicos/Linhagens (Lixo Contextual)
+    "PROSTATE", "KIDNEY", "LIVER", "HEART", "LUNG", 
     "PARKINSON", "ALZHEIMER", "DIABETES", "T2DM", "OBESITY", "INSULIN",
-    "GUERIN", "BACILLUS", "CALMETTE", "BCG", # Remove vacina BCG quebrada
+    "GUERIN", "BACILLUS", "CALMETTE", "BCG", 
     "PLACEBO", "CONTROL", "SHAM", "VEHICLE", "SALINE",
     "DNA", "RNA", "MRNA", "PROTEIN", "CELL", "TISSUE", "SERUM", "PLASMA", "URINE", "BLOOD",
-    "HISTONE", "FACTOR", "COMPONENT", "SYSTEM", "MODEL", "PATHWAY", "MECHANISM"
+    "HISTONE", "FACTOR", "COMPONENT", "SYSTEM", "MODEL", "PATHWAY", "MECHANISM",
+    "METHAMPHETAMINE", "COCAINE", "ALCOHOL", "ETHANOL", # Drogas de abuso (geralmente não são o alvo terapêutico)
+    "U-87", "HEK293", "SH-SY5Y", "PC12", "BV2" # Linhagens celulares comuns em neuro
 }
 
 MAPA_SINONIMOS_BASE = {
     "BLADDER": "(Bladder OR Urothelial OR Urothelium OR Detrusor)",
     "PAIN": "(Pain OR Nociception OR Analgesia)",
-    "INFLAMMATION": "(Inflammation OR Cytokines OR NF-kappaB)"
+    "INFLAMMATION": "(Inflammation OR Cytokines OR NF-kappaB)",
+    "BRAIN": "(Brain OR Cerebral OR CNS OR Neuron OR Glia)" # Sinônimos para Cérebro
 }
 
 # ================= GEMINI CORE =================
@@ -123,7 +129,8 @@ def ner_extraction_batch(textos_completos: List[str], api_key: str, contexto_alv
     CRITICAL EXCLUSION RULES (IGNORE THESE):
     - NO Clinical Procedures (Surgery, Resection, Injection).
     - NO Study Types (RCT, Review, Meta-analysis, Mendelian Randomization).
-    - NO General Biological Terms (Gene, Protein, Cell, Pathway, Expression, Activation, Identification).
+    - NO General Biological Terms (Gene, Protein, Cell, Pathway, Expression, Activation, Identification, Inflammation).
+    - NO Outcomes (Cognition, Memory, Behavior, Death).
     - NO "Standard of Care" drugs unless used in a NOVEL way.
     
     YOUR OUTPUT FORMAT:
