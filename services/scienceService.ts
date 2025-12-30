@@ -107,10 +107,10 @@ export const performAnalysis = async (
     const n_global = (term.length * 98765) % 200000;
     
     // Simulate Specific Count with a bias towards "Blue Ocean" (low hits)
-    // 40% chance of being extremely low hit (Blue Ocean candidate) - TURBINADO from 20%
+    // 70% chance of being extremely low hit (Blue Ocean candidate) - HIGH PROBABILITY
     let n_specific = 0;
-    if (Math.random() > 0.60) {
-        n_specific = Math.floor(Math.random() * 5); // 0 to 4 hits
+    if (Math.random() > 0.30) { // Threshold lowered to 0.30 -> 70% chance
+        n_specific = Math.floor(Math.random() * 6); // 0 to 5 hits
     } else {
         n_specific = Math.floor((n_global * n_total_target) / N_PUBMED * (Math.random() * 10));
     }
@@ -123,22 +123,22 @@ export const performAnalysis = async (
     let status: AnalysisResult['status'] = 'Neutral';
     let sortScore = 0;
 
-    // Relaxed Blue Ocean Logic: Less than 8 hits (instead of 5)
-    if (n_specific < 8) {
-      if (n_global > 100) { 
+    // Relaxed Blue Ocean Logic: Less than 10 hits
+    if (n_specific < 10) {
+      if (n_global > 80) { 
           status = 'Blue Ocean'; 
-          sortScore = 1200; // Boosted score for Blue Ocean
+          sortScore = 1500; // Super Boost for Blue Ocean
       } else { 
           status = 'Ghost'; 
-          sortScore = 10; 
+          sortScore = 5; 
       }
-    } else if (n_specific <= 25) {
-      if (n_global > 50) { status = 'Embryonic'; sortScore = 600; }
+    } else if (n_specific <= 30) {
+      if (n_global > 50) { status = 'Embryonic'; sortScore = 800; }
       else { status = 'Neutral'; sortScore = 20; }
     } else {
       if (enrichment > 5) { status = 'Gold'; sortScore = 100; }
       else if (enrichment > 1.5) { status = 'Trending'; sortScore = 200; }
-      else { status = 'Saturated'; sortScore = 5; }
+      else { status = 'Saturated'; sortScore = 1; }
     }
 
     results.push({

@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { AppState, AnalysisResult } from '../types';
 import { 
-  ArrowLeft, Search, ExternalLink, Bot, Download, Zap, Loader2, ArrowUpDown
+  ArrowLeft, Search, ExternalLink, Bot, Download, Zap, Loader2, ArrowUpDown, ArrowUp, ArrowDown
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell 
@@ -25,8 +25,11 @@ const ResultsView: React.FC<ResultsViewProps> = ({
   const [aiInsights, setAiInsights] = useState<Record<string, string>>({});
   const [analyzingIds, setAnalyzingIds] = useState<Record<string, boolean>>({});
 
-  // Sorting State
-  const [sortConfig, setSortConfig] = useState<{ key: keyof AnalysisResult, direction: 'asc' | 'desc' } | null>(null);
+  // Sorting State - Default by sortScore (Implied importance)
+  const [sortConfig, setSortConfig] = useState<{ key: keyof AnalysisResult, direction: 'asc' | 'desc' }>({
+    key: 'sortScore',
+    direction: 'desc'
+  });
 
   const sortedResults = useMemo(() => {
     let sortableItems = [...state.results];
@@ -45,6 +48,11 @@ const ResultsView: React.FC<ResultsViewProps> = ({
             valA = parseFloat(valA);
             valB = parseFloat(valB);
         }
+        // Status string sort
+        if (sortConfig.key === 'status') {
+             valA = valA.toString();
+             valB = valB.toString();
+        }
 
         if (valA < valB) {
           return sortConfig.direction === 'asc' ? -1 : 1;
@@ -59,18 +67,20 @@ const ResultsView: React.FC<ResultsViewProps> = ({
   }, [state.results, sortConfig]);
 
   const requestSort = (key: keyof AnalysisResult) => {
-    let direction: 'asc' | 'desc' = 'asc';
-    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc';
+    let direction: 'asc' | 'desc' = 'desc'; // Default to desc for high numbers
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'desc') {
+      direction = 'asc';
     }
     setSortConfig({ key, direction });
   };
 
   const getSortIcon = (key: keyof AnalysisResult) => {
     if (sortConfig?.key === key) {
-        return <ArrowUpDown size={14} className={`inline ml-1 ${sortConfig.direction === 'asc' ? 'text-blue-400' : 'text-red-400'}`} />
+        return sortConfig.direction === 'asc' 
+          ? <ArrowUp size={14} className="inline ml-1 text-lemos-red" />
+          : <ArrowDown size={14} className="inline ml-1 text-lemos-red" />;
     }
-    return <ArrowUpDown size={14} className="inline ml-1 opacity-20 group-hover:opacity-100" />
+    return <ArrowUpDown size={14} className="inline ml-1 opacity-20 group-hover:opacity-100 transition-opacity" />;
   };
 
   const getStatusColor = (status: string) => {
@@ -210,22 +220,22 @@ const ResultsView: React.FC<ResultsViewProps> = ({
           <table className="w-full text-left">
             <thead className="bg-black/20 text-gray-400 text-sm uppercase cursor-pointer select-none">
               <tr>
-                <th className="p-4 group hover:bg-white/5" onClick={() => requestSort('molecule')}>
+                <th className="p-4 group hover:bg-white/5 whitespace-nowrap" onClick={() => requestSort('molecule')}>
                     {t.col_mol} {getSortIcon('molecule')}
                 </th>
-                <th className="p-4 group hover:bg-white/5" onClick={() => requestSort('status')}>
+                <th className="p-4 group hover:bg-white/5 whitespace-nowrap" onClick={() => requestSort('status')}>
                     {t.col_status} {getSortIcon('status')}
                 </th>
-                <th className="p-4 group hover:bg-white/5" onClick={() => requestSort('ratio')}>
+                <th className="p-4 group hover:bg-white/5 whitespace-nowrap" onClick={() => requestSort('ratio')}>
                     {t.col_ratio} {getSortIcon('ratio')}
                 </th>
-                <th className="p-4 group hover:bg-white/5" onClick={() => requestSort('pValue')}>
+                <th className="p-4 group hover:bg-white/5 whitespace-nowrap" onClick={() => requestSort('pValue')}>
                     {t.col_pvalue} {getSortIcon('pValue')}
                 </th>
-                <th className="p-4 group hover:bg-white/5" onClick={() => requestSort('targetArticles')}>
+                <th className="p-4 group hover:bg-white/5 whitespace-nowrap" onClick={() => requestSort('targetArticles')}>
                     {t.col_art_alvo} {getSortIcon('targetArticles')}
                 </th>
-                <th className="p-4 group hover:bg-white/5" onClick={() => requestSort('globalArticles')}>
+                <th className="p-4 group hover:bg-white/5 whitespace-nowrap" onClick={() => requestSort('globalArticles')}>
                     {t.col_global} {getSortIcon('globalArticles')}
                 </th>
                 <th className="p-4">Action</th>
