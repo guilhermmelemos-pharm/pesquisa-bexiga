@@ -56,8 +56,8 @@ def gerar_com_gemini(prompt: str, client, is_json: bool = False) -> str:
         max_output_tokens=1024,
         safety_settings=[
             types.SafetySetting(
-                category="HARM_CATEGORY_DANGEROUS_CONTENT",
-                threshold="BLOCK_NONE"
+                category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                threshold=types.HarmBlockThreshold.BLOCK_NONE
             )
         ]
     )
