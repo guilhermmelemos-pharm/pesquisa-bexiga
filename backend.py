@@ -8,197 +8,173 @@ from collections import Counter
 # --- CONFIGURAÇÃO ---
 Entrez.email = "pesquisador_guest@unifesp.br" 
 
-# --- IA: ANÁLISE INDIVIDUAL (FORMATO NOVO: ALVO - FÁRMACO - AÇÃO) ---
+# --- IA: ANÁLISE INDIVIDUAL ---
 def analisar_abstract_com_ia(titulo, abstract, api_key, lang='pt'):
     if not api_key: return "⚠️ IA OFF"
-    
     try:
         genai.configure(api_key=api_key)
-        # Otimização: Corta abstracts gigantes
-        abstract_seguro = abstract[:4000] if abstract else "" 
+        # Corta para economizar tokens, mas mantém o suficiente para contexto
+        abstract_seguro = abstract[:3500] if abstract else "" 
         
         prompt = f"""
-        Atue como Farmacologista PhD focado em Drug Discovery.
+        Papel: Farmacologista Drug Discovery.
+        Dado o abstract abaixo, identifique o trio principal.
         
-        DADOS DO ARTIGO:
         TÍTULO: {titulo}
         TEXTO: {abstract_seguro}
         
-        SUA MISSÃO: Identificar o trio farmacológico.
+        SAÍDA (Uma linha): Alvo - Fármaco - Ação
         
-        FORMATO DE SAÍDA OBRIGATÓRIO (Apenas uma linha):
-        Alvo Molecular - Fármaco/Composto - Ação
-        
-        REGRAS:
-        1. Alvo: Receptor, Enzima ou Canal (ex: P2X3, mTOR, COX-2).
-        2. Fármaco: O nome da droga, composto ou "Composto Experimental" (ex: Mirabegron, Trealose, AF-353).
-        3. Ação: O que a droga faz no alvo (Agonista, Inibidor, Bloqueador).
-        4. Se não houver droga específica, coloque "N/A".
-        5. Responda em Português.
-        
-        Exemplo: "Receptor Beta-3 - Mirabegron - Agonista"
+        Regras:
+        - Alvo: Receptor/Enzima (ex: P2X3, mTOR).
+        - Fármaco: Nome da droga ou composto (ex: Gefapixant, Trealose). Se não houver, "N/A".
+        - Ação: Inibidor, Agonista, Antagonista, Ativador.
+        - Idioma: Português.
         """
-
+        
+        # Tenta modelos do mais barato/rápido para o mais parrudo
         modelos = ['models/gemini-1.5-flash', 'models/gemini-2.0-flash-exp']
         for m in modelos:
             try:
                 model = genai.GenerativeModel(m)
                 resp = model.generate_content(prompt)
-                return resp.text.strip().replace("Output:", "").replace("*", "")
-            except: continue 
+                clean = resp.text.strip().replace("Output:", "").replace("*", "")
+                return clean if len(clean) > 5 else "N/A - N/A - N/A"
+            except: continue
         return "Erro IA"
-    except Exception as e: return f"Erro: {str(e)[:20]}"
+    except: return "Erro Conexão"
 
-# --- IA: CURADORIA MASSIVA DE LISTA ---
+# --- IA: FILTRO DE LISTA ---
 def filtrar_candidatos_com_ia(lista_suja, api_key):
-    if not api_key or not lista_suja: return lista_suja[:15]
-
+    if not api_key or not lista_suja: return lista_suja[:10]
     try:
         genai.configure(api_key=api_key)
-        
-        # Prompt ajustado para priorizar DRUGS e TARGETS VALIDÁVEIS
-        prompt_curadoria = f"""
-        Sou um caçador de fármacos. Tenho uma lista suja de termos extraídos de 500 títulos do PubMed.
-        
+        prompt = f"""
+        Sou pesquisador. Tenho uma lista suja de termos extraídos do PubMed.
         LISTA SUJA: {', '.join(lista_suja)}
-
-        TAREFA: 
-        Filtre e retorne APENAS:
-        1. Nomes de Fármacos/Compostos (ex: Trealose, Sildenafil, Resiniferatoxin).
-        2. Alvos Moleculares acionáveis (ex: P2X3, TRPV1, Rho-Kinase).
         
-        REMOVA IMEDIATAMENTE:
-        - Termos anatômicos (Bexiga, Mucosa, Detrusor).
-        - Termos genéricos (Estudo, Análise, Efeito, Ratos, Humanos).
-        - Doenças (Cistite, Inflamação).
+        TAREFA: Retorne APENAS os Fármacos, Compostos Químicos e Alvos Moleculares Reais.
         
-        Saída: Lista limpa separada por vírgula.
+        REGRAS DE EXCLUSÃO (CRÍTICO):
+        - REMOVA: Termos anatômicos (Bexiga, Mucosa), genéricos (Estudo, Efeito, Ratos), doenças (Dor, Cistite).
+        
+        SAÍDA: Lista limpa separada por vírgula.
         """
-
         model = genai.GenerativeModel('models/gemini-1.5-flash')
-        response = model.generate_content(prompt_curadoria)
-        
-        limpos = [x.strip() for x in response.text.split(",") if x.strip()]
+        resp = model.generate_content(prompt)
+        limpos = [x.strip() for x in resp.text.split(",") if x.strip()]
         return limpos if limpos else lista_suja[:10]
-
     except: return lista_suja[:10]
 
-# --- FUNÇÕES DE BUSCA ---
+# --- BUSCA AUXILIAR ---
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
 def _fetch_pubmed_count(query):
     handle = Entrez.esearch(db="pubmed", term=query, retmax=0)
-    record = Entrez.read(handle)
-    handle.close()
+    record = Entrez.read(handle); handle.close()
     return int(record["Count"])
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def consultar_pubmed_count(termo, contexto, email, ano_ini, ano_fim):
     if email and "@" in email: Entrez.email = email
-    # Query focada em intervenção
     q_base = f"({termo}) AND ({contexto})" if contexto else f"({termo})"
-    q_farmaco = " AND (drug OR inhibitor OR agonist OR antagonist OR treatment OR compound)"
+    # Garante que estamos contando artigos farmacológicos/mecanísticos
+    q_farmaco = " AND (drug OR treatment OR mechanism OR receptor OR inhibition)"
     query = f"{q_base}{q_farmaco} AND ({ano_ini}:{ano_fim}[Date - Publication])"
     try: return _fetch_pubmed_count(query)
     except: return 0
 
-# --- LEITOR DETALHADO (Mantém leitura do abstract para a tabela final) ---
+# --- LEITOR DETALHADO (Mantido igual) ---
 @st.cache_data(ttl=86400, show_spinner=False)
 def buscar_resumos_detalhados(termo, orgao, email, ano_ini, ano_fim):
     if email and "@" in email: Entrez.email = email
     query = f"({termo}) AND ({orgao}) AND ({ano_ini}:{ano_fim}[Date - Publication]) AND (NOT Review[pt])"
-    
     try:
-        handle = Entrez.esearch(db="pubmed", term=query, retmax=5, sort="relevance") # Aqui mantemos 5 para leitura profunda
+        handle = Entrez.esearch(db="pubmed", term=query, retmax=5, sort="relevance")
         record = Entrez.read(handle); handle.close()
         id_list = record["IdList"]
         if not id_list: return []
         
         handle = Entrez.efetch(db="pubmed", id=id_list, rettype="medline", retmode="text")
-        artigos_txt = handle.read(); handle.close()
+        txt = handle.read(); handle.close()
         
-        artigos_finais = []
-        for raw in artigos_txt.split("\n\nPMID-")[:5]:
-            tit, abs_txt, link_id = "", "", ""
+        finais = []
+        for raw in txt.split("\n\nPMID-")[:5]:
+            tit, abs_t, lid = "", "", ""
             lines = raw.split("\n")
-            last_tag = "" 
-            for line in lines:
-                if line.strip().isdigit(): link_id = line.strip()
-                if line.startswith("TI  - "): tit = line[6:].strip(); last_tag="TI"
-                elif line.startswith("AB  - "): abs_txt = line[6:].strip(); last_tag="AB"
-                elif line.startswith("      "): 
-                    if last_tag=="TI": tit+=" "+line.strip()
-                    elif last_tag=="AB": abs_txt+=" "+line.strip()
-                elif len(line)>4 and line[4]=="-": last_tag=""
+            lt = ""
+            for l in lines:
+                if l.strip().isdigit(): lid = l.strip()
+                if l.startswith("TI  - "): tit=l[6:].strip(); lt="TI"
+                elif l.startswith("AB  - "): abs_t=l[6:].strip(); lt="AB"
+                elif l.startswith("      "):
+                    if lt=="TI": tit+=" "+l.strip()
+                    elif lt=="AB": abs_t+=" "+l.strip()
+                elif len(l)>4 and l[4]=="-": lt=""
             
-            if not link_id and id_list: link_id=id_list[0]
+            if not lid and id_list: lid=id_list[0]
             if tit:
-                artigos_finais.append({
-                    "Title": tit, "Resumo_Original": abs_txt, 
-                    "Resumo_IA": "...", 
-                    "Link": f"https://pubmed.ncbi.nlm.nih.gov/{link_id}/"
-                })
-        return artigos_finais
+                finais.append({"Title": tit, "Resumo_Original": abs_t, "Resumo_IA": "...", "Link": f"https://pubmed.ncbi.nlm.nih.gov/{lid}/"})
+        return finais
     except: return []
 
-# --- MINERAÇÃO TURBO (500 ARTIGOS - SÓ TÍTULO/KEYWORDS) ---
+# --- MINERAÇÃO CORRIGIDA (V2.4) ---
 @st.cache_data(ttl=3600, show_spinner=False)
 def buscar_alvos_emergentes_pubmed(termo_base, email):
     api_key = st.session_state.get('api_key_usuario', '')
     if email and "@" in email: Entrez.email = email
     
-    # 1. QUERY DE ALTA PRESSÃO (Focada 80% em Fármacos/Ação)
-    # Exige termos de ação farmacológica para o artigo aparecer
+    # 1. Query: Força artigos que tenham "Drug/Inhibitor" E "Receptor/Pathway"
     query = (
-        f"({termo_base}) AND "
-        "(inhibitor OR agonist OR antagonist OR blocker OR activator OR analogue OR derivative OR treatment OR drug OR compound) "
-        "AND (2020:2030[Date - Publication])"
+        f"({termo_base}) AND (receptor OR channel OR enzyme) "
+        f"AND (inhibitor OR agonist OR antagonist OR drug OR treatment) "
+        f"AND (2022:2030[Date - Publication])"
     )
     
     try:
-        # AUMENTO PARA 500 ARTIGOS
-        handle = Entrez.esearch(db="pubmed", term=query, retmax=500, sort="relevance")
+        # Baixamos 100 artigos (equilíbrio entre velocidade e variedade)
+        handle = Entrez.esearch(db="pubmed", term=query, retmax=100, sort="relevance")
         record = Entrez.read(handle); handle.close()
         id_list = record["IdList"]
         if not id_list: return []
         
-        # OTIMIZAÇÃO: Buscamos apenas Medline, mas vamos focar em Títulos e Keywords
-        # processar 500 abstracts inteiros demoraria muito. Vamos focar nos metadados.
         handle = Entrez.efetch(db="pubmed", id=id_list, rettype="medline", retmode="text")
         dados = handle.read(); handle.close()
         
         artigos_raw = dados.split("\n\nPMID-")
         candidatos_brutos = []
         
-        # Regex ajustada para pegar nomes químicos (hífen, números) e siglas
-        regex_quimico = r'\b[A-Za-z0-9-]{3,20}\b' 
-        
-        ignore = set(["THE", "AND", "WITH", "FOR", "NOT", "BUT", "FROM", "AFTER", "DURING", "HIGH", "LOW", 
-                  "STUDY", "DATA", "GROUP", "URINARY", "BLADDER", "CELLS", "RAT", "MICE", "HUMAN", 
-                  "EXPRESSION", "ACTIVITY", "ROLE", "EFFECT", "LEVELS", "TREATED", "USING", "CONTROL", 
-                  "SHAM", "WEEK", "DAY", "DOSE", "MGDL", "KG", "MG", "ML", "MODEL", "INDUCED"])
+        ignore = set(["THE", "AND", "FOR", "NOT", "BUT", "WITH", "FROM", "AFTER", "HIGH", "LOW", "STUDY", "DATA", "GROUP", "BLADDER", "CELLS", "RATS", "MICE", "HUMAN", "EXPRESSION", "ACTIVITY", "EFFECT", "LEVELS", "TREATED", "USING", "CONTROL", "DOSE", "MODEL", "INDUCED", "PATHWAY", "RECEPTOR", "MECHANISM", "SIGNALING"])
 
-        # Loop de Extração Rápida
+        # Regex para palavras que parecem drogas ou alvos
+        # 1. Siglas com números/hífens (P2X3, HO-1, NF-kB)
+        # 2. Palavras terminadas em sufixos farmacológicos comuns (-in, -il, -on, -ol, -mab, -ax)
+        # 3. Palavras em CAPS LOCK com pelo menos 3 letras (BDNF, NGF)
+        
+        regex_complexo = r'\b[A-Za-z0-9-]{3,20}\b'
+
         for art in artigos_raw:
             txt_interesse = ""
             lines = art.split("\n")
             for line in lines:
-                # SÓ LÊ TÍTULO (TI) E PALAVRAS-CHAVE (OT) - Ignora Abstract (AB) para ganhar velocidade
-                if line.startswith("TI  - "): txt_interesse += line[6:].strip() + " "
-                elif line.startswith("OT  - "): txt_interesse += line[6:].strip() + " "
+                # Agora lemos Abstract (AB) também, pois drogas aparecem lá
+                if line.startswith("TI  - ") or line.startswith("AB  - ") or line.startswith("OT  - "):
+                    txt_interesse += line[6:].strip() + " "
             
-            palavras = re.findall(regex_quimico, txt_interesse)
+            palavras = re.findall(regex_complexo, txt_interesse)
             for p in palavras:
                 pu = p.upper()
-                if pu not in ignore and len(pu) > 2:
-                    # Filtro básico: se parece gene/droga (tem numero ou hifen) ou é uma palavra muito especifica
-                    if re.search(r'\d', p) or "-" in p or pu in ["MIRABEGRON", "SOLIFENACIN", "TAMSULOSIN", "RESINIFERATOXIN", "BOTOX"]:
-                        candidatos_brutos.append(p)
-                    # Adiciona palavras em caixa alta (siglas)
-                    elif p.isupper() and len(p) > 2:
-                        candidatos_brutos.append(p)
+                if len(pu) < 3 or pu in ignore: continue
+                
+                # Critérios de Aceite (Heurística)
+                is_gene = bool(re.search(r'\d', p) or "-" in p) # Tem numero ou hifen? (P2X3, IL-6)
+                is_drug_suffix = any(pu.endswith(s) for s in ["IN", "IL", "ON", "OL", "MAB", "ATE", "IDE"]) # Sufixos (Mirabegron, Sildenafil)
+                is_caps = p.isupper() # Siglas (BDNF, NGF)
+                
+                if is_gene or is_drug_suffix or is_caps:
+                    candidatos_brutos.append(p)
 
-        # Pega Top 50 termos brutos para a IA limpar
-        top_brutos = [t for t, q in Counter(candidatos_brutos).most_common(50)]
+        # Manda o Top 40 para a IA filtrar
+        top_brutos = [t for t, q in Counter(candidatos_brutos).most_common(40)]
 
         if api_key:
             return filtrar_candidatos_com_ia(top_brutos, api_key)
@@ -209,10 +185,7 @@ def buscar_alvos_emergentes_pubmed(termo_base, email):
         print(e)
         return []
 
+# Notícias (Placeholder mantido)
 @st.cache_data(ttl=3600)
 def buscar_todas_noticias(lang='pt'):
-    return [
-        {"titulo": "Novos inibidores de P2X3 em teste", "fonte": "Nature Urology", "img": "https://images.unsplash.com/photo-1576086213369-97a306d36557?w=400", "link": "#", "bandeira": "🧪"},
-        {"titulo": "Eficácia do Vibegron vs Mirabegron", "fonte": "ScienceDirect", "img": "https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=400", "link": "#", "bandeira": "💊"},
-        {"titulo": "Toxina Botulínica: Novos mecanismos", "fonte": "Cell", "img": "https://images.unsplash.com/photo-1530026405186-ed1f139313f8?w=400", "link": "#", "bandeira": "⚡"}
-    ]
+    return [{"titulo": "Carregando notícias...", "fonte": "PubMed", "img": "", "link": "#", "bandeira": "📡"}]
