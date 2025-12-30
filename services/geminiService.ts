@@ -21,21 +21,43 @@ export class GeminiService {
     }
 
     try {
-      const currentListStr = currentList.length > 0 ? currentList.join(", ") : "None";
+      const isListEmpty = currentList.length === 0;
+      let contextBlock = "";
+
+      // --- O PULO DO GATO: Contexto Dinâmico ---
+      if (isListEmpty) {
+        // SE A LISTA ESTIVER VAZIA:
+        // Ensinamos a IA o que queremos usando exemplos genéricos de farmacologia.
+        // Isso dá o "norte" que os presets davam, mas sem sujar sua lista.
+        contextBlock = `
+        STARTING PHASE: Zero Knowledge.
+        
+        REFERENCE EXAMPLES (To understand the desired format ONLY):
+        - Pharmacology: "Semaglutide", "Atorvastatin"
+        - Targets: "GLP1R", "P2X3", "TRPV1", "mTOR"
+        
+        INSTRUCTION: Generate NEW targets for "${target}" following the style of the Reference Examples above.
+        `;
+      } else {
+        // SE JÁ TIVER ITENS:
+        // Usamos a lista como exclusão para não repetir.
+        contextBlock = `
+        EXPANSION PHASE: Filtering known targets.
+        
+        EXCLUSION LIST (DO NOT OUTPUT THESE):
+        [${currentList.join(", ")}]
+        `;
+      }
       
-      // --- O TRUQUE DO "CONTEXTO FANTASMA" ---
-      // Damos exemplos para a IA entender o formato, mesmo com lista vazia.
       const baseContext = `
       TARGET CONTEXT:
       - Primary Disease/Organ: "${target}"
       - Biological Context: "${context}"
       
-      KNOWN EXCLUSION LIST (DO NOT REPEAT THESE):
-      [${currentListStr}]
+      ${contextBlock}
       `;
 
       let prompt = "";
-      // Temperatura alta para criatividade
       let temperature = 0.8; 
 
       switch (strategy) {
@@ -43,11 +65,11 @@ export class GeminiService {
           temperature = 0.2;
           prompt = `
             Role: Scientific Data Curator.
-            Task: Clean and Standardize the candidate list.
+            Task: Standardize terms related to "${target}".
             Input: ${baseContext}
             Instructions: 
-            1. Convert Drugs to Targets (e.g. Semaglutide -> GLP1R).
-            2. Remove noise terms. 
+            1. If input is empty, generate standard targets for this disease.
+            2. Convert Drugs to Targets (e.g. Semaglutide -> GLP1R).
             3. Return a clean JSON Array of strings.
           `;
           break;
@@ -58,13 +80,9 @@ export class GeminiService {
             Task: Suggest approved drugs or clinical candidates for "${target}".
             ${baseContext}
             
-            EXAMPLE OUTPUT FORMAT (Follow this style):
-            ["SGLT2 inhibitors", "Metformin", "Atorvastatin"]
-
             Instructions:
-            1. STRICTLY NEW items (Not in Exclusion List).
-            2. Focus on FDA approved drugs and Phase 2/3 candidates.
-            3. Return a JSON Array of strings (Max 30 items).
+            1. Focus on FDA approved drugs and Phase 2/3 candidates.
+            2. Return a JSON Array of strings (Max 30 items).
           `;
           break;
 
@@ -74,13 +92,9 @@ export class GeminiService {
             Task: Identify upstream/downstream signaling pathways for "${target}".
             ${baseContext}
 
-            EXAMPLE OUTPUT FORMAT (Follow this style):
-            ["mTORC1", "NF-kB", "P2X3 receptor", "TRPV1"]
-
             Instructions:
-            1. STRICTLY NEW items.
-            2. Focus on Kinases, Transcription Factors, Ion Channels, Enzymes.
-            3. Return a JSON Array of strings (Max 30 items).
+            1. Focus on Kinases, Transcription Factors, Ion Channels, Enzymes.
+            2. Return a JSON Array of strings (Max 30 items).
           `;
           break;
 
@@ -91,14 +105,10 @@ export class GeminiService {
             Task: Identify NOVEL, CONTROVERSIAL, or EMERGING targets for "${target}".
             ${baseContext}
 
-            EXAMPLE OUTPUT FORMAT (Follow this style):
-            ["Piezo2", "LncRNA MALAT1", "GPR183", "OSCA1"]
-
             Instructions:
-            1. STRICTLY NEW items (Not in Exclusion List).
-            2. Targets from literature in the last 2-5 years.
-            3. Focus on Orphan GPCRs, lncRNAs, Ion Channels.
-            4. Return a JSON Array of strings (Max 30 items).
+            1. Targets from literature in the last 2-5 years.
+            2. Focus on Orphan GPCRs, lncRNAs, Ion Channels.
+            3. Return a JSON Array of strings (Max 30 items).
           `;
           break;
       }
