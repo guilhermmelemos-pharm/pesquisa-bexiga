@@ -54,7 +54,6 @@ st.markdown("""
 # ================= LÓGICA =================
 
 def mudar_idioma(novo_lang): 
-    # CORREÇÃO 1: Removido st.rerun() para evitar erro "no-op"
     st.session_state.lang = novo_lang
     resetar_pesquisa()
 
@@ -94,20 +93,27 @@ def ir_para_analise(email, contexto, alvo, y_ini, y_fim, textos):
     st.session_state.email_guardado = email; st.session_state.alvo_guardado = alvo
     lista = [x.strip() for x in st.session_state.alvos_val.split(",") if x.strip()]
     res = []
+    
     with st.spinner(textos["spinner_analise"]):
         n_total_alvo = bk.consultar_pubmed_count(alvo, "", email, 1900, 2030)
         if n_total_alvo == 0: n_total_alvo = 1
+    
     N_PUBMED = 36000000
     placeholder = st.empty()
+    
     with placeholder.container():
-        st.markdown(textos["titulo_processando"]); prog = st.progress(0)
+        st.markdown(textos["titulo_processando"])
+        prog = st.progress(0)
+        
     for i, item in enumerate(lista):
-        time.sleep(0.5) 
+        time.sleep(0.1) # Pequena pausa para não travar o NCBI
+        
         base_comparacao = contexto if contexto else ""
         n_base = bk.consultar_pubmed_count(item, base_comparacao, email, y_ini, y_fim)
         n_especifico = bk.consultar_pubmed_count(item, alvo, email, y_ini, y_fim)
         
-        a, b, c_val = n_especifico, n_global - n_especifico, n_total_alvo - n_especifico
+        # --- A CORREÇÃO ESTÁ AQUI: Usando n_base em vez de n_global ---
+        a, b, c_val = n_especifico, n_base - n_especifico, n_total_alvo - n_especifico
         d = max(0, N_PUBMED - (a + max(0,b) + max(0,c_val)))
         
         try: _, p_value = stats.fisher_exact([[a, max(0,b)], [max(0,c_val), d]], alternative='greater')
@@ -116,17 +122,14 @@ def ir_para_analise(email, contexto, alvo, y_ini, y_fim, textos):
         expected = (n_base * n_total_alvo) / N_PUBMED
         if expected == 0: expected = 0.00001
         enrichment = (n_especifico + 0.1) / expected
+        
         if contexto and n_base > n_especifico: enrichment = enrichment / 2 
 
-        # --- CORREÇÃO 2: Lógica Blue Ocean Atualizada (0-5 hits) ---
+        # Lógica Blue Ocean (0-5 hits)
         tag, score_sort = textos["tag_neutral"], 0
-        
         if n_especifico <= 5:
-            # Se tem poucos no alvo, mas existe no mundo (>20), é oportunidade
-            if n_base > 20: 
-                tag, score_sort = textos["tag_blue_ocean"], 1000
-            else: 
-                tag, score_sort = textos["tag_ghost"], 0
+            if n_base > 20: tag, score_sort = textos["tag_blue_ocean"], 1000
+            else: tag, score_sort = textos["tag_ghost"], 0
         elif n_especifico <= 25:
             tag, score_sort = textos["tag_embryonic"], 500
         else:
@@ -144,9 +147,11 @@ def ir_para_analise(email, contexto, alvo, y_ini, y_fim, textos):
             "_sort": score_sort
         })
         prog.progress((i+1)/len(lista))
+    
     placeholder.empty()
     st.session_state.resultado_df = pd.DataFrame(res).sort_values(by=["_sort", textos["col_ratio"]], ascending=[False, False])
-    st.session_state.pagina = 'resultados'; st.rerun()
+    st.session_state.pagina = 'resultados'
+    st.rerun()
 
 def resetar_pesquisa():
     st.session_state.pagina = 'home'; st.session_state.resultado_df = None; st.session_state.artigos_detalhe = None
@@ -271,4 +276,3 @@ with cf1:
     with st.expander(t["citar_titulo"]): st.code(t["citar_texto"], language="text")
 with cf2:
     st.caption(t["apoio_titulo"]); st.text_input("Chave Pix:", value="960f3f16-06ce-4e71-9b5f-6915b2a10b5a", disabled=False)
-
