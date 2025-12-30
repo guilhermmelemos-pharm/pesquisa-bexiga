@@ -1,6 +1,6 @@
 # constantes.py
 # Configurações, Textos e Listas de Prospecção
-# Versão: 2.0 (Correção de Chaves + Textos Ajustados)
+# Versão: 3.2 (Correção Final de Chaves de Tradução)
 
 TEXTOS = {
     "pt": {
@@ -112,8 +112,6 @@ TEXTOS = {
         "btn_add_manual": "Add Manual",
         "header_config": "Configuration",
         "slider_tempo": "Time Range",
-        
-        # --- TEXTOS FIXOS (EN) ---
         "label_contexto": "Comparison Organ",
         "uploader_label": "Import List (CSV/TXT)",
         "btn_limpar": "Clear Terms",
