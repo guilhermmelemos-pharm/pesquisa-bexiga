@@ -1,7 +1,8 @@
 
+
 import React from 'react';
 import { 
-  FlaskConical, Trash2, Settings, Key, Play, FileText, AlertTriangle, 
+  FlaskConical, Trash2, Settings, Play, FileText, 
   Sparkles, ShieldCheck, Pill, Dna, Upload, Copy, Check, Loader2
 } from 'lucide-react';
 import { TEXTS, PRESETS_FRONTEIRA } from '../constants';
@@ -49,7 +50,6 @@ const HomeView: React.FC<HomeViewProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Fixed Strategy Button to use explicit classes instead of dynamic string replacement
   const StrategyButton = ({ 
     id, icon: Icon, label, borderColor, textColor, pingColor, desc 
   }: { 
@@ -209,7 +209,7 @@ const HomeView: React.FC<HomeViewProps> = ({
                   {isLoading ? (
                      <div className="flex items-center gap-2">
                        <Loader2 className="animate-spin" size={24} />
-                       <span>Consultando Gemini AI...</span>
+                       <span>{state.miningStatus || "Processando..."}</span>
                      </div>
                   ) : (
                      `${t.btn_run_prefix} ${t[`strat_${state.miningStrategy}`] || state.miningStrategy.toUpperCase()}`
@@ -268,22 +268,6 @@ const HomeView: React.FC<HomeViewProps> = ({
                     />
                     <label htmlFor="aiToggle" className="text-sm text-gray-300 cursor-pointer">{t.expander_ia}</label>
                   </div>
-                  
-                  {state.useAI && (
-                    <div className="pl-6 animate-in fade-in slide-in-from-top-2">
-                      <div className="relative">
-                        <Key size={14} className="absolute left-3 top-3 text-gray-500" />
-                        <input 
-                          type="password"
-                          value={state.apiKey}
-                          onChange={(e) => updateState({ apiKey: e.target.value })}
-                          placeholder={t.placeholder_key}
-                          className="w-full bg-lemos-dark border border-gray-700 rounded-lg py-2.5 pl-9 pr-3 text-xs text-white focus:border-lemos-red focus:outline-none"
-                        />
-                      </div>
-                      <p className="text-[10px] text-gray-500 mt-1 ml-1">{t.caption_ia} <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-blue-400 hover:underline">{t.link_key}</a></p>
-                    </div>
-                  )}
                 </div>
               </div>
               
@@ -344,7 +328,7 @@ const HomeView: React.FC<HomeViewProps> = ({
                  className="mt-2 w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2"
                >
                  {isLoading ? (
-                   <span>{t.titulo_processando} {Math.round(progress)}%</span>
+                   <span>{state.miningStatus || `${t.titulo_processando} ${Math.round(progress)}%`}</span>
                  ) : (
                    <>
                     <Play size={16} fill="white" />

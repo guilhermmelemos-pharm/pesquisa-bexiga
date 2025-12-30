@@ -32,10 +32,24 @@ const ResultsView: React.FC<ResultsViewProps> = ({
     let sortableItems = [...state.results];
     if (sortConfig !== null) {
       sortableItems.sort((a, b) => {
-        if (a[sortConfig.key] < b[sortConfig.key]) {
+        let valA: any = a[sortConfig.key];
+        let valB: any = b[sortConfig.key];
+
+        // Ensure numbers are treated as numbers
+        if (['ratio', 'targetArticles', 'globalArticles', 'sortScore'].includes(sortConfig.key)) {
+            valA = Number(valA);
+            valB = Number(valB);
+        }
+        // pValue is string but represents a number, better to sort numerically
+        if (sortConfig.key === 'pValue') {
+            valA = parseFloat(valA);
+            valB = parseFloat(valB);
+        }
+
+        if (valA < valB) {
           return sortConfig.direction === 'asc' ? -1 : 1;
         }
-        if (a[sortConfig.key] > b[sortConfig.key]) {
+        if (valA > valB) {
           return sortConfig.direction === 'asc' ? 1 : -1;
         }
         return 0;

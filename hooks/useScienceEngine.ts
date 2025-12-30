@@ -9,7 +9,6 @@ export const useScienceEngine = () => {
   const [state, setState] = useState<AppState>({
     page: 'home',
     email: '',
-    apiKey: '',
     target: '',
     context: '',
     yearStart: 2015,
@@ -18,7 +17,8 @@ export const useScienceEngine = () => {
     results: [],
     useAI: true,
     miningStrategy: 'blue_ocean', // Default
-    selectedArticleDetails: null
+    selectedArticleDetails: null,
+    miningStatus: ''
   });
 
   const [isLoading, setIsLoading] = useState(false);
@@ -44,9 +44,7 @@ export const useScienceEngine = () => {
   };
 
   const handleFileUpload = (text: string) => {
-    // Use the simple parser for uploads, respecting user's exact keywords
     const extracted = parseSimpleUserList(text);
-    
     const current = state.targetList ? state.targetList.split(',').map(s => s.trim()) : [];
     const unique = [...new Set([...current, ...extracted])];
     
@@ -61,38 +59,38 @@ export const useScienceEngine = () => {
     }
     
     setIsLoading(true);
+    updateState({ miningStatus: 'Conectando ao Gemini AI...' });
+    
     let currentTerms = state.targetList 
       ? state.targetList.split(',').map(s => s.trim()).filter(x => x) 
       : [];
 
-    // REMOVED: Confusing fallback logic that injected 'Blockbusters' preset when list was empty.
-    // Now, if list is empty and user wants 'Conservative' (Cleaning), we just warn them.
     if (currentTerms.length === 0 && state.miningStrategy === 'conservative') {
       alert("O modo 'Faxina' serve para limpar uma lista existente. Por favor, adicione alvos manualmente ou use 'Blue Ocean' para descobrir novos.");
       setIsLoading(false);
+      updateState({ miningStatus: '' });
       return;
     }
 
-    // 2. Cross-Tissue Intelligence
     if (state.useAI) {
       try {
+        updateState({ miningStatus: `Minerando (${state.miningStrategy})...` });
+        
         const resultTerms = await gemini.mineNovelTargets(
           state.target,
-          state.context || '', // Ensure context is never null
+          state.context || '', 
           currentTerms,
-          state.miningStrategy,
-          state.apiKey // Pass the key from UI
+          state.miningStrategy
         );
         
+        updateState({ miningStatus: 'Processando resultados...' });
+
         if (resultTerms.length === 0) {
           alert("A IA não encontrou novos alvos com os parâmetros atuais. Tente mudar a estratégia ou adicionar Contexto.");
         } else {
           if (state.miningStrategy === 'conservative') {
-             // Conservative is a filter/cleaner, so we REPLACE the list with the cleaned version
              currentTerms = resultTerms;
           } else {
-             // Repurposing, Mechanism, Blue Ocean: We ADD the new findings to the existing list
-             // Ensure uniqueness case-insensitive
              const existingSet = new Set(currentTerms.map(t => t.toUpperCase()));
              const newItems = resultTerms.filter(t => !existingSet.has(t.toUpperCase()));
              currentTerms = [...currentTerms, ...newItems];
@@ -101,18 +99,16 @@ export const useScienceEngine = () => {
 
       } catch (e) {
         console.warn("Deep Mining failed", e);
-        // More descriptive error
-        alert("Erro na Mineração IA. Verifique se sua API Key está inserida nas configurações ou no environment.");
+        alert("Erro na Mineração IA. Verifique se o ambiente possui a API Key configurada.");
       }
     } else if (state.context) {
-      // Fallback: simple regex on context if no AI
       const contextTerms = extractEntitiesRegex(state.context);
       const existingSet = new Set(currentTerms.map(t => t.toUpperCase()));
       const newItems = contextTerms.filter(t => !existingSet.has(t.toUpperCase()));
       currentTerms = [...currentTerms, ...newItems];
     }
     
-    updateState({ targetList: currentTerms.join(', ') });
+    updateState({ targetList: currentTerms.join(', '), miningStatus: '' });
     setIsLoading(false);
   };
 
@@ -121,8 +117,6 @@ export const useScienceEngine = () => {
       alert("Defina um alvo antes de executar.");
       return;
     }
-    // Allow execution even if list is empty (it will just return empty results or use internal mock)
-    // But typically user needs a list.
     if (!state.targetList) {
        alert("Sua lista de alvos está vazia. Use a IA para minerar ou adicione manualmente.");
        return;
@@ -130,11 +124,12 @@ export const useScienceEngine = () => {
 
     setIsLoading(true);
     setProgress(0);
+    updateState({ miningStatus: 'Calculando estatísticas (Lambda Score)...' });
     
     const terms = state.targetList.split(',').map(s => s.trim()).filter(s => s.length > 0);
     const results = await performAnalysis(terms, state.target, state.email, (p) => setProgress(p));
     
-    updateState({ results, page: 'results' });
+    updateState({ results, page: 'results', miningStatus: '' });
     setIsLoading(false);
   };
 
@@ -144,7 +139,7 @@ export const useScienceEngine = () => {
   };
 
   const analyzeArticle = async (title: string, abstract: string) => {
-    return await gemini.analyzePaper(title, abstract, state.apiKey);
+    return await gemini.analyzePaper(title, abstract);
   };
 
   return {

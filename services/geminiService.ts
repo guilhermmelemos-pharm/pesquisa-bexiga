@@ -4,32 +4,27 @@ import { MiningStrategy } from "../types";
 
 export class GeminiService {
   
-  private getClient(apiKey?: string): GoogleGenAI {
-    // Prioritize key passed from UI, fallback to env, finally error if neither exists
-    const key = apiKey || process.env.API_KEY;
-    if (!key) {
-      throw new Error("MISSING_KEY");
-    }
-    return new GoogleGenAI({ apiKey: key });
+  private getClient(): GoogleGenAI {
+    // The API key must be obtained exclusively from the environment variable process.env.API_KEY.
+    return new GoogleGenAI({ apiKey: process.env.API_KEY });
   }
 
   /**
    * Deep Mining Strategy:
    * Branches based on the selected strategy.
    */
-  async mineNovelTargets(target: string, context: string, currentList: string[], strategy: MiningStrategy, apiKey?: string): Promise<string[]> {
+  async mineNovelTargets(target: string, context: string, currentList: string[], strategy: MiningStrategy): Promise<string[]> {
     let ai: GoogleGenAI;
     try {
-        ai = this.getClient(apiKey);
+        ai = this.getClient();
     } catch (e) {
-        console.warn("API Key missing");
-        throw new Error("API Key Missing");
+        console.warn("API Key missing for mining");
+        throw e;
     }
 
     try {
       // Create a set for case-insensitive local filtering of the output
       const lowerCaseCurrentSet = new Set(currentList.map(t => t.toLowerCase().trim()));
-      
       const currentListStr = currentList.length > 0 ? currentList.join(", ") : "None";
       
       const baseContext = `
@@ -94,7 +89,7 @@ export class GeminiService {
           break;
 
         case 'blue_ocean':
-          temperature = 0.9;
+          temperature = 0.95; // Higher creativity
           topK = 60;
           prompt = `
             Role: Elite Scientific Prospector.
@@ -102,10 +97,11 @@ export class GeminiService {
             ${baseContext}
             
             Instructions:
-            1. **STRICTLY NEW**: Do NOT output any item present in the "EXCLUSION LIST". This is critical.
-            2. **NOVELTY**: Targets from literature in the last 3-5 years.
+            1. **STRICTLY NEW**: Do NOT output any item present in the "EXCLUSION LIST".
+            2. **NOVELTY**: Targets from literature in the last 2-5 years.
             3. **IGNORE THE OBVIOUS**: Dig for obscure receptors, non-coding RNAs, or orphan GPCRs.
-            4. **OUTPUT**: A strict comma-separated list of 15 novel targets.
+            4. **DIVERSITY**: Include Ion Channels, Enzymes, and Transcription Factors.
+            5. **OUTPUT**: A strict comma-separated list of 15 novel targets.
           `;
           break;
       }
@@ -137,13 +133,8 @@ export class GeminiService {
         .filter(t => !t.toLowerCase().includes("context"))
         .filter(t => !t.toLowerCase().includes("exclusion list"))
         .filter(t => !t.toLowerCase().includes("none"))
-        // Strong client-side filter to prevent repetition
         .filter(t => {
-            // If strategy is conservative, we ALLOW items from input (because we are cleaning/converting them)
-            // If strategy is OTHERS, we STRICTLY BLOCK items from input
             if (strategy === 'conservative') return true;
-            
-            // For other strategies, check against the exclusion list
             return !lowerCaseCurrentSet.has(t.toLowerCase());
         });
         
@@ -153,10 +144,10 @@ export class GeminiService {
     }
   }
 
-  async analyzePaper(title: string, abstract: string, apiKey?: string): Promise<string> {
+  async analyzePaper(title: string, abstract: string): Promise<string> {
     let ai: GoogleGenAI;
     try {
-        ai = this.getClient(apiKey);
+        ai = this.getClient();
     } catch (e) {
         return "API Key Required for Analysis.";
     }

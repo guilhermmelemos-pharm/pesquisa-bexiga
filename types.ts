@@ -1,4 +1,5 @@
 
+
 export interface AnalysisResult {
   molecule: string;
   status: 'Gold' | 'Trending' | 'Blue Ocean' | 'Embryonic' | 'Saturated' | 'Ghost' | 'Neutral';
@@ -31,7 +32,6 @@ export type MiningStrategy = 'conservative' | 'repurposing' | 'mechanism' | 'blu
 export interface AppState {
   page: 'home' | 'results';
   email: string;
-  apiKey: string; // Added field
   target: string;
   context: string;
   yearStart: number;
@@ -41,6 +41,7 @@ export interface AppState {
   useAI: boolean;
   miningStrategy: MiningStrategy;
   selectedArticleDetails: Article[] | null;
+  miningStatus: string; // Added for UI feedback
 }
 
 export enum Language {
