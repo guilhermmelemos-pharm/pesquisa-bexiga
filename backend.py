@@ -25,7 +25,7 @@ BLACKLIST_TOTAL = {
     "ruido_academico": {
         "CONTROL", "MEDICINE", "ALONGSIDE", "MULTIVARIATE", "DETERMINE", 
         "INDICATE", "ADEQUATE", "DETERMINATION", "EVALUATE", "FURTHERMORE",
-        "STRICTLY", "RELEVANT", "CONSIDER", "PRESENT", "ASSOCIATED"
+        "STRICTLY", "RELEVANT", "CONSIDER", "PRESENT", "ASSOCIATED", "INDICATED"
     },
     "substancias_genericas": {
         "ETHANOL", "CHOLESTEROL", "GLUTAMINE", "TYROSINE", "SULFATE", 
@@ -48,7 +48,7 @@ UNIFIED_BLACKLIST = set().union(*BLACKLIST_TOTAL.values())
 REGEX_PATTERNS = [
     r"\b[A-Z]{2,5}\d{1,4}[A-Z]?\b", # Siglas Alvo: STAT1, TRPV4, CDK1
     r"\b[A-Z]{2,4}[- ]?\d{3,6}\b",  # Códigos: CG0070
-    # Sufixos com exigência de comprimento p/ evitar: "ADEQUATE", "INDICATE"
+    # Exigência de 6 letras para evitar verbos curtos como "Indicate" ou "Adequate"
     r"\b[A-Za-z]{6,}(?:mab|ib|ol|one|ide|ate|ase|pril|afil|tin|ine|arin|oside)\b"
 ]
 
@@ -78,14 +78,16 @@ def validar_com_ia(candidatos: List[str], contexto: str, api_key: str) -> List[s
 ROLE: Senior PhD Pharmacologist.
 TASK: Return ONLY a JSON list of:
 1. Specific Drugs (ex: Enfortumab, Bupivacaine, Pembrolizumab).
-2. Molecular Targets (ex: TRPV4, FGFR3, BCL6, USP7).
+2. Molecular Targets (ex: TRPV4, FGFR3, BCL6, STAT1).
 
 STRICTLY EXCLUDE:
-- Adverbs/Verbs (Determine, Indicate, Alongside, Adequate).
-- Ubiquitous metabolites (Ethanol, Glutamine, Cholesterol).
+- Adverbs/Verbs (Determine, Indicate, Alongside, Adequate, Multivariate).
+- Generic substances (Ethanol, Glutamine, Cholesterol).
 - Generic medical terms (Medicine, Disease, Population).
 
-LIST: {", ".join(candidatos[:120])}
+LIST TO FILTER:
+{", ".join(candidatos[:120])}
+
 OUTPUT: Pure JSON list only.
 """
     res = gerar_com_gemini(prompt, client, is_json=True)
@@ -129,7 +131,7 @@ def minerar_pubmed(termo_base: str, email: str, api_key: str, usar_ia: bool = Tr
         return {"termos_indicados": candidatos[:50]}
     except: return {"termos_indicados": []}
 
-# Wrappers de análise e contagem permanecem iguais...
+# Funções auxiliares (Analisar Abstract, Contagem, Resumos) permanecem as mesmas v2.0
 def analisar_abstract_com_ia(titulo, abstract, api_key, lang="pt"):
     client = configurar_gemini(api_key); prompt = f"PhD Pharmacologist. One line in {lang}: Organ – Target – Action. Title: {titulo}. Abstract: {abstract}"
     res = gerar_com_gemini(prompt, client); return res.split("\n")[0].strip() if res else "Indisponível"
@@ -144,7 +146,7 @@ def buscar_resumos_detalhados(termo, orgao, email, y_ini, y_fim):
     try:
         handle = Entrez.esearch(db="pubmed", term=query, retmax=6); rec = Entrez.read(handle); handle.close()
         if not rec["IdList"]: return []
-        handle = Entrez.efetch(db="pubmed", id=rec["IdList"], rettype="medline", retmode="text")
+        handle = Entrez.efetch(db="pubmed", id=record["IdList"], rettype="medline", retmode="text")
         return [{"Title": r.get("TI", ""), "Abstract": r.get("AB", "")[:1000], "Link": f"https://pubmed.ncbi.nlm.nih.gov/{r.get('PMID','')}/"} for r in Medline.parse(handle)]
     except: return []
 
