@@ -5,10 +5,10 @@ authors:
     given-names: "Guilherme"
     affiliation: "Universidade Federal de São Paulo (Unifesp)"
 title: "Lemos Lambda: Deep Science Prospector"
-version: 2.0
-doi: 10.5281/zenodo.18036690
-date-released: 2025-12-23
-url: "https://github.com/guilhermelemos/lemos-lambda"
+version: 2.1
+doi: 10.5281/zenodo.18090934
+date-released: 2025-12-29
+url: "https://github.com/guilhermmelemos-pharm/pesquisa-bexiga"
 keywords:
   - pharmacology
   - text-mining
