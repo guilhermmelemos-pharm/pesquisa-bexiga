@@ -3,7 +3,7 @@ import {
   FlaskConical, Trash2, Settings, Key, Play, FileText, AlertTriangle, 
   Sparkles, ShieldCheck, Pill, Dna, Upload, Copy, Check, Loader2
 } from 'lucide-react';
-import { TEXTS, PRESETS_FRONTEIRA } from '../constants';
+import { PRESETS_FRONTEIRA } from '../constants';
 import Radar from './Radar';
 import { AppState, Language, MiningStrategy } from '../types';
 
@@ -11,7 +11,8 @@ interface HomeViewProps {
   state: AppState;
   t: any;
   updateState: (updates: Partial<AppState>) => void;
-  isLoading: boolean;
+  isMining: boolean;      // NOVO
+  isAnalyzing: boolean;   // NOVO
   progress: number;
   handleDeepMine: () => void;
   executeAnalysis: () => void;
@@ -23,7 +24,7 @@ interface HomeViewProps {
 }
 
 const HomeView: React.FC<HomeViewProps> = ({
-  state, t, updateState, isLoading, progress, 
+  state, t, updateState, isMining, isAnalyzing, progress, 
   handleDeepMine, executeAnalysis, handlePresetAdd, 
   handleAddAllPresets, handleFileUpload, setLang, lang
 }) => {
@@ -36,7 +37,7 @@ const HomeView: React.FC<HomeViewProps> = ({
       const reader = new FileReader();
       reader.onload = (ev) => {
         const count = handleFileUpload(ev.target?.result as string);
-        alert(`Success! ${count} items imported.`);
+        alert(`Lista carregada! ${count} itens importados.`);
       };
       reader.readAsText(file);
     }
@@ -56,21 +57,15 @@ const HomeView: React.FC<HomeViewProps> = ({
     <button 
       onClick={() => updateState({ miningStrategy: id })}
       title={desc}
+      disabled={isMining}
       className={`relative p-2 rounded-lg border text-xs font-bold flex flex-col items-center justify-center gap-1 transition-all h-20 group
         ${state.miningStrategy === id 
           ? `bg-opacity-10 border-opacity-100 ${colorClass} bg-white ring-1 ring-offset-0 ring-white/20` 
           : 'bg-lemos-dark border-gray-700 text-gray-500 hover:border-gray-500 hover:bg-gray-800'
-        }`}
+        } ${isMining ? 'opacity-50 cursor-not-allowed' : ''}`}
     >
       <Icon size={22} className={`mb-1 transition-transform group-hover:scale-110 ${state.miningStrategy === id ? '' : 'opacity-60'}`} />
       <span className={`text-[10px] uppercase tracking-wide ${state.miningStrategy === id ? 'text-white' : ''}`}>{label}</span>
-      
-      {state.miningStrategy === id && (
-        <span className="absolute -top-1 -right-1 flex h-3 w-3">
-          <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${colorClass.split(' ')[0].replace('border', 'bg')}`}></span>
-          <span className={`relative inline-flex rounded-full h-3 w-3 ${colorClass.split(' ')[0].replace('border', 'bg')}`}></span>
-        </span>
-      )}
     </button>
   );
 
@@ -124,11 +119,10 @@ const HomeView: React.FC<HomeViewProps> = ({
                     onChange={(e) => updateState({ target: e.target.value })}
                     placeholder={t.holder_alvo}
                   />
-                  <p className="text-[10px] text-gray-500 mt-1">{t.helper_alvo}</p>
                 </div>
                 <button 
                   onClick={() => updateState({ target: '' })}
-                  className="p-3 bg-lemos-dark border border-gray-700 rounded-lg hover:text-lemos-red h-[50px] mb-[22px]"
+                  className="p-3 bg-lemos-dark border border-gray-700 rounded-lg hover:text-lemos-red h-[50px]"
                 >
                   <Trash2 size={20} />
                 </button>
@@ -143,32 +137,16 @@ const HomeView: React.FC<HomeViewProps> = ({
                    </div>
                    <div className="grid grid-cols-4 gap-3">
                      <StrategyButton 
-                       id="conservative" 
-                       icon={ShieldCheck} 
-                       label={t.strat_clean} 
-                       desc={t.desc_clean} 
-                       colorClass="border-green-500 text-green-400" 
+                       id="conservative" icon={ShieldCheck} label={t.strat_clean} desc={t.desc_clean} colorClass="border-green-500 text-green-400" 
                      />
                      <StrategyButton 
-                       id="repurposing" 
-                       icon={Pill} 
-                       label={t.strat_repurpose} 
-                       desc={t.desc_repurpose} 
-                       colorClass="border-orange-500 text-orange-400" 
+                       id="repurposing" icon={Pill} label={t.strat_repurpose} desc={t.desc_repurpose} colorClass="border-orange-500 text-orange-400" 
                      />
                      <StrategyButton 
-                       id="mechanism" 
-                       icon={Dna} 
-                       label={t.strat_mechanism} 
-                       desc={t.desc_mechanism} 
-                       colorClass="border-purple-500 text-purple-400" 
+                       id="mechanism" icon={Dna} label={t.strat_mechanism} desc={t.desc_mechanism} colorClass="border-purple-500 text-purple-400" 
                      />
                      <StrategyButton 
-                       id="blue_ocean" 
-                       icon={Sparkles} 
-                       label={t.strat_blue_ocean} 
-                       desc={t.desc_blue_ocean} 
-                       colorClass="border-blue-500 text-blue-400" 
+                       id="blue_ocean" icon={Sparkles} label={t.strat_blue_ocean} desc={t.desc_blue_ocean} colorClass="border-blue-500 text-blue-400" 
                      />
                    </div>
                 </div>
@@ -184,28 +162,11 @@ const HomeView: React.FC<HomeViewProps> = ({
                    className="w-full bg-lemos-dark border border-gray-700 rounded-lg p-2 text-sm h-16 focus:border-lemos-red focus:outline-none"
                    placeholder="Ex: 'Pulmão' / 'Hypoxia pathway'..."
                  />
-                 <p className="text-[10px] text-gray-500 mt-1">
-                   {t.lbl_contexto_help}
-                 </p>
               </div>
 
-              {/* Warning about Missing API Key */}
-              {!state.apiKey && state.useAI && (
-                <div className="bg-yellow-900/20 border border-yellow-600/50 p-3 rounded-lg flex gap-3 items-start animate-pulse">
-                  <AlertTriangle className="text-yellow-500 shrink-0" size={18} />
-                  <div>
-                    <h4 className="text-yellow-400 text-xs font-bold uppercase">{t.warn_no_key_tit}</h4>
-                    <p className="text-yellow-200/80 text-xs mt-1">
-                      {t.warn_no_key_desc}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* MINING BUTTON / PROGRESS BAR AREA */}
+              {/* MINING BUTTON (Controlado APENAS por isMining) */}
               <div className="relative">
-                {isLoading ? (
-                  /* ESTADO DE CARREGAMENTO (Barra de Progresso) */
+                {isMining ? (
                   <div className="w-full bg-lemos-dark border border-blue-500/30 rounded-xl p-4 shadow-lg shadow-blue-900/10">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-xs font-bold text-blue-400 uppercase tracking-widest flex items-center gap-2">
@@ -213,33 +174,24 @@ const HomeView: React.FC<HomeViewProps> = ({
                         Neuro-Mining
                       </span>
                       <span className="text-xs text-blue-300 font-mono animate-pulse">
-                        Gemini 2.0 Thinking...
+                        Gemini Thinking...
                       </span>
                     </div>
-                    
-                    {/* A Barra Animada */}
                     <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden relative">
                       <div className="absolute top-0 left-0 h-full bg-blue-500 w-1/3 animate-[slide_1.5s_ease-in-out_infinite]"></div>
                     </div>
-                    
-                    <p className="text-[10px] text-gray-500 mt-2 font-mono text-center">
-                      Cruzando dados de "{state.target}" com literatura recente...
-                    </p>
                   </div>
                 ) : (
-                  /* ESTADO NORMAL (Botão) */
                   <button 
                     onClick={handleDeepMine}
-                    disabled={isLoading}
+                    disabled={isMining || isAnalyzing} // Desabilita se QUALQUER coisa estiver rodando
                     className={`w-full font-bold py-4 rounded-xl text-lg shadow-lg transition-all flex items-center justify-center gap-2 relative overflow-hidden group
                       ${!state.apiKey 
                         ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' 
                         : 'bg-lemos-red hover:bg-red-600 text-white shadow-red-900/20'
                       }`}
                   >
-                    <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
-                    
-                    {state.apiKey 
+                     {state.apiKey 
                       ? `${t.btn_run_prefix} ${t[`strat_${state.miningStrategy}`] || state.miningStrategy.toUpperCase()}`
                       : "🔍 Minerar (Modo Básico)"
                     }
@@ -292,10 +244,7 @@ const HomeView: React.FC<HomeViewProps> = ({
                   onChange={(e) => updateState({ apiKey: e.target.value })}
                   placeholder={t.placeholder_key}
                 />
-                <div className="mt-1 text-xs text-gray-500">
-                  <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="underline hover:text-lemos-red">{t.link_key}</a>
-                </div>
-                <div className="mt-3 flex items-center gap-2">
+                 <div className="mt-3 flex items-center gap-2">
                   <input 
                     type="checkbox" 
                     id="aiToggle"
@@ -312,19 +261,9 @@ const HomeView: React.FC<HomeViewProps> = ({
               <div>
                  <label className="block text-sm text-gray-400 mb-1">{t.slider_tempo}</label>
                  <div className="flex items-center gap-2 text-sm">
-                    <input 
-                      type="number" 
-                      value={state.yearStart} 
-                      onChange={(e) => updateState({ yearStart: parseInt(e.target.value) })}
-                      className="w-20 bg-lemos-dark border border-gray-700 rounded p-1"
-                    />
+                    <input type="number" value={state.yearStart} onChange={(e) => updateState({ yearStart: parseInt(e.target.value) })} className="w-20 bg-lemos-dark border border-gray-700 rounded p-1"/>
                     <span>-</span>
-                    <input 
-                      type="number" 
-                      value={state.yearEnd} 
-                      onChange={(e) => updateState({ yearEnd: parseInt(e.target.value) })}
-                      className="w-20 bg-lemos-dark border border-gray-700 rounded p-1"
-                    />
+                    <input type="number" value={state.yearEnd} onChange={(e) => updateState({ yearEnd: parseInt(e.target.value) })} className="w-20 bg-lemos-dark border border-gray-700 rounded p-1"/>
                  </div>
               </div>
 
@@ -338,14 +277,11 @@ const HomeView: React.FC<HomeViewProps> = ({
                   onChange={onFileChange}
                   className="w-full text-xs text-gray-400 file:mr-2 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-lemos-dark file:text-white hover:file:bg-gray-700"
                  />
-                 <p className="text-[10px] text-gray-500 mt-1">
-                    {t.upload_helper}
-                 </p>
               </div>
             </div>
           </div>
 
-          {/* List Preview */}
+          {/* List Preview & EXECUTE BUTTON */}
           {state.targetList && (
             <div className="bg-lemos-dark p-4 rounded-xl border border-gray-800">
                <div className="flex justify-between items-center mb-2">
@@ -356,14 +292,15 @@ const HomeView: React.FC<HomeViewProps> = ({
                  className="w-full bg-transparent text-xs font-mono text-gray-300 h-24 focus:outline-none resize-none border border-transparent focus:border-gray-700 rounded p-1"
                  value={state.targetList}
                  onChange={(e) => updateState({ targetList: e.target.value })}
-                 placeholder="Digite ou edite seus alvos aqui..."
                />
+               
+               {/* BOTÃO EXECUTAR (Controlado por isAnalyzing) */}
                <button 
                  onClick={executeAnalysis}
-                 disabled={isLoading}
-                 className="mt-2 w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2"
+                 disabled={isAnalyzing || isMining}
+                 className={`mt-2 w-full font-bold py-3 rounded-lg flex items-center justify-center gap-2 ${isAnalyzing ? 'bg-gray-700 cursor-wait' : 'bg-blue-600 hover:bg-blue-500 text-white'}`}
                >
-                 {isLoading ? (
+                 {isAnalyzing ? (
                    <span>{t.titulo_processando} {Math.round(progress)}%</span>
                  ) : (
                    <>
@@ -372,6 +309,7 @@ const HomeView: React.FC<HomeViewProps> = ({
                    </>
                  )}
                </button>
+               
                <div className="mt-2 text-center">
                   <button onClick={() => updateState({ targetList: '' })} className="text-xs text-red-400 hover:text-red-300">
                      {t.btn_limpar}
@@ -381,41 +319,10 @@ const HomeView: React.FC<HomeViewProps> = ({
           )}
         </div>
       </div>
-
-      {/* FOOTER */}
+      
+      {/* Footer (Mantido simples) */}
       <footer className="mt-12 border-t border-gray-800 pt-8 pb-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          <div className="md:col-span-2">
-             <h4 className="text-sm font-bold text-gray-400 mb-2">{t.footer_citar}</h4>
-             <details className="bg-lemos-dark border border-gray-700 rounded-lg p-3 group">
-                <summary className="text-sm cursor-pointer font-medium hover:text-lemos-red flex items-center gap-2 text-gray-300">
-                   <FileText size={16} />
-                   {t.citar_titulo}
-                </summary>
-                <div className="mt-3 bg-black/30 p-2 rounded text-xs font-mono text-gray-300 break-all border border-gray-800 select-all">
-                   {t.citar_texto}
-                </div>
-             </details>
-          </div>
-          <div>
-             <h4 className="text-sm font-bold text-gray-400 mb-2">{t.apoio_titulo}</h4>
-             <div className="flex gap-2">
-                <input 
-                  readOnly 
-                  value={t.pix_key} 
-                  className="bg-black/30 border border-gray-700 text-xs text-gray-300 p-2 rounded flex-1 focus:outline-none font-mono"
-                />
-                <button 
-                  onClick={copyPix}
-                  className="bg-lemos-card hover:bg-gray-700 border border-gray-700 text-white p-2 rounded transition-colors"
-                  title={t.btn_copy}
-                >
-                  {copied ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
-                </button>
-             </div>
-             <p className="text-xs text-gray-500 mt-2">{t.apoio_desc}</p>
-          </div>
-        </div>
+        <p className="text-xs text-gray-500 text-center">Lemos Lambda v2.1</p>
       </footer>
     </div>
   );
