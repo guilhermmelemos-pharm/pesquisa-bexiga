@@ -6,4 +6,5 @@ deep-translator
 feedparser
 nltk
 google-genai
+scipy
 tenacity
