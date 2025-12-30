@@ -1,0 +1,10 @@
+streamlit
+pandas
+plotly
+biopython
+deep-translator
+feedparser
+nltk
+google-generativeai
+scipy
+tenacity
