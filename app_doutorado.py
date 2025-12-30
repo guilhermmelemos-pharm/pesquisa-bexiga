@@ -5,7 +5,6 @@ Licensed under the MIT License.
 """
 import streamlit as st
 
-# --- 1. CONFIGURAÇÃO DA PÁGINA (Deve ser a primeira linha) ---
 st.set_page_config(
     page_title="λ Lemos Lambda: Deep Science Prospector", 
     page_icon="λ", 
@@ -21,7 +20,6 @@ import scipy.stats as stats
 import constantes as c
 import backend as bk 
 
-# --- 2. ESTADO E INICIALIZAÇÃO ---
 defaults = {
     'pagina': 'home', 'alvos_val': "", 'resultado_df': None, 'news_index': 0,
     'input_alvo': "", 'input_fonte': "", 'input_email': "", 'artigos_detalhe': None,
@@ -37,7 +35,6 @@ if 'api_key_usuario' not in st.session_state: st.session_state.api_key_usuario =
 def get_textos(): return c.TEXTOS.get(st.session_state.lang, c.TEXTOS["pt"])
 t = get_textos()
 
-# --- 3. CSS (ESTILIZAÇÃO) ---
 st.markdown("""
     <style>
     .stButton button { border-radius: 12px; height: 50px; font-weight: bold; }
@@ -50,8 +47,6 @@ st.markdown("""
     .sub-header-style { font-size: 1.2rem; font-weight: 400; color: #A0A0A0; margin-bottom: 20px; }
     </style>
 """, unsafe_allow_html=True)
-
-# ================= LÓGICA DO APP =================
 
 def mudar_idioma(novo_lang): 
     st.session_state.lang = novo_lang; resetar_pesquisa(); st.rerun()
@@ -73,9 +68,7 @@ def adicionar_termos_seguro(lista, textos):
 
 def carregar_lista_dinamica_smart(textos):
     email, alvo = st.session_state.input_email, st.session_state.input_alvo
-    # Master Switch Lógica
     usar_ia = st.session_state.usar_ia_faxina and st.session_state.ia_global_switch
-    
     if not alvo: st.error(textos["erro_alvo"]); return
     existentes = [x.strip() for x in st.session_state.alvos_val.split(",") if x.strip()]
     lista_mestra = list(set(existentes)) 
@@ -155,14 +148,11 @@ def exibir_radar_cientifico(lang_code, textos):
                     st.link_button(textos["btn_ler"], n['link'], use_container_width=True)
     except: pass
 
-# --- HEADER E IDIOMA ---
 c_logo, c_lang = st.columns([10, 2])
 with c_lang:
     c1, c2 = st.columns(2)
     with c1: st.button("🇧🇷", key="pt_btn", on_click=mudar_idioma, args=("pt",))
     with c2: st.button("🇺🇸", key="en_btn", on_click=mudar_idioma, args=("en",))
-
-# ================= UI PRINCIPAL =================
 
 if st.session_state.pagina == 'resultados':
     c_back, c_tit = st.columns([1, 5])
@@ -195,14 +185,12 @@ if st.session_state.pagina == 'resultados':
                         if not st.session_state.api_key_usuario:
                             nova_chave = st.text_input("Cole sua Google API Key:", type="password", key=f"key_input_{i}")
                             if nova_chave: st.session_state.api_key_usuario = nova_chave; st.rerun()
-                        # Lógica da IA (Verifica Chave E Master Switch)
                         if st.session_state.api_key_usuario and st.session_state.ia_global_switch:
                             if st.button(f"🤖 Analisar este artigo", key=f"btn_ia_{i}"):
                                 with st.spinner("Analisando..."):
                                     resumo = bk.analisar_abstract_com_ia(art['Title'], art.get('Info_IA', ''), st.session_state.api_key_usuario, st.session_state.lang)
                                     st.markdown(f"<div style='background-color: #262730; color: #ffffff; padding: 15px; border-radius: 8px; border-left: 5px solid #FF4B4B; margin-top: 10px;'><small style='color: #FF4B4B;'>🧠 <b>Análise Lemos Lambda:</b></small><br><span style='font-size: 1.1em;'>{resumo}</span></div>", unsafe_allow_html=True)
-                        elif st.session_state.api_key_usuario and not st.session_state.ia_global_switch:
-                             st.caption("⚠️ IA Desativada (Master Switch OFF)")
+                        elif st.session_state.api_key_usuario and not st.session_state.ia_global_switch: st.caption("⚠️ IA Desativada (Master Switch OFF)")
                     with c_link: st.link_button("🔗 Abrir no PubMed", art['Link'], use_container_width=True)
 else:
     # --- HOME ---
@@ -228,18 +216,20 @@ else:
                 adicionar_termos_seguro(c.PRESETS_FRONTEIRA[escolha], t); st.rerun()
     with col_config:
         st.subheader(t["header_config"])
-        # --- BOTÃO MASTER (FORA DO EXPANDER) ---
+        
+        # --- AQUI ESTÁ A CORREÇÃO: BOTÃO "GLOBAL" VISÍVEL ---
         st.toggle("🤖 Habilitar IA Generativa (Global)", key="ia_global_switch", value=True)
         
-        # --- CONFIGURAÇÃO DA CHAVE (DENTRO DO EXPANDER RENOMEADO) ---
+        # --- E O MENU "CHAVE API" RENOMEADO ---
         with st.expander("🔑 Configurar Chave API", expanded=True):
             st.session_state.api_key_usuario = st.text_input("Google API Key", type="password", value=st.session_state.api_key_usuario)
             st.toggle("✨ Ativar Curadoria por IA", key="usar_ia_faxina", help="Usa a IA para limpar a lista de mineração.")
             st.markdown(f"[{t['link_key']}](https://aistudio.google.com/app/apikey)")
+        
         st.divider()
         anos = st.slider(t["slider_tempo"], 2000, datetime.now().year, (2015, datetime.now().year))
         
-        # --- CAMPO DE CONTEXTO CORRIGIDO ---
+        # --- E O TEXTO DO CONTEXTO CORRIGIDO NA MARRA ---
         st.text_input("Orgão para comparar", key="input_fonte")
         
         st.file_uploader(t["uploader_label"], type=["csv", "txt"], key="uploader_key", on_change=processar_upload, args=(t,))
@@ -249,7 +239,7 @@ else:
         with st.expander(t["expander_lista"]):
             st.text_area("", key="alvos_val", height=150)
             
-            # --- BOTÃO APAGAR CORRIGIDO ---
+            # --- E O BOTÃO "APAGAR" CORRIGIDO NA MARRA ---
             st.button("Apagar termos", on_click=limpar_lista_total)
             
         if st.button(t["btn_executar"], type="primary", use_container_width=True):
