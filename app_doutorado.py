@@ -54,7 +54,10 @@ st.markdown("""
 # ================= LÓGICA =================
 
 def mudar_idioma(novo_lang): 
-    st.session_state.lang = novo_lang; resetar_pesquisa(); st.rerun()
+    # CORREÇÃO AQUI: Removemos o st.rerun() pois o botão já faz isso nativamente
+    st.session_state.lang = novo_lang
+    resetar_pesquisa()
+
 def limpar_campo(k): st.session_state[k] = ""
 def limpar_lista_total(): st.session_state.alvos_val = ""
 
@@ -100,26 +103,37 @@ def ir_para_analise(email, contexto, alvo, y_ini, y_fim, textos):
         st.markdown(textos["titulo_processando"]); prog = st.progress(0)
     for i, item in enumerate(lista):
         time.sleep(0.01) 
-        n_global = bk.consultar_pubmed_count(item, "", email, y_ini, y_fim)
+        base_comparacao = contexto if contexto else ""
+        n_base = bk.consultar_pubmed_count(item, base_comparacao, email, y_ini, y_fim)
         n_especifico = bk.consultar_pubmed_count(item, alvo, email, y_ini, y_fim)
+        
         a, b, c_val = n_especifico, n_global - n_especifico, n_total_alvo - n_especifico
         d = max(0, N_PUBMED - (a + max(0,b) + max(0,c_val)))
+        
         try: _, p_value = stats.fisher_exact([[a, max(0,b)], [max(0,c_val), d]], alternative='greater')
         except: p_value = 1.0
-        expected = (n_global * n_total_alvo) / N_PUBMED
-        enrichment = (n_especifico + 0.1) / (expected if expected > 0 else 0.00001)
+        
+        expected = (n_base * n_total_alvo) / N_PUBMED
+        if expected == 0: expected = 0.00001
+        enrichment = (n_especifico + 0.1) / expected
+        if contexto and n_base > n_especifico: enrichment = enrichment / 2 
+
+        # --- LÓGICA DE CLASSIFICAÇÃO (0-5 = BLUE OCEAN) ---
         tag, score_sort = textos["tag_neutral"], 0
-        if n_especifico == 0:
-            if n_global > 100: tag, score_sort = textos["tag_blue_ocean"], 1000
-            else: tag, score_sort = textos["tag_ghost"], 0
-        elif n_especifico <= 15:
-            if n_global > 50: tag, score_sort = textos["tag_embryonic"], 500
-            else: tag, score_sort = textos["tag_neutral"], 20
+        
+        if n_especifico <= 5:
+            if n_base > 20: 
+                tag, score_sort = textos["tag_blue_ocean"], 1000
+            else: 
+                tag, score_sort = textos["tag_ghost"], 0
+        elif n_especifico <= 25:
+            tag, score_sort = textos["tag_embryonic"], 500
         else:
-            if enrichment > 5: tag, score_sort = textos["tag_gold"], 100
-            elif enrichment > 1.5: tag, score_sort = textos["tag_trending"], 200
+            if enrichment > 1.5: tag, score_sort = textos["tag_trending"], 200 
+            elif enrichment > 5: tag, score_sort = textos["tag_gold"], 100
             else: tag, score_sort = textos["tag_saturated"], 10
-        res.append({textos["col_mol"]: item, textos["col_status"]: tag, textos["col_ratio"]: round(float(enrichment), 1), "P-Value": f"{p_value:.4f}", textos["col_art_alvo"]: n_especifico, textos["col_global"]: n_global, "_sort": score_sort})
+            
+        res.append({textos["col_mol"]: item, textos["col_status"]: tag, textos["col_ratio"]: round(float(enrichment), 1), "P-Value": f"{p_value:.4f}", textos["col_art_alvo"]: n_especifico, textos["col_global"]: n_base, "_sort": score_sort})
         prog.progress((i+1)/len(lista))
     placeholder.empty()
     st.session_state.resultado_df = pd.DataFrame(res).sort_values(by=["_sort", textos["col_ratio"]], ascending=[False, False])
@@ -153,14 +167,12 @@ def exibir_radar_cientifico(lang_code, textos):
                     st.link_button(textos["btn_ler"], n['link'], use_container_width=True)
     except: pass
 
-# --- HEADER E IDIOMA ---
+# --- UI ---
 c_logo, c_lang = st.columns([10, 2])
 with c_lang:
     c1, c2 = st.columns(2)
     with c1: st.button("🇧🇷", key="pt_btn", on_click=mudar_idioma, args=("pt",))
     with c2: st.button("🇺🇸", key="en_btn", on_click=mudar_idioma, args=("en",))
-
-# ================= UI PRINCIPAL =================
 
 if st.session_state.pagina == 'resultados':
     c_back, c_tit = st.columns([1, 5])
@@ -179,31 +191,30 @@ if st.session_state.pagina == 'resultados':
         c_sel, c_btn = st.columns([3, 1], vertical_alignment="bottom")
         with c_sel: sel = st.selectbox(t["label_investigar"], lista_alvos)
         with c_btn: 
-            if st.button(f"🔎 Buscar Papers", use_container_width=True):
+            if st.button(t["btn_investigar"], use_container_width=True):
                 with st.spinner(t["spinner_investigando"]):
                     st.session_state.artigos_detalhe = bk.buscar_resumos_detalhados(sel, st.session_state.alvo_guardado, st.session_state.email_guardado, 2015, 2025)
                     st.rerun()
         if st.session_state.artigos_detalhe:
-            st.info(f"Foram encontrados {len(st.session_state.artigos_detalhe)} artigos recentes sobre {sel}.")
+            st.info(f"{len(st.session_state.artigos_detalhe)} papers found for {sel}.")
             for i, art in enumerate(st.session_state.artigos_detalhe):
                 with st.expander(f"📄 {art['Title']}", expanded=False):
-                    st.caption(f"**Keywords/Contexto:** {art.get('Info_IA', 'N/A')[:200]}...")
+                    st.caption(f"**Keywords/Context:** {art.get('Info_IA', 'N/A')[:200]}...")
                     c_ia, c_link = st.columns([1, 1])
                     with c_ia:
                         if not st.session_state.api_key_usuario:
-                            nova_chave = st.text_input("Cole sua Google API Key:", type="password", key=f"key_input_{i}")
+                            nova_chave = st.text_input("Google API Key:", type="password", key=f"key_input_{i}")
                             if nova_chave: st.session_state.api_key_usuario = nova_chave; st.rerun()
-                        # IA: Verifica o switch global
                         if st.session_state.api_key_usuario and st.session_state.ia_global_switch:
-                            if st.button(f"🤖 Analisar este artigo", key=f"btn_ia_{i}"):
-                                with st.spinner("Analisando..."):
+                            if st.button(f"🤖 {t['btn_investigar']}", key=f"btn_ia_{i}"):
+                                with st.spinner("Analyzing..."):
                                     resumo = bk.analisar_abstract_com_ia(art['Title'], art.get('Info_IA', ''), st.session_state.api_key_usuario, st.session_state.lang)
-                                    st.markdown(f"<div style='background-color: #262730; color: #ffffff; padding: 15px; border-radius: 8px; border-left: 5px solid #FF4B4B; margin-top: 10px;'><small style='color: #FF4B4B;'>🧠 <b>Análise Lemos Lambda:</b></small><br><span style='font-size: 1.1em;'>{resumo}</span></div>", unsafe_allow_html=True)
+                                    st.markdown(f"<div style='background-color: #262730; color: #ffffff; padding: 15px; border-radius: 8px; border-left: 5px solid #FF4B4B; margin-top: 10px;'><small style='color: #FF4B4B;'>🧠 <b>Lemos Lambda AI:</b></small><br><span style='font-size: 1.1em;'>{resumo}</span></div>", unsafe_allow_html=True)
                         elif st.session_state.api_key_usuario and not st.session_state.ia_global_switch:
-                             st.caption("⚠️ IA Desativada no Painel Lateral")
-                    with c_link: st.link_button("🔗 Abrir no PubMed", art['Link'], use_container_width=True)
+                             st.caption("⚠️ AI Disabled")
+                    with c_link: st.link_button(t["btn_pubmed"], art['Link'], use_container_width=True)
 else:
-    st.markdown(f'<p class="header-style">λ {t["titulo_desk"]}</p>', unsafe_allow_html=True)
+    st.markdown(f'<p class="header-style">{t["titulo_desk"]}</p>', unsafe_allow_html=True)
     st.markdown(f'<p class="sub-header-style">{t["subtitulo"]}</p>', unsafe_allow_html=True)
     exibir_radar_cientifico(st.session_state.lang, t); st.divider()
     col_main, col_config = st.columns([2, 1])
@@ -225,34 +236,21 @@ else:
                 adicionar_termos_seguro(c.PRESETS_FRONTEIRA[escolha], t); st.rerun()
     with col_config:
         st.subheader(t["header_config"])
-        
-        # --- CORREÇÃO VISUAL AQUI ---
-        # Botão Global FORA do expander
-        st.toggle("🤖 Habilitar IA Generativa (Global)", key="ia_global_switch", value=True)
-        
-        # Expander RENOMEADO para não parecer botão
-        with st.expander("🔑 Configurar Chave API", expanded=True):
+        st.toggle(t["label_ia_global"], key="ia_global_switch")
+        with st.expander(t["expander_ia"], expanded=True):
             st.session_state.api_key_usuario = st.text_input("Google API Key", type="password", value=st.session_state.api_key_usuario)
-            st.toggle("✨ Ativar Curadoria por IA", key="usar_ia_faxina", help="Usa a IA para limpar a lista de mineração.")
+            st.toggle(t["toggle_ia_curadoria"], key="usar_ia_faxina")
             st.markdown(f"[{t['link_key']}](https://aistudio.google.com/app/apikey)")
-        
         st.divider()
         anos = st.slider(t["slider_tempo"], 2000, datetime.now().year, (2015, datetime.now().year))
-        
-        # --- TEXTO FORÇADO AQUI ---
-        st.text_input("Orgão para comparar", key="input_fonte")
-        
+        st.text_input(t["label_contexto"], key="input_fonte")
         st.file_uploader(t["uploader_label"], type=["csv", "txt"], key="uploader_key", on_change=processar_upload, args=(t,))
-    
     st.divider()
     if st.session_state.alvos_val:
-        st.success(f"✅ {len(st.session_state.alvos_val.split(','))} alvos prontos.")
+        st.success(f"✅ {len(st.session_state.alvos_val.split(','))} {t['msg_alvos_ok']}")
         with st.expander(t["expander_lista"]):
             st.text_area("", key="alvos_val", height=150)
-            
-            # --- TEXTO FORÇADO AQUI TAMBÉM ---
-            st.button("Apagar termos", on_click=limpar_lista_total)
-            
+            st.button(t["btn_limpar"], on_click=limpar_lista_total)
         if st.button(t["btn_executar"], type="primary", use_container_width=True):
             if not st.session_state.input_email: st.error(t["erro_email"])
             else: ir_para_analise(st.session_state.input_email, st.session_state.input_fonte, st.session_state.input_alvo, anos[0], anos[1], t)
@@ -261,6 +259,6 @@ st.markdown("---")
 cf1, cf2 = st.columns([2, 1])
 with cf1:
     st.caption(t["footer_citar"])
-    with st.expander(t["citar_titulo"]): st.code("Lemos, G. (2025). Lemos Lambda: Deep Science Prospector (v2.0). Zenodo. https://doi.org/10.5281/zenodo.18092141", language="text")
+    with st.expander(t["citar_titulo"]): st.code(t["citar_texto"], language="text")
 with cf2:
     st.caption(t["apoio_titulo"]); st.text_input("Chave Pix:", value="960f3f16-06ce-4e71-9b5f-6915b2a10b5a", disabled=False)
