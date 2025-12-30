@@ -5,8 +5,6 @@ import {
 } from 'lucide-react';
 import { TEXTS, PRESETS_FRONTEIRA } from '../constants';
 import Radar from './Radar';
-// Se você criou o componente Logo.tsx, descomente a linha abaixo. Se não, deixe comentado.
-// import Logo from './Logo'; 
 import { AppState, Language, MiningStrategy } from '../types';
 
 interface HomeViewProps {
@@ -82,7 +80,6 @@ const HomeView: React.FC<HomeViewProps> = ({
       <header className="mb-8 flex justify-between items-center">
         <div>
           <div className="flex items-center gap-3">
-            {/* Se tiver o componente Logo, use <Logo className="w-10 h-10 text-lemos-red"/> aqui */}
             <span className="text-3xl text-lemos-red">λ</span>
             <h1 className="text-3xl md:text-4xl font-bold tracking-tight">{t.titulo_desk}</h1>
           </div>
