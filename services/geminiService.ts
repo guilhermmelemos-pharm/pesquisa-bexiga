@@ -21,19 +21,19 @@ export class GeminiService {
     }
 
     try {
-      // --- LÓGICA DE PARTIDA (COLD START) ---
+      // --- LÓGICA INTELIGENTE (COLD START vs EXPANSION) ---
       const isListEmpty = currentList.length === 0;
       let contextInstruction = "";
 
       if (isListEmpty) {
-        // Se a lista estiver vazia, pedimos para CRIAR a base
+        // MODO FOLHA EM BRANCO: Ensina a IA a gerar a base
         contextInstruction = `
         STATE: COLD START (Zero knowledge).
         TASK: Generate the INITIAL foundation list of targets for this disease.
         NOTE: Do not ask for examples, just generate the most scientifically relevant targets.
         `;
       } else {
-        // Se tiver itens, pedimos para EXPANDIR
+        // MODO EXPANSÃO: Pede coisas novas
         contextInstruction = `
         STATE: EXPANSION MODE.
         EXCLUSION LIST (IGNORE these, find NEW ones):
@@ -48,7 +48,7 @@ export class GeminiService {
       `;
 
       let prompt = "";
-      // Temperatura calibrada para o 2.0 Flash
+      // Temperatura média para garantir JSON válido no 1.5
       let temperature = 0.7; 
 
       switch (strategy) {
@@ -106,16 +106,15 @@ export class GeminiService {
           break;
       }
 
-      // --- USO DO GEMINI 2.0 FLASH EXPERIMENTAL ---
-      // Este modelo está na sua lista "Check" ✅ e é muito poderoso.
+      // --- MUDANÇA PARA O MODELO ESTÁVEL (1.5 FLASH) ---
       const response = await this.ai.models.generateContent({
-        model: 'gemini-2.0-flash-exp', 
+        model: 'gemini-1.5-flash', 
         contents: prompt + "\nOutput strictly a JSON Array of strings: [\"Item1\", \"Item2\"]",
         config: {
           temperature: temperature,
           maxOutputTokens: 2000,
           responseMimeType: "application/json",
-          // Desativa bloqueios para permitir termos médicos
+          // Desliga bloqueios de segurança para permitir termos médicos/drogas
           safetySettings: [
             { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
             { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
@@ -127,13 +126,14 @@ export class GeminiService {
       });
 
       const text = response.text || "[]";
-      console.log(`[Gemini 2.0] Resposta:`, text);
+      console.log(`[Gemini 1.5] Resposta:`, text);
       
       let terms: string[] = [];
       try {
         terms = JSON.parse(text);
       } catch (jsonError) {
         console.error("Erro JSON:", jsonError);
+        // Fallback simples
         terms = text.replace(/[\[\]"]/g, "").split(",");
       }
       
@@ -145,8 +145,8 @@ export class GeminiService {
         .filter(t => !lowerCaseCurrentSet.has(t.toLowerCase()));
         
     } catch (error) {
-      console.error("Gemini Critical Error:", error);
-      alert("A IA falhou. Detalhes no console. Tente trocar para 'gemini-1.5-flash' se o '2.0-flash-exp' continuar instável.");
+      console.error("Gemini Error:", error);
+      alert("Erro na IA: " + error);
       return currentList; 
     }
   }
@@ -161,7 +161,7 @@ export class GeminiService {
 
     try {
       const response = await this.ai.models.generateContent({
-        model: 'gemini-2.0-flash-exp', 
+        model: 'gemini-1.5-flash', 
         contents: `Analyze: Title: "${title}" Abstract: "${optimizedAbstract}". Task: Identify Target, Drug, and Effect. Output format: "M: [Molecule] | E: [Effect]"`,
       });
       return response.text || "Analysis failed.";
