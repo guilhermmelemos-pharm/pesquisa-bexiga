@@ -31,6 +31,7 @@ export type MiningStrategy = 'conservative' | 'repurposing' | 'mechanism' | 'blu
 export interface AppState {
   page: 'home' | 'results';
   email: string;
+  apiKey: string; // Added field
   target: string;
   context: string;
   yearStart: number;

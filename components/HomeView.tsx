@@ -257,15 +257,33 @@ const HomeView: React.FC<HomeViewProps> = ({
 
             <div className="space-y-4">
               <div>
-                <div className="mt-3 flex items-center gap-2">
-                  <input 
-                    type="checkbox" 
-                    id="aiToggle"
-                    checked={state.useAI}
-                    onChange={(e) => updateState({ useAI: e.target.checked })}
-                    className="accent-lemos-red"
-                  />
-                  <label htmlFor="aiToggle" className="text-sm text-gray-300">{t.expander_ia}</label>
+                <div className="mt-3 flex flex-col gap-3">
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="checkbox" 
+                      id="aiToggle"
+                      checked={state.useAI}
+                      onChange={(e) => updateState({ useAI: e.target.checked })}
+                      className="accent-lemos-red h-4 w-4"
+                    />
+                    <label htmlFor="aiToggle" className="text-sm text-gray-300 cursor-pointer">{t.expander_ia}</label>
+                  </div>
+                  
+                  {state.useAI && (
+                    <div className="pl-6 animate-in fade-in slide-in-from-top-2">
+                      <div className="relative">
+                        <Key size={14} className="absolute left-3 top-3 text-gray-500" />
+                        <input 
+                          type="password"
+                          value={state.apiKey}
+                          onChange={(e) => updateState({ apiKey: e.target.value })}
+                          placeholder={t.placeholder_key}
+                          className="w-full bg-lemos-dark border border-gray-700 rounded-lg py-2.5 pl-9 pr-3 text-xs text-white focus:border-lemos-red focus:outline-none"
+                        />
+                      </div>
+                      <p className="text-[10px] text-gray-500 mt-1 ml-1">{t.caption_ia} <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-blue-400 hover:underline">{t.link_key}</a></p>
+                    </div>
+                  )}
                 </div>
               </div>
               

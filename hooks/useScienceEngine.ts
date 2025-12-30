@@ -9,6 +9,7 @@ export const useScienceEngine = () => {
   const [state, setState] = useState<AppState>({
     page: 'home',
     email: '',
+    apiKey: '',
     target: '',
     context: '',
     yearStart: 2015,
@@ -64,13 +65,12 @@ export const useScienceEngine = () => {
       ? state.targetList.split(',').map(s => s.trim()).filter(x => x) 
       : [];
 
-    // 1. Initial Seeding logic altered:
-    // Only auto-seed with presets if using "Conservative/Clean" mode on an empty list.
-    // For Blue Ocean/Repurposing, we want the AI to generate from scratch if empty.
+    // REMOVED: Confusing fallback logic that injected 'Blockbusters' preset when list was empty.
+    // Now, if list is empty and user wants 'Conservative' (Cleaning), we just warn them.
     if (currentTerms.length === 0 && state.miningStrategy === 'conservative') {
-      const randomPreset = Object.values(PRESETS_FRONTEIRA)[0];
-      currentTerms = [...randomPreset];
-      alert("Modo Faxina requer uma lista inicial. Carregando preset padrão...");
+      alert("O modo 'Faxina' serve para limpar uma lista existente. Por favor, adicione alvos manualmente ou use 'Blue Ocean' para descobrir novos.");
+      setIsLoading(false);
+      return;
     }
 
     // 2. Cross-Tissue Intelligence
@@ -80,7 +80,8 @@ export const useScienceEngine = () => {
           state.target,
           state.context || '', // Ensure context is never null
           currentTerms,
-          state.miningStrategy
+          state.miningStrategy,
+          state.apiKey // Pass the key from UI
         );
         
         if (resultTerms.length === 0) {
@@ -100,7 +101,8 @@ export const useScienceEngine = () => {
 
       } catch (e) {
         console.warn("Deep Mining failed", e);
-        alert("Erro na Mineração IA. Verifique sua API Key no environment.");
+        // More descriptive error
+        alert("Erro na Mineração IA. Verifique se sua API Key está inserida nas configurações ou no environment.");
       }
     } else if (state.context) {
       // Fallback: simple regex on context if no AI
@@ -142,7 +144,7 @@ export const useScienceEngine = () => {
   };
 
   const analyzeArticle = async (title: string, abstract: string) => {
-    return await gemini.analyzePaper(title, abstract);
+    return await gemini.analyzePaper(title, abstract, state.apiKey);
   };
 
   return {

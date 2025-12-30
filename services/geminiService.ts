@@ -3,31 +3,42 @@ import { GoogleGenAI } from "@google/genai";
 import { MiningStrategy } from "../types";
 
 export class GeminiService {
-  private ai: GoogleGenAI;
-
-  constructor() {
-    this.ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  
+  private getClient(apiKey?: string): GoogleGenAI {
+    // Prioritize key passed from UI, fallback to env, finally error if neither exists
+    const key = apiKey || process.env.API_KEY;
+    if (!key) {
+      throw new Error("MISSING_KEY");
+    }
+    return new GoogleGenAI({ apiKey: key });
   }
 
   /**
    * Deep Mining Strategy:
    * Branches based on the selected strategy.
    */
-  async mineNovelTargets(target: string, context: string, currentList: string[], strategy: MiningStrategy): Promise<string[]> {
-    if (!this.ai) {
-      console.warn("Gemini AI instance not initialized.");
-      throw new Error("Gemini Client Error");
+  async mineNovelTargets(target: string, context: string, currentList: string[], strategy: MiningStrategy, apiKey?: string): Promise<string[]> {
+    let ai: GoogleGenAI;
+    try {
+        ai = this.getClient(apiKey);
+    } catch (e) {
+        console.warn("API Key missing");
+        throw new Error("API Key Missing");
     }
 
     try {
-      // If list is empty, we say "None".
+      // Create a set for case-insensitive local filtering of the output
+      const lowerCaseCurrentSet = new Set(currentList.map(t => t.toLowerCase().trim()));
+      
       const currentListStr = currentList.length > 0 ? currentList.join(", ") : "None";
       
       const baseContext = `
-      CONTEXT DATA:
+      CONTEXT:
       - Primary Disease/Organ: "${target}"
-      - Additional Biological Context: "${context}"
-      - Existing List (DO NOT REPEAT THESE): ${currentListStr}
+      - Bio Context: "${context}"
+      
+      EXCLUSION LIST (ALREADY KNOWN - DO NOT OUTPUT THESE):
+      [${currentListStr}]
       `;
 
       let prompt = "";
@@ -36,50 +47,54 @@ export class GeminiService {
 
       switch (strategy) {
         case 'conservative':
-          temperature = 0.1; // Strict, deterministic
+          temperature = 0.1; // Strict
           prompt = `
             Role: Scientific Data Curator.
-            Task: Clean and standardize the "Existing List" provided above.
+            Task: Clean, Standardize, and Convert the "EXCLUSION LIST" into a clean list of Molecular Targets.
+            
+            Input Data:
             ${baseContext}
             
             Instructions:
-            1. **REMOVE NOISE**: Delete terms that are NOT specific molecular targets (e.g., "Study", "Analysis", "Rats", "Patients", "Placebo", "Safety").
-            2. **STANDARDIZE**: Convert names to official gene/protein symbols (e.g., "ATP receptor" -> "P2X3").
-            3. **OUTPUT**: A strict comma-separated list of the cleaned molecules. Nothing else.
+            1. **CONVERT DRUGS TO TARGETS**: If an item is a drug (e.g., "Semaglutide", "Viagra"), output its primary molecular target (e.g., "GLP1R", "PDE5").
+            2. **REMOVE NOISE**: Delete terms that are NOT specific molecular targets (e.g., "Study", "Analysis", "Safety", "Placebo", "Rats").
+            3. **STANDARDIZE**: Use official gene/protein symbols (e.g., "ATP receptor" -> "P2X3").
+            4. **OUTPUT**: A single comma-separated list of the FINAL targets.
           `;
           break;
 
         case 'repurposing':
-          temperature = 0.4; // Balanced for finding real drugs
+          temperature = 0.4;
           prompt = `
-            Role: Senior Pharmacologist & Drug Hunter.
-            Task: Suggest approved drugs or clinical candidates that could be REPURPOSED for "${target}".
+            Role: Senior Pharmacologist.
+            Task: Suggest approved drugs or clinical candidates for "${target}".
             ${baseContext}
 
             Instructions:
-            1. **IGNORE EXISTING**: Do not output items from the "Existing List". Find NEW candidates.
-            2. **HIGH POTENTIAL**: Focus on drugs with known safety profiles (FDA approved) or Phase 2/3 data.
-            3. **SPECIFICITY**: Return the DRUG NAME or SPECIFIC MOLECULE (e.g., "SGLT2 inhibitors", "Metformin", "Mirabegron").
-            4. **OUTPUT**: A strict comma-separated list of 15 unique, high-value candidates. No numbering.
+            1. **STRICTLY NEW**: Do NOT output any item present in the "EXCLUSION LIST".
+            2. **HIGH POTENTIAL**: Focus on drugs with FDA approval or Phase 2/3 data.
+            3. **FORMAT**: Return the Drug Name or Specific Molecule.
+            4. **OUTPUT**: A strict comma-separated list of 15 unique, high-value candidates.
           `;
           break;
 
         case 'mechanism':
-          temperature = 0.5; // Balanced for pathways
+          temperature = 0.5;
           prompt = `
             Role: Molecular Systems Biologist.
             Task: Identify upstream regulators and downstream effectors for "${target}".
             ${baseContext}
 
             Instructions:
-            1. **PATHWAY MAPPING**: Suggest Kinases (e.g., mTOR, PI3K), Transcription Factors (NF-kB), or Ion Channels involved in the pathophysiology.
-            2. **DEEP DIVE**: Look for specific subunits (e.g., "G alpha s", "Nav1.8", "TRPV4") rather than generic terms.
-            3. **OUTPUT**: A strict comma-separated list of 15 mechanistic targets. No numbering.
+            1. **STRICTLY NEW**: Do NOT output any item present in the "EXCLUSION LIST".
+            2. **PATHWAY MAPPING**: Suggest Kinases, Transcription Factors, or Ion Channels.
+            3. **DEEP DIVE**: Specific subunits (e.g., "G alpha s", "Nav1.8") rather than generic terms.
+            4. **OUTPUT**: A strict comma-separated list of 15 mechanistic targets.
           `;
           break;
 
         case 'blue_ocean':
-          temperature = 0.9; // High creativity for discovery
+          temperature = 0.9;
           topK = 60;
           prompt = `
             Role: Elite Scientific Prospector.
@@ -87,16 +102,15 @@ export class GeminiService {
             ${baseContext}
             
             Instructions:
-            1. **NOVELTY**: Prioritize targets appearing in literature only in the last 3-5 years or those with low citation counts but high relevance.
-            2. **IGNORE THE OBVIOUS**: Do NOT suggest well-known targets for this condition. Dig deeper.
-            3. **ANATOMICAL NICHE**: Look for targets specific to cell types (e.g., "Interstitial Cells", "Urothelium", "Endothelium").
-            4. **OUTPUT**: A strict comma-separated list of 15 novel targets. No bullet points.
+            1. **STRICTLY NEW**: Do NOT output any item present in the "EXCLUSION LIST". This is critical.
+            2. **NOVELTY**: Targets from literature in the last 3-5 years.
+            3. **IGNORE THE OBVIOUS**: Dig for obscure receptors, non-coding RNAs, or orphan GPCRs.
+            4. **OUTPUT**: A strict comma-separated list of 15 novel targets.
           `;
           break;
       }
 
-      // Using gemini-3-flash-preview for speed and reliability with lists
-      const response = await this.ai.models.generateContent({
+      const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview', 
         contents: prompt,
         config: {
@@ -106,35 +120,46 @@ export class GeminiService {
       });
 
       const text = response.text || "";
-      console.log(`Gemini Raw Response (${strategy}):`, text); // Debugging
+      console.log(`Gemini Raw Response (${strategy}):`, text);
       
-      // FIX: Robust Parsing
-      // Remove common conversational fillers and Markdown
       const cleanText = text
         .replace(/^Here.*:/i, "")
         .replace(/Output:/i, "")
-        .replace(/[\[\]*_`]/g, "") // Remove brackets, bold, italics, code blocks
+        .replace(/[\[\]*_`]/g, "")
         .trim();
       
-      // Split by comma or newline
       const terms = cleanText.split(/,|\n/);
       
       return terms
         .map(t => t.trim())
-        .map(t => t.replace(/^\d+[\).]\s*/, "")) // Remove "1. ", "2)"
-        .filter(t => t.length > 2 && t.length < 50) // Length filter
-        .filter(t => !t.toLowerCase().includes("context")) // Filter out hallucinations repeating "Context"
-        .filter(t => !t.toLowerCase().includes("existing list")) // Filter out hallucinations
-        .filter(t => !t.toLowerCase().includes("none")); // Filter out empty indicator
+        .map(t => t.replace(/^\d+[\).]\s*/, ""))
+        .filter(t => t.length > 2 && t.length < 50)
+        .filter(t => !t.toLowerCase().includes("context"))
+        .filter(t => !t.toLowerCase().includes("exclusion list"))
+        .filter(t => !t.toLowerCase().includes("none"))
+        // Strong client-side filter to prevent repetition
+        .filter(t => {
+            // If strategy is conservative, we ALLOW items from input (because we are cleaning/converting them)
+            // If strategy is OTHERS, we STRICTLY BLOCK items from input
+            if (strategy === 'conservative') return true;
+            
+            // For other strategies, check against the exclusion list
+            return !lowerCaseCurrentSet.has(t.toLowerCase());
+        });
         
     } catch (error) {
       console.error("Gemini Mining Error:", error);
-      throw error; // Throw so UI knows it failed
+      throw error;
     }
   }
 
-  async analyzePaper(title: string, abstract: string): Promise<string> {
-    if (!this.ai) return "API Key Required for Analysis.";
+  async analyzePaper(title: string, abstract: string, apiKey?: string): Promise<string> {
+    let ai: GoogleGenAI;
+    try {
+        ai = this.getClient(apiKey);
+    } catch (e) {
+        return "API Key Required for Analysis.";
+    }
     
     if (!abstract || typeof abstract !== 'string') {
       return "Abstract not available for analysis.";
@@ -146,7 +171,7 @@ export class GeminiService {
     }
 
     try {
-      const response = await this.ai.models.generateContent({
+      const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: `
         Analyze this scientific abstract.
