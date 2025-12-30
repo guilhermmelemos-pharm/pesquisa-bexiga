@@ -22,9 +22,9 @@ export class GeminiService {
     if (!this.ai) return currentList;
 
     try {
-      const isComparative = context.length > 2;
-      let prompt = "";
+      const isComparative = (context || "").length > 2;
       const baseContext = `- Primary Target Organ/Disease: "${target}"\n- Current Candidate List: ${currentList.join(", ")}`;
+      let prompt = "";
 
       switch (strategy) {
         case 'conservative':
@@ -91,30 +91,43 @@ export class GeminiService {
       }
 
       const response = await this.ai.models.generateContent({
-        model: 'gemini-2.0-flash-exp', // Experimental model is better for reasoning
+        model: 'gemini-3-pro-preview', 
         contents: prompt,
       });
 
       const text = response.text || "";
-      const terms = text.replace(/Output:|Here is the list:|\[|\]|\./g, "").split(",");
+      
+      // FIX 1: Robust Parsing
+      // AI often ignores "comma-separated" and uses bullets (* or -) or newlines.
+      // We remove Markdown headers, brackets, bullets, and then split by newline OR comma.
+      const cleanText = text.replace(/Output:|Here is the list:|\[|\]|\*|- /g, "");
+      
+      // Split by comma OR newline to handle "List format" responses
+      const terms = cleanText.split(/,|\n/);
       
       return terms
         .map(t => t.trim())
-        .filter(t => t.length > 2 && !t.includes(" " && t.length > 30));
+        // Clean up numbering (e.g., "1. Target")
+        .map(t => t.replace(/^\d+\.\s*/, ""))
+        // Filter out if it contains a space AND is too long (hallucination sentence)
+        .filter(t => t.length > 2 && !(t.includes(" ") && t.length > 30));
         
     } catch (error) {
       console.error("Gemini Mining Error:", error);
+      // Fail gracefully returning current list
       return currentList;
     }
   }
 
   async analyzePaper(title: string, abstract: string): Promise<string> {
     if (!this.ai) return "API Key Required for Analysis.";
+    
+    // FIX 2: Crash Prevention for Null Abstracts
+    if (!abstract || typeof abstract !== 'string') {
+      return "Abstract not available for analysis.";
+    }
 
     // SMART CONTEXT OPTIMIZATION:
-    // Instead of sending the whole abstract (which costs more tokens),
-    // we send the Title + First 300 chars (Intro) + Last 300 chars (Conclusion).
-    // This captures the "Aim" and the "Result" 90% of the time.
     let optimizedAbstract = abstract;
     if (abstract.length > 600) {
       optimizedAbstract = abstract.substring(0, 300) + "\n...[middle section skipped]...\n" + abstract.substring(abstract.length - 300);
@@ -139,7 +152,7 @@ export class GeminiService {
 
       return response.text || "Analysis failed.";
     } catch (error) {
-      return "Error analyzing paper.";
+      return "Error analyzing paper (AI Limit or Network).";
     }
   }
 }

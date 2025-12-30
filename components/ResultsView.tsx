@@ -82,6 +82,8 @@ const ResultsView: React.FC<ResultsViewProps> = ({
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    // Fix: Revoke URL to prevent memory leaks
+    URL.revokeObjectURL(url);
   };
 
   return (

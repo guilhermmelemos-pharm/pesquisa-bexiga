@@ -60,7 +60,10 @@ export const useScienceEngine = () => {
   };
 
   const handleDeepMine = async () => {
-    if (!state.target) throw new Error("Target is required");
+    if (!state.target) {
+      alert("Please define a Target first.");
+      return;
+    }
     
     setIsLoading(true);
     let currentTerms = state.targetList 
@@ -78,7 +81,7 @@ export const useScienceEngine = () => {
       try {
         const resultTerms = await gemini.mineNovelTargets(
           state.target,
-          state.context,
+          state.context || '', // Ensure context is never null
           currentTerms,
           state.miningStrategy
         );
@@ -95,7 +98,8 @@ export const useScienceEngine = () => {
         }
 
       } catch (e) {
-        console.warn("Deep Mining failed, falling back to basic list");
+        console.warn("Deep Mining failed", e);
+        alert("AI Mining failed. Check your API Key or Quota.");
       }
     } else if (state.context) {
       // Fallback: simple regex on context if no AI
