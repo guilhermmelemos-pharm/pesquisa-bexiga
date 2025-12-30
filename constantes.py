@@ -1,5 +1,4 @@
-# constantes.py
-# Versão: 4.0 (Tradução Completa + Chaves Adicionais)
+# Versão: 2.0 (Lemos Lambda: Deep Science Prospector)
 
 TEXTOS = {
     "pt": {
@@ -55,7 +54,7 @@ TEXTOS = {
         "expander_lista": "👀 Ver/Editar Lista Completa",
         "toast_importado": "Importação concluída",
         "erro_arquivo": "Erro ao ler arquivo.",
-        "spinner_analise": "Calibrando estatística (Lemos Lambda v4.0)...",
+        "spinner_analise": "Calibrando estatística (Lemos Lambda v2.0)...",
         "titulo_processando": "## 🧬 Processando Estatística...",
         "spinner_investigando": "Lendo artigos com Inteligência Artificial...",
 
@@ -85,7 +84,7 @@ TEXTOS = {
         # --- RODAPÉ ---
         "footer_citar": "Uso Acadêmico",
         "citar_titulo": "📄 Como Citar",
-        "citar_texto": "Lemos, G. (2025). Lemos Lambda v4.0. Zenodo. doi.org/10.5281/zenodo.18092141",
+        "citar_texto": "Lemos, G. (2025). Lemos Lambda v2.0. Zenodo. doi.org/10.5281/zenodo.18092141",
         "apoio_titulo": "Apoie o Projeto (Pix):",
         "apoio_desc": "Ajude a manter o código atualizado ☕"
     },
@@ -131,7 +130,7 @@ TEXTOS = {
         "expander_lista": "👀 View/Edit Full List",
         "toast_importado": "Import successful",
         "erro_arquivo": "Error reading file.",
-        "spinner_analise": "Calibrating statistics (Lemos Lambda v4.0)...",
+        "spinner_analise": "Calibrating statistics (Lemos Lambda v2.0)...",
         "titulo_processando": "## 🧬 Processing Statistics...",
         "spinner_investigando": "Reading articles with AI...",
         "resultados": "Intelligence Report",
@@ -155,7 +154,7 @@ TEXTOS = {
         "tag_saturated": "🔴 Saturated",
         "footer_citar": "Academic Use",
         "citar_titulo": "📄 How to Cite",
-        "citar_texto": "Lemos, G. (2025). Lemos Lambda v4.0. Zenodo.",
+        "citar_texto": "Lemos, G. (2025). Lemos Lambda v2.0. Zenodo.",
         "apoio_titulo": "Support the Project (Pix):",
         "apoio_desc": "Help keep the code updated ☕"
     }
@@ -169,9 +168,5 @@ PRESETS_FRONTEIRA = {
     "🥑 Resolução & Lipídios": ["Resolvin D1", "Resolvin E1", "Maresin-1", "Lipoxin A4", "Anandamide (AEA)", "2-AG", "GPR55", "GPR18"],
     "👻 Receptores Órfãos": ["GPR35", "GPR84", "GPR68", "OR51E2", "OR1D2", "TAS2R14", "TAS2R38"]
 }
-
-CANDIDATOS_MINERACAO = []
-for lista in PRESETS_FRONTEIRA.values():
-    CANDIDATOS_MINERACAO.extend(lista)
 
 BLACKLIST_GERAL = ["review", "meta-analysis", "rat", "mice", "human", "study"]
