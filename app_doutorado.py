@@ -54,7 +54,7 @@ st.markdown("""
 # ================= LÓGICA =================
 
 def mudar_idioma(novo_lang): 
-    # CORREÇÃO AQUI: Removemos o st.rerun() pois o botão já faz isso nativamente
+    # CORREÇÃO 1: Removido st.rerun() para evitar erro "no-op"
     st.session_state.lang = novo_lang
     resetar_pesquisa()
 
@@ -118,10 +118,11 @@ def ir_para_analise(email, contexto, alvo, y_ini, y_fim, textos):
         enrichment = (n_especifico + 0.1) / expected
         if contexto and n_base > n_especifico: enrichment = enrichment / 2 
 
-        # --- LÓGICA DE CLASSIFICAÇÃO (0-5 = BLUE OCEAN) ---
+        # --- CORREÇÃO 2: Lógica Blue Ocean Atualizada (0-5 hits) ---
         tag, score_sort = textos["tag_neutral"], 0
         
         if n_especifico <= 5:
+            # Se tem poucos no alvo, mas existe no mundo (>20), é oportunidade
             if n_base > 20: 
                 tag, score_sort = textos["tag_blue_ocean"], 1000
             else: 
@@ -133,7 +134,15 @@ def ir_para_analise(email, contexto, alvo, y_ini, y_fim, textos):
             elif enrichment > 5: tag, score_sort = textos["tag_gold"], 100
             else: tag, score_sort = textos["tag_saturated"], 10
             
-        res.append({textos["col_mol"]: item, textos["col_status"]: tag, textos["col_ratio"]: round(float(enrichment), 1), "P-Value": f"{p_value:.4f}", textos["col_art_alvo"]: n_especifico, textos["col_global"]: n_base, "_sort": score_sort})
+        res.append({
+            textos["col_mol"]: item, 
+            textos["col_status"]: tag, 
+            textos["col_ratio"]: round(float(enrichment), 1), 
+            "P-Value": f"{p_value:.4f}", 
+            textos["col_art_alvo"]: n_especifico, 
+            textos["col_global"]: n_base, 
+            "_sort": score_sort
+        })
         prog.progress((i+1)/len(lista))
     placeholder.empty()
     st.session_state.resultado_df = pd.DataFrame(res).sort_values(by=["_sort", textos["col_ratio"]], ascending=[False, False])
