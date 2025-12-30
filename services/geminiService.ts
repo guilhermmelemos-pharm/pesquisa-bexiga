@@ -22,17 +22,18 @@ export class GeminiService {
 
     try {
       // --- LÓGICA DE PARTIDA (COLD START) ---
-      // Define se a IA deve CRIAR (lista vazia) ou EXPANDIR (lista cheia)
       const isListEmpty = currentList.length === 0;
       let contextInstruction = "";
 
       if (isListEmpty) {
+        // Se a lista estiver vazia, pedimos para CRIAR a base
         contextInstruction = `
         STATE: COLD START (Zero knowledge).
         TASK: Generate the INITIAL foundation list of targets for this disease.
         NOTE: Do not ask for examples, just generate the most scientifically relevant targets.
         `;
       } else {
+        // Se tiver itens, pedimos para EXPANDIR
         contextInstruction = `
         STATE: EXPANSION MODE.
         EXCLUSION LIST (IGNORE these, find NEW ones):
@@ -47,8 +48,8 @@ export class GeminiService {
       `;
 
       let prompt = "";
-      // Gemini 3 gosta de temperatura alta para ser criativo
-      let temperature = 0.8; 
+      // Temperatura calibrada para o 2.0 Flash
+      let temperature = 0.7; 
 
       switch (strategy) {
         case 'conservative':
@@ -91,7 +92,7 @@ export class GeminiService {
           break;
 
         case 'blue_ocean':
-          temperature = 1.0;
+          temperature = 0.9;
           prompt = `
             Role: Elite Scientific Prospector.
             Task: Identify NOVEL, CONTROVERSIAL, or EMERGING targets for "${target}".
@@ -105,16 +106,16 @@ export class GeminiService {
           break;
       }
 
-      // --- CONFIGURAÇÃO GEMINI 3 PRO ---
+      // --- USO DO GEMINI 2.0 FLASH EXPERIMENTAL ---
+      // Este modelo está na sua lista "Check" ✅ e é muito poderoso.
       const response = await this.ai.models.generateContent({
-        // O modelo que você pediu
-        model: 'gemini-3-pro-preview', 
+        model: 'gemini-2.0-flash-exp', 
         contents: prompt + "\nOutput strictly a JSON Array of strings: [\"Item1\", \"Item2\"]",
         config: {
           temperature: temperature,
-          // Força JSON (Gemini 3 obedece bem a isso)
+          maxOutputTokens: 2000,
           responseMimeType: "application/json",
-          // DESLIGA TODAS AS TRAVAS DE SEGURANÇA (Essencial para Farmacologia)
+          // Desativa bloqueios para permitir termos médicos
           safetySettings: [
             { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
             { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
@@ -126,14 +127,13 @@ export class GeminiService {
       });
 
       const text = response.text || "[]";
-      console.log(`[Gemini 3] Resposta:`, text);
+      console.log(`[Gemini 2.0] Resposta:`, text);
       
       let terms: string[] = [];
       try {
         terms = JSON.parse(text);
       } catch (jsonError) {
         console.error("Erro JSON:", jsonError);
-        // Fallback de força bruta caso o JSON venha quebrado
         terms = text.replace(/[\[\]"]/g, "").split(",");
       }
       
@@ -145,8 +145,8 @@ export class GeminiService {
         .filter(t => !lowerCaseCurrentSet.has(t.toLowerCase()));
         
     } catch (error) {
-      console.error("Gemini 3 Error:", error);
-      alert("Erro no Gemini 3. Verifique se sua chave suporta o modelo 'preview'. Detalhes no console.");
+      console.error("Gemini Critical Error:", error);
+      alert("A IA falhou. Detalhes no console. Tente trocar para 'gemini-1.5-flash' se o '2.0-flash-exp' continuar instável.");
       return currentList; 
     }
   }
@@ -160,10 +160,8 @@ export class GeminiService {
     }
 
     try {
-      // Para análise rápida de texto, o Flash ainda é recomendado, 
-      // mas podemos usar o 3-flash-preview se preferir consistência.
       const response = await this.ai.models.generateContent({
-        model: 'gemini-3-flash-preview', 
+        model: 'gemini-2.0-flash-exp', 
         contents: `Analyze: Title: "${title}" Abstract: "${optimizedAbstract}". Task: Identify Target, Drug, and Effect. Output format: "M: [Molecule] | E: [Effect]"`,
       });
       return response.text || "Analysis failed.";
