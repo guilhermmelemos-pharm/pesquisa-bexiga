@@ -2,12 +2,13 @@
 Lemos Lambda: Deep Science Prospector
 Copyright (c) 2025 Guilherme Lemos
 Licensed under the MIT License.
+Version: 2.0 (Stable)
 """
 import streamlit as st
 
 # --- 1. CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
-    page_title="λ Lemos Lambda: Deep Science Prospector", 
+    page_title="λ Lemos Lambda v2.0: Deep Science Prospector", 
     page_icon="λ", 
     layout="wide", 
     initial_sidebar_state="collapsed"
@@ -32,8 +33,6 @@ defaults = {
 for k, v in defaults.items():
     if k not in st.session_state: st.session_state[k] = v
 
-if 'api_key_usuario' not in st.session_state: st.session_state.api_key_usuario = ""
-
 def get_textos(): return c.TEXTOS.get(st.session_state.lang, c.TEXTOS["pt"])
 t = get_textos()
 
@@ -42,8 +41,6 @@ st.markdown("""
     <style>
     .stButton button { border-radius: 12px; height: 50px; font-weight: bold; }
     div[data-testid="stMetricValue"] { font-size: 1.8rem !important; }
-    div[data-testid="stImage"] { height: 160px !important; overflow: hidden !important; border-radius: 8px !important; }
-    div[data-testid="stImage"] img { height: 160px !important; object-fit: cover !important; width: 100% !important; }
     .big-button button { background-color: #FF4B4B !important; color: white !important; border: none; font-size: 1.1rem !important; }
     .stTextArea textarea { font-family: monospace; }
     .header-style { font-size: 2.5rem; font-weight: 700; color: #FAFAFA; margin-bottom: 0px; }
@@ -98,7 +95,7 @@ def ir_para_analise(email, contexto, alvo, y_ini, y_fim, textos):
         n_total_alvo = bk.consultar_pubmed_count(alvo, "", email, 1900, 2030)
         if n_total_alvo == 0: n_total_alvo = 1
     
-    N_PUBMED = 36000000
+    N_PUBMED = 36000000 # Background global PubMed
     placeholder = st.empty()
     
     with placeholder.container():
@@ -106,13 +103,13 @@ def ir_para_analise(email, contexto, alvo, y_ini, y_fim, textos):
         prog = st.progress(0)
         
     for i, item in enumerate(lista):
-        time.sleep(0.1) # Pequena pausa para não travar o NCBI
+        time.sleep(0.1) 
         
         base_comparacao = contexto if contexto else ""
         n_base = bk.consultar_pubmed_count(item, base_comparacao, email, y_ini, y_fim)
         n_especifico = bk.consultar_pubmed_count(item, alvo, email, y_ini, y_fim)
         
-        # --- A CORREÇÃO ESTÁ AQUI: Usando n_base em vez de n_global ---
+        # --- Cálculo Estatístico Lemos Lambda v2.0 ---
         a, b, c_val = n_especifico, n_base - n_especifico, n_total_alvo - n_especifico
         d = max(0, N_PUBMED - (a + max(0,b) + max(0,c_val)))
         
@@ -125,7 +122,7 @@ def ir_para_analise(email, contexto, alvo, y_ini, y_fim, textos):
         
         if contexto and n_base > n_especifico: enrichment = enrichment / 2 
 
-        # Lógica Blue Ocean (0-5 hits)
+        # Classificação Lemos Lambda
         tag, score_sort = textos["tag_neutral"], 0
         if n_especifico <= 5:
             if n_base > 20: tag, score_sort = textos["tag_blue_ocean"], 1000
@@ -133,8 +130,8 @@ def ir_para_analise(email, contexto, alvo, y_ini, y_fim, textos):
         elif n_especifico <= 25:
             tag, score_sort = textos["tag_embryonic"], 500
         else:
-            if enrichment > 1.5: tag, score_sort = textos["tag_trending"], 200 
-            elif enrichment > 5: tag, score_sort = textos["tag_gold"], 100
+            if enrichment > 5: tag, score_sort = textos["tag_gold"], 100
+            elif enrichment > 1.5: tag, score_sort = textos["tag_trending"], 200 
             else: tag, score_sort = textos["tag_saturated"], 10
             
         res.append({
@@ -155,6 +152,7 @@ def ir_para_analise(email, contexto, alvo, y_ini, y_fim, textos):
 
 def resetar_pesquisa():
     st.session_state.pagina = 'home'; st.session_state.resultado_df = None; st.session_state.artigos_detalhe = None
+
 def processar_upload(textos):
     f = st.session_state.get('uploader_key')
     if f:
@@ -163,6 +161,7 @@ def processar_upload(textos):
             l = [x.strip() for x in content.replace("\n", ",").split(",") if x.strip()]
             adicionar_termos_seguro(l, textos); st.toast(textos['toast_importado'], icon="📂")
         except: st.error(textos["erro_arquivo"])
+
 @st.fragment(run_every=60) 
 def exibir_radar_cientifico(lang_code, textos):
     try:
@@ -181,7 +180,7 @@ def exibir_radar_cientifico(lang_code, textos):
                     st.link_button(textos["btn_ler"], n['link'], use_container_width=True)
     except: pass
 
-# --- UI ---
+# --- UI INTERFACE ---
 c_logo, c_lang = st.columns([10, 2])
 with c_lang:
     c1, c2 = st.columns(2)
@@ -224,8 +223,6 @@ if st.session_state.pagina == 'resultados':
                                 with st.spinner("Analyzing..."):
                                     resumo = bk.analisar_abstract_com_ia(art['Title'], art.get('Info_IA', ''), st.session_state.api_key_usuario, st.session_state.lang)
                                     st.markdown(f"<div style='background-color: #262730; color: #ffffff; padding: 15px; border-radius: 8px; border-left: 5px solid #FF4B4B; margin-top: 10px;'><small style='color: #FF4B4B;'>🧠 <b>Lemos Lambda AI:</b></small><br><span style='font-size: 1.1em;'>{resumo}</span></div>", unsafe_allow_html=True)
-                        elif st.session_state.api_key_usuario and not st.session_state.ia_global_switch:
-                             st.caption("⚠️ AI Disabled")
                     with c_link: st.link_button(t["btn_pubmed"], art['Link'], use_container_width=True)
 else:
     st.markdown(f'<p class="header-style">{t["titulo_desk"]}</p>', unsafe_allow_html=True)
@@ -269,6 +266,7 @@ else:
             if not st.session_state.input_email: st.error(t["erro_email"])
             else: ir_para_analise(st.session_state.input_email, st.session_state.input_fonte, st.session_state.input_alvo, anos[0], anos[1], t)
 
+# --- RODAPÉ ACADÊMICO v2.0 ---
 st.markdown("---")
 cf1, cf2 = st.columns([2, 1])
 with cf1:
