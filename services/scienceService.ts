@@ -14,22 +14,23 @@ export class GeminiService {
     this.ai = new GoogleGenAI({ apiKey });
   }
 
-  // --- FUNÇÃO DE DIAGNÓSTICO ---
+  // --- FUNÇÃO DE DIAGNÓSTICO (VERSÃO SEGURA PARA BUILD) ---
   private async generateWithFallback(prompt: string): Promise<string> {
-    // Vamos testar os modelos principais. Se um falhar, guardamos o erro para te mostrar.
     const models = [
-      'gemini-2.0-flash',       // Tentativa 1
-      'gemini-2.0-flash-lite',  // Tentativa 2
-      'gemini-flash-latest'     // Tentativa 3
+      'gemini-2.0-flash',       
+      'gemini-2.0-flash-lite',  
+      'gemini-flash-latest'     
     ];
     
-    let fullErrorLog = ""; // Vai acumular os erros de cada tentativa
+    let fullErrorLog = ""; 
 
     for (const model of models) {
       try {
         console.log(`🔍 DIAGNÓSTICO: Tentando modelo ${model}...`);
         
-        const response = await this.ai!.models.generateContent({
+        if (!this.ai) throw new Error("API Key is missing internally");
+
+        const response = await this.ai.models.generateContent({
           model: model, 
           contents: prompt,
           config: {
@@ -48,19 +49,16 @@ export class GeminiService {
           return response.text;
         }
         
-      } catch (e: any) {
-        // Captura o erro bruto
-        const errorMsg = e.message || JSON.stringify(e);
-        const status = e.status || "Sem Status";
+      } catch (unknownError) {
+        // TRUQUE PARA EVITAR ERRO DE BUILD: Cast manual
+        const e = unknownError as any;
+        const errorMsg = e.message || String(e);
         
         console.warn(`❌ Falha no ${model}: ${errorMsg}`);
-        
-        // Adiciona ao relatório de erros
-        fullErrorLog += `\n\n🔴 Modelo: ${model}\nStatus: ${status}\nErro: ${errorMsg}`;
+        fullErrorLog += `\n[${model}]: ${errorMsg}`;
       }
     }
     
-    // Se chegou aqui, todos falharam. Lança o relatório completo.
     throw new Error(fullErrorLog);
   }
 
@@ -75,7 +73,6 @@ export class GeminiService {
       const baseContext = `- Target: "${target}"\n- List: ${listString}`;
       let prompt = "";
 
-      // Prompt simplificado para teste de conexão
       switch (strategy) {
         case 'conservative':
           prompt = `Role: Data Curator. Clean this list: ${baseContext}. Output: Comma-separated strings.`;
@@ -91,7 +88,6 @@ export class GeminiService {
           break;
       }
 
-      // Chama a função de diagnóstico
       const text = await this.generateWithFallback(prompt);
       
       const cleanText = text.replace(/Output:|Here is the list:|\[|\]|\*|- /g, "");
@@ -102,12 +98,12 @@ export class GeminiService {
         .map(t => t.replace(/^\d+\.\s*/, ""))
         .filter(t => t.length > 2 && !(t.includes(" ") && t.length > 50));
         
-    } catch (error: any) {
+    } catch (unknownError) {
+      // TRUQUE PARA EVITAR ERRO DE BUILD
+      const error = unknownError as any;
       console.error("DIAGNÓSTICO FINAL:", error);
       
-      // --- AQUI ESTÁ O QUE VOCÊ PEDIU ---
-      // Um alerta gigante com o erro exato para você copiar/printar
-      alert(`🚨 RELATÓRIO DE ERRO DA IA 🚨\nCopie isso e mande para o suporte:\n${error.message}`);
+      alert(`🚨 RELATÓRIO DE ERRO 🚨\n\n${error.message || String(error)}`);
       
       return currentList;
     }
