@@ -1,5 +1,5 @@
 """
-Lemos Lambda Backend v2.0
+Lemos Lambda Backend v2.5
 Hybrid Deterministic-LLM Pipeline for Pharmacological Discovery
 SDK Oficial Gemini 2.5 (Pro + Flash) — API google-genai
 """
@@ -25,18 +25,19 @@ BLACKLIST_TOTAL = {
     "metodologia": {"STUDY", "ANALYSIS", "REVIEW", "DATA", "RESULTS", "CONCLUSION", "METHODS", "TRIAL", "RCT", "COHORT"},
     "estatistica": {"PVALUE", "ANOVA", "RATIO", "ODDS", "STATISTICS", "SIGNIFICANT", "DIFFERENCE", "BASELINE", "SCORE", "KAPLAN"},
     "clinico": {"SURGERY", "RESECTION", "DIAGNOSIS", "PROGNOSIS", "MANAGEMENT", "THERAPY", "TREATMENT", "SYNDROME", "PATIENT", "HOSPITAL", "BIOPSY"},
-    "anatomia_ruido": {"KIDNEY", "PROSTATE", "LIVER", "LUNG", "HEART", "BLOOD", "URINE", "CELLS", "PATIENTS"},
-    "geral": {"ROLE", "EFFECT", "IMPACT", "POTENTIAL", "NOVEL", "ASSOCIATION", "EVALUATION", "IDENTIFICATION", "ACTIVATION"}
+    "geral": {"ROLE", "EFFECT", "IMPACT", "POTENTIAL", "NOVEL", "ASSOCIATION", "EVALUATION", "IDENTIFICATION", "ACTIVATION", "DISEASE", "POUR", "VOLUME"}
 }
 UNIFIED_BLACKLIST = set().union(*BLACKLIST_TOTAL.values())
 
-# ================= REGEX FARMACÊUTICO =================
+# ================= REGEX FARMACÊUTICO REFINADO =================
 
 REGEX_PATTERNS = [
+    # 1. Siglas e Alvos com Números (ex: TRPV1, P2X3)
     r"\b[A-Z]{2,5}\d{1,4}[A-Z]?\b",
-    r"\b[A-Z]{3,6}R\b",
+    # 2. Códigos de Compostos Experimentais (ex: GYY-4137, BAY-123)
     r"\b[A-Z]{2,4}[- ]?\d{3,6}\b",
-    r"\b[A-Z][a-z]{3,}(?:ine|mab|ib|ol|on|one|ide|ate|ase|an)\b"
+    # 3. NOVO: Nomes de Fármacos por Sufixos IUPAC/WHO (ex: Sildenafil, Mirabegron)
+    r"\b[A-Za-z]{3,}(?:ine|mab|ib|ol|on|one|ide|ate|ase|an|tin|pril|afil|arin|vir|setron|statin)\b"
 ]
 
 # ================= GEMINI CLIENT =================
@@ -66,7 +67,7 @@ def gerar_com_gemini(prompt: str, client, is_json: bool = False) -> str:
         ]
     )
 
-    # Roteamento: JSON prefere Flash, Texto prefere Pro
+    # Roteamento: JSON (Validação) prefere Flash, Texto (Dedução) prefere Pro
     modelos = [MODELO_FLASH, MODELO_PRO] if is_json else [MODELO_PRO, MODELO_FLASH]
 
     for modelo in modelos:
@@ -82,18 +83,28 @@ def gerar_com_gemini(prompt: str, client, is_json: bool = False) -> str:
             continue
     return ""
 
-# ================= VALIDAÇÃO COM IA =================
+# ================= VALIDAÇÃO COM IA (FOCO ANATÔMICO E QUÍMICO) =================
 
 def validar_com_ia(candidatos: List[str], contexto: str, api_key: str) -> List[str]:
-    """Valida termos usando o cliente configurado localmente."""
+    """Valida termos focando em fármacos e eliminando sinônimos de outros órgãos."""
     client = configurar_gemini(api_key)
     if not candidatos or not client:
         return []
 
     prompt = f"""
-    Expert Pharmacologist Review. Context: {contexto}
-    Return ONLY a pure JSON list of valid Drugs or Molecular Targets (Receptors, Channels, Enzymes).
-    LIST: {", ".join(candidatos[:120])}
+    Expert Pharmacologist and Anatomist Review.
+    Context: {contexto} (Lower Urinary Tract Focus).
+
+    TASK:
+    1. From the list below, return ONLY valid Drugs (names or codes) or Molecular Targets.
+    2. STRICTLY REMOVE anatomical terms or synonyms of other organs (ex: PROSTATE, SEMINAL, KIDNEY, NEPHRON, URETER).
+    3. REMOVE cell lines (HT1376) and statistical/generic noise.
+    4. Group chemical synonyms into the most standard pharmacological name.
+
+    LIST:
+    {", ".join(candidatos[:120])}
+
+    Return a pure JSON list of strings. No comments.
     """
 
     resposta = gerar_com_gemini(prompt, client, is_json=True)
@@ -104,12 +115,14 @@ def validar_com_ia(candidatos: List[str], contexto: str, api_key: str) -> List[s
     except:
         return []
 
-# ================= PIPELINE PUBMED =================
+# ================= PIPELINE PUBMED (QUERY NEGATIVA) =================
 
 def minerar_pubmed(termo_base: str, email: str, api_key: str, usar_ia: bool = True) -> Dict:
-    """Pipeline puro: recebe todos os parâmetros necessários do frontend."""
+    """Busca com filtro de exclusão para evitar 'contaminação' de outros órgãos."""
     Entrez.email = email
-    query = f"({termo_base}) AND (drug OR inhibitor OR compound OR target) AND (2020:2026[Date])"
+    
+    # Query v2.5: Foca no alvo mas exclui explicitamente Próstata e Rim do título para evitar falsos sinônimos
+    query = f"({termo_base}) NOT (prostate[TI] OR kidney[TI] OR renal[TI]) AND (drug OR inhibitor OR compound OR target) AND (2020:2026[Date])"
 
     try:
         handle = Entrez.esearch(db="pubmed", term=query, retmax=200)
@@ -132,8 +145,18 @@ def minerar_pubmed(termo_base: str, email: str, api_key: str, usar_ia: bool = Tr
         for pattern in REGEX_PATTERNS:
             raw_found.extend(re.findall(pattern, full_text))
 
-        normalized = [x.upper().replace("-", "").replace(" ", "") for x in raw_found]
-        cleaned = [x for x in normalized if x not in UNIFIED_BLACKLIST and len(x) > 2]
+        # Normalização inteligente (apenas para siglas, nomes de fármacos mantêm capitalização)
+        cleaned = []
+        for x in raw_found:
+            x_clean = x.strip()
+            # Se for sigla (toda maiúscula), normaliza. Se for nome de fármaco, limpa espaços.
+            if x_clean.isupper():
+                x_norm = x_clean.replace("-", "").replace(" ", "")
+            else:
+                x_norm = x_clean
+            
+            if x_norm.upper() not in UNIFIED_BLACKLIST and len(x_norm) > 2:
+                cleaned.append(x_norm)
 
         counts = Counter(cleaned)
         candidatos = [k for k, _ in counts.most_common(120)]
@@ -152,7 +175,7 @@ def minerar_pubmed(termo_base: str, email: str, api_key: str, usar_ia: bool = Tr
     except Exception as e:
         return {"termos_indicados": [], "error": str(e)}
 
-# ================= ABSTRACT ANALYSIS =================
+# ================= ABSTRACT ANALYSIS (TRADUÇÃO INJETADA) =================
 
 def analisar_abstract_com_ia(titulo: str, dados_curtos: str, api_key: str, lang: str = "pt") -> str:
     """Análise PhD injetando o idioma via parâmetro."""
@@ -182,7 +205,8 @@ def buscar_alvos_emergentes_pubmed(alvo: str, email: str, api_key: str, usar_ia:
 
 def consultar_pubmed_count(termo: str, contexto: str, email: str, ano_ini: int, ano_fim: int) -> int:
     Entrez.email = email
-    query = f"({termo}) AND ({contexto}) AND ({ano_ini}:{ano_fim}[Date])"
+    # Filtro para contagem também respeitar a exclusão anatômica
+    query = f"({termo}) AND ({contexto}) NOT (prostate[TI] OR kidney[TI]) AND ({ano_ini}:{ano_fim}[Date])"
     try:
         handle = Entrez.esearch(db="pubmed", term=query, retmax=0)
         record = Entrez.read(handle)
