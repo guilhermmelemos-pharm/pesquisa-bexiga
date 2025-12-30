@@ -1,6 +1,6 @@
 # constantes.py
 # Configurações, Textos e Listas de Prospecção
-# Versão: 2.0 (Textos Ajustados)
+# Versão: 2.0 (Correção de Chaves + Textos Ajustados)
 
 TEXTOS = {
     "pt": {
@@ -28,12 +28,13 @@ TEXTOS = {
         "header_config": "Configuração",
         "slider_tempo": "Janela de Tempo",
         
-        # --- MUDANÇAS AQUI ---
+        # --- TEXTOS FIXOS PEDIDOS ---
         "label_contexto": "Orgão para comparar", 
         "uploader_label": "Importar Lista (CSV/TXT)",
+        "btn_limpar": "Apagar termos",
+        "expander_ia": "🔑 Configurar Chave API",
         
         # --- CONFIG IA ---
-        "expander_ia": "🔑 Configurar Chave API", # Mudado para não duplicar visualmente
         "caption_ia": "Insira sua chave gratuita do Google para resumos inteligentes.",
         "placeholder_key": "Cole sua chave AIza... aqui",
         "link_key": "Obter chave grátis",
@@ -44,10 +45,6 @@ TEXTOS = {
         "sucesso_carregado": "alvos carregados. Clique em EXECUTAR abaixo.",
         "msg_alvos_ok": "alvos prontos para análise.",
         "expander_lista": "👀 Ver/Editar Lista Completa",
-        
-        # --- MUDANÇA AQUI ---
-        "btn_limpar": "Apagar termos",
-        
         "btn_executar": "🚀 EXECUTAR ANÁLISE ESTATÍSTICA",
         "toast_importado": "Importação concluída",
         "erro_arquivo": "Erro ao ler arquivo.",
@@ -92,15 +89,89 @@ TEXTOS = {
         "apoio_desc": "Ajude a manter o código atualizado ☕"
     },
     "en": {
+        # --- GENERAL ---
         "titulo_desk": "λ Lemos Lambda: Deep Science Prospector",
         "subtitulo": "Dynamic Pharmacological Prospecting Tool",
-         "label_email": "Researcher E-mail (NCBI Required)",
-         "btn_auto": "🧠 AUTO-DETECT TARGETS",
-         "erro_alvo": "Define target first",
-         "tag_blue_ocean": "💎 Blue Ocean",
-         "label_contexto": "Comparison Organ",
-         "btn_limpar": "Clear Terms",
-         "expander_ia": "🔑 API Key Config"
+        "radar_titulo": "📡 Scientific Radar (Last 24h)",
+        "btn_ler": "Read Article",
+        
+        # --- INPUTS ---
+        "label_email": "Researcher E-mail (NCBI Required)",
+        "holder_email": "ex: researcher@university.edu",
+        "erro_email": "⚠️ E-mail is required for API usage!",
+        "label_alvo": "Main Target (Organ/Disease)",
+        "holder_alvo": "ex: Bladder, Urothelium, Detrusor",
+        "erro_alvo": "⚠️ Define Target first!",
+        "btn_auto": "🧠 AUTO-DETECT TARGETS",
+        "expander_presets": "💎 Blue Ocean Frontiers & Presets",
+        "label_categoria": "Category:",
+        "btn_add_preset": "📥 Add Category",
+        "btn_add_all": "💎 ADD ALL PRESETS (Full Scan)",
+        "popover_manual": "✍️ Manual Input",
+        "holder_manual": "Ex: ATP, P2X3",
+        "btn_add_manual": "Add Manual",
+        "header_config": "Configuration",
+        "slider_tempo": "Time Range",
+        
+        # --- TEXTOS FIXOS (EN) ---
+        "label_contexto": "Comparison Organ",
+        "uploader_label": "Import List (CSV/TXT)",
+        "btn_limpar": "Clear Terms",
+        "expander_ia": "🔑 API Key Config",
+        
+        # --- CONFIG IA ---
+        "caption_ia": "Insert your free Google API Key for smart summaries.",
+        "placeholder_key": "Paste your AIza... key here",
+        "link_key": "Get free key",
+        
+        # --- FEEDBACK ---
+        "status_minerando": "Mining literature for",
+        "toast_atualizado": "List updated!",
+        "sucesso_carregado": "targets loaded. Click EXECUTE below.",
+        "msg_alvos_ok": "targets ready for analysis.",
+        "expander_lista": "👀 View/Edit Full List",
+        "btn_executar": "🚀 EXECUTE STATISTICAL ANALYSIS",
+        "toast_importado": "Import successful",
+        "erro_arquivo": "Error reading file.",
+        "spinner_analise": "Calibrating statistics (Lemos Lambda v3.0)...",
+        "titulo_processando": "## 🧬 Processing Statistics...",
+
+        # --- RESULTS ---
+        "resultados": "Intelligence Report",
+        "btn_voltar": "⬅ Back",
+        "metric_top": "Top Opportunity",
+        "metric_score": "Lambda Score",
+        "metric_hits": "Local Hits",
+        "header_heatmap": "Heatmap",
+        "btn_baixar": "📥 Download Report (CSV)",
+        "header_leitura": "Guided Reading (AI)",
+        "label_investigar": "Choose target:",
+        "btn_investigar": "🔎 Investigate with AI",
+        "spinner_investigando": "Reading articles with AI...",
+        "btn_pubmed": "View on PubMed",
+
+        # --- COLUMNS ---
+        "col_mol": "Molecular Target",
+        "col_status": "Classification",
+        "col_ratio": "Lambda Score",
+        "col_art_alvo": "Hits (Target)",
+        "col_global": "Hits (Comparison)",
+
+        # --- TAGS ---
+        "tag_blue_ocean": "💎 Blue Ocean",
+        "tag_ghost": "👻 Ghost",
+        "tag_embryonic": "🌱 Embryonic",
+        "tag_neutral": "⚖️ Neutral",
+        "tag_gold": "🥇 Gold",
+        "tag_trending": "🚀 Trending",
+        "tag_saturated": "🔴 Saturated",
+
+        # --- FOOTER ---
+        "footer_citar": "Academic Use",
+        "citar_titulo": "📄 How to Cite",
+        "citar_texto": "Lemos, G. (2025). Lemos Lambda v3.0. Zenodo. doi.org/10.5281/zenodo.18092141",
+        "apoio_titulo": "Support the Project (Pix):",
+        "apoio_desc": "Help keep the code updated ☕"
     }
 }
 
