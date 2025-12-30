@@ -14,18 +14,66 @@ export class GeminiService {
     this.ai = new GoogleGenAI({ apiKey });
   }
 
+  // --- FUNÇÃO DE BACKUP COM ALERTA DE ERRO ---
+  private async generateWithBackup(prompt: string): Promise<string> {
+    // Lista de Prioridade: Tenta o 3 (que você quer), se falhar, vai pro 2 (que funciona)
+    const models = ['gemini-3-pro-preview', 'gemini-2.0-flash-exp']; 
+    
+    for (const model of models) {
+      try {
+        console.log(`🤖 Tentando modelo: ${model}...`);
+        
+        const response = await this.ai!.models.generateContent({
+          model: model, 
+          contents: prompt,
+          // Travas desligadas para permitir Farmacologia
+          config: {
+            safetySettings: [
+              { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+              { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+              { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+              { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+              { category: 'HARM_CATEGORY_CIVIC_INTEGRITY', threshold: 'BLOCK_NONE' }
+            ]
+          }
+        });
+
+        if (response.text) {
+          console.log(`✅ Sucesso com ${model}!`);
+          return response.text;
+        }
+        
+      } catch (e: any) {
+        const errorMsg = e.message || JSON.stringify(e);
+        console.warn(`❌ Falha no ${model}:`, errorMsg);
+
+        // SE O GEMINI 3 FALHAR, AVISAMOS VOCÊ NA TELA ANTES DE TROCAR
+        if (model.includes('3-pro')) {
+            alert(`⚠️ O Gemini 3 falhou.\nErro: ${errorMsg}\n\n🔄 Trocando automaticamente para o Gemini 2.0...`);
+        }
+      }
+    }
+    throw new Error("Todos os modelos falharam. Verifique sua API Key.");
+  }
+
   /**
-   * Deep Mining Strategy:
-   * Branches based on the selected strategy.
+   * Deep Mining Strategy (Sua versão Clássica + Backup + Alerta)
    */
   async mineNovelTargets(target: string, context: string, currentList: string[], strategy: MiningStrategy): Promise<string[]> {
-    if (!this.ai) return currentList;
+    if (!this.ai) {
+        alert("⚠️ API Key não configurada!");
+        return currentList;
+    }
 
     try {
       const isComparative = (context || "").length > 2;
-      const baseContext = `- Primary Target Organ/Disease: "${target}"\n- Current Candidate List: ${currentList.join(", ")}`;
+      // Se lista vazia, passa "None" para o prompt entender que é o início
+      const listString = currentList.length > 0 ? currentList.join(", ") : "None";
+      
+      const baseContext = `- Primary Target Organ/Disease: "${target}"\n- Current Candidate List: ${listString}`;
       let prompt = "";
 
+      // SEUS PROMPTS ORIGINAIS MANTIDOS
       switch (strategy) {
         case 'conservative':
           prompt = `
@@ -90,79 +138,47 @@ export class GeminiService {
           break;
       }
 
-      const response = await this.ai.models.generateContent({
-        model: 'gemini-3-pro-preview', 
-        contents: prompt,
-        // ADICIONEI APENAS ISSO PARA NÃO TRAVAR EM TERMOS MÉDICOS:
-        config: {
-          safetySettings: [
-            { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-            { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-            { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-            { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-            { category: 'HARM_CATEGORY_CIVIC_INTEGRITY', threshold: 'BLOCK_NONE' }
-          ]
-        }
-      });
+      // Chama a função blindada
+      const text = await this.generateWithBackup(prompt);
+      
+      console.log("Texto Bruto da IA:", text);
 
-      const text = response.text || "";
-      
-      // FIX 1: Robust Parsing
-      // AI often ignores "comma-separated" and uses bullets (* or -) or newlines.
-      // We remove Markdown headers, brackets, bullets, and then split by newline OR comma.
+      // SUA LÓGICA DE LIMPEZA ORIGINAL (REGEX)
       const cleanText = text.replace(/Output:|Here is the list:|\[|\]|\*|- /g, "");
-      
-      // Split by comma OR newline to handle "List format" responses
       const terms = cleanText.split(/,|\n/);
       
       return terms
         .map(t => t.trim())
-        // Clean up numbering (e.g., "1. Target")
         .map(t => t.replace(/^\d+\.\s*/, ""))
-        // Filter out if it contains a space AND is too long (hallucination sentence)
-        .filter(t => t.length > 2 && !(t.includes(" ") && t.length > 30));
+        // Filtro levemente ajustado
+        .filter(t => t.length > 2 && !(t.includes(" ") && t.length > 50));
         
     } catch (error) {
-      console.error("Gemini Mining Error:", error);
-      // Fail gracefully returning current list
+      console.error("Erro Geral:", error);
+      alert("A IA não conseguiu responder com nenhum modelo. Verifique se sua conta tem cota disponível.");
       return currentList;
     }
   }
 
   async analyzePaper(title: string, abstract: string): Promise<string> {
-    if (!this.ai) return "API Key Required for Analysis.";
+    if (!this.ai) return "API Key Required.";
     
-    // FIX 2: Crash Prevention for Null Abstracts
-    if (!abstract || typeof abstract !== 'string') {
-      return "Abstract not available for analysis.";
-    }
+    if (!abstract || typeof abstract !== 'string') return "No abstract.";
 
-    // SMART CONTEXT OPTIMIZATION:
     let optimizedAbstract = abstract;
     if (abstract.length > 600) {
-      optimizedAbstract = abstract.substring(0, 300) + "\n...[middle section skipped]...\n" + abstract.substring(abstract.length - 300);
+      optimizedAbstract = abstract.substring(0, 300) + "\n...\n" + abstract.substring(abstract.length - 300);
     }
 
     try {
+      // Tenta o flash para análise rápida
       const response = await this.ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `
-        Act as a Pharmacologist. Analyze this truncated abstract.
-        
-        Title: "${title}"
-        Text: "${optimizedAbstract}"
-        
-        Task:
-        Identify the **Molecule/Target**, its **Action** (Agonist/Antagonist), and the biological **Outcome**.
-        
-        Output format (one sentence):
-        "Mechanism: [Molecule] acts as [Mechanism] -> [Outcome]"
-        `,
+        model: 'gemini-1.5-flash', 
+        contents: `Analyze: Title: "${title}" Abstract: "${optimizedAbstract}". Task: Identify Target, Drug, and Effect. Output format: "M: [Molecule] | E: [Effect]"`,
       });
-
       return response.text || "Analysis failed.";
     } catch (error) {
-      return "Error analyzing paper (AI Limit or Network).";
+      return "Error analyzing paper.";
     }
   }
 }
