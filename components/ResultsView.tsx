@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { AppState, AnalysisResult } from '../types';
 import { 
@@ -82,11 +83,6 @@ const ResultsView: React.FC<ResultsViewProps> = ({
   };
 
   const handleAIAnalysis = async (art: any) => {
-    if (!state.apiKey) {
-      alert("Please add your API Key in the settings first.");
-      return;
-    }
-    
     // Set analyzing state
     setAnalyzingIds(prev => ({ ...prev, [art.id]: true }));
     
@@ -283,7 +279,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({
                        <a href={art.link} className="flex items-center gap-1 text-xs text-white bg-gray-700 px-3 py-2 rounded hover:bg-gray-600 transition-colors font-medium">
                          <ExternalLink size={12} /> {t.btn_pubmed}
                        </a>
-                       {state.apiKey && !aiInsights[art.id] && (
+                       {!aiInsights[art.id] && (
                          <button 
                            onClick={() => handleAIAnalysis(art)}
                            disabled={analyzingIds[art.id]}

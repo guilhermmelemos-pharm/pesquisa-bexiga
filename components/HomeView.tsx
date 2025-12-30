@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { 
   FlaskConical, Trash2, Settings, Key, Play, FileText, AlertTriangle, 
@@ -136,7 +137,7 @@ const HomeView: React.FC<HomeViewProps> = ({
               </div>
 
               {/* Strategy Selector */}
-              {state.useAI && state.apiKey && (
+              {state.useAI && (
                 <div className="space-y-2 pt-2">
                    <div className="flex justify-between items-end mb-1">
                      <label className="text-xs text-gray-400 font-bold uppercase tracking-wider">{t.lbl_ai_strategy}</label>
@@ -198,28 +199,11 @@ const HomeView: React.FC<HomeViewProps> = ({
                  </p>
               </div>
 
-              {/* Warning about Missing API Key */}
-              {!state.apiKey && state.useAI && (
-                <div className="bg-yellow-900/20 border border-yellow-600/50 p-3 rounded-lg flex gap-3 items-start animate-pulse">
-                  <AlertTriangle className="text-yellow-500 shrink-0" size={18} />
-                  <div>
-                    <h4 className="text-yellow-400 text-xs font-bold uppercase">{t.warn_no_key_tit}</h4>
-                    <p className="text-yellow-200/80 text-xs mt-1">
-                      {t.warn_no_key_desc}
-                    </p>
-                  </div>
-                </div>
-              )}
-
               <div className="relative">
                 <button 
                   onClick={handleDeepMine}
                   disabled={isLoading}
-                  className={`w-full font-bold py-4 rounded-xl text-lg shadow-lg transition-all flex items-center justify-center gap-2 relative overflow-hidden group
-                    ${!state.apiKey 
-                      ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' 
-                      : 'bg-lemos-red hover:bg-red-600 text-white shadow-red-900/20'
-                    }`}
+                  className={`w-full font-bold py-4 rounded-xl text-lg shadow-lg transition-all flex items-center justify-center gap-2 relative overflow-hidden group bg-lemos-red hover:bg-red-600 text-white shadow-red-900/20`}
                 >
                   <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
                   {isLoading ? (
@@ -228,9 +212,7 @@ const HomeView: React.FC<HomeViewProps> = ({
                        <span>Consultando Gemini AI...</span>
                      </div>
                   ) : (
-                     state.apiKey 
-                     ? `${t.btn_run_prefix} ${t[`strat_${state.miningStrategy}`] || state.miningStrategy.toUpperCase()}`
-                     : "🔍 Minerar (Modo Básico)"
+                     `${t.btn_run_prefix} ${t[`strat_${state.miningStrategy}`] || state.miningStrategy.toUpperCase()}`
                   )}
                 </button>
                 {isLoading && (
@@ -275,19 +257,6 @@ const HomeView: React.FC<HomeViewProps> = ({
 
             <div className="space-y-4">
               <div>
-                 <label className="block text-sm text-gray-400 mb-1 flex items-center gap-1">
-                   <Key size={14} /> Google API Key
-                 </label>
-                 <input 
-                  type="password" 
-                  className={`w-full bg-lemos-dark border rounded-lg p-2 text-sm focus:outline-none ${!state.apiKey ? 'border-yellow-500/50' : 'border-gray-700'}`}
-                  value={state.apiKey}
-                  onChange={(e) => updateState({ apiKey: e.target.value })}
-                  placeholder={t.placeholder_key}
-                />
-                <div className="mt-1 text-xs text-gray-500">
-                  <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="underline hover:text-lemos-red">{t.link_key}</a>
-                </div>
                 <div className="mt-3 flex items-center gap-2">
                   <input 
                     type="checkbox" 

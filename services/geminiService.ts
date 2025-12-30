@@ -1,17 +1,12 @@
+
 import { GoogleGenAI } from "@google/genai";
 import { MiningStrategy } from "../types";
 
 export class GeminiService {
-  private ai: GoogleGenAI | null = null;
+  private ai: GoogleGenAI;
 
-  constructor(apiKey: string) {
-    if (apiKey) {
-      this.ai = new GoogleGenAI({ apiKey });
-    }
-  }
-
-  updateKey(apiKey: string) {
-    this.ai = new GoogleGenAI({ apiKey });
+  constructor() {
+    this.ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   }
 
   /**
@@ -19,140 +14,154 @@ export class GeminiService {
    * Branches based on the selected strategy.
    */
   async mineNovelTargets(target: string, context: string, currentList: string[], strategy: MiningStrategy): Promise<string[]> {
-    if (!this.ai) return currentList;
+    if (!this.ai) {
+      console.warn("Gemini AI instance not initialized.");
+      throw new Error("Gemini Client Error");
+    }
 
     try {
-      const isComparative = (context || "").length > 2;
-      const baseContext = `- Primary Target Organ/Disease: "${target}"\n- Current Candidate List: ${currentList.join(", ")}`;
+      // If list is empty, we say "None".
+      const currentListStr = currentList.length > 0 ? currentList.join(", ") : "None";
+      
+      const baseContext = `
+      CONTEXT DATA:
+      - Primary Disease/Organ: "${target}"
+      - Additional Biological Context: "${context}"
+      - Existing List (DO NOT REPEAT THESE): ${currentListStr}
+      `;
+
       let prompt = "";
+      let temperature = 0.5;
+      let topK = 40;
 
       switch (strategy) {
         case 'conservative':
+          temperature = 0.1; // Strict, deterministic
           prompt = `
-            Role: Biomedical Data Curator.
-            Task: Clean and standardize a list of pharmacological targets for: "${target}".
+            Role: Scientific Data Curator.
+            Task: Clean and standardize the "Existing List" provided above.
             ${baseContext}
             
-            Rules:
-            1. **REMOVE GARBAGE**: Delete generic terms like "Study", "Analysis", "Expression", "Rat", "Patient", "Method".
-            2. **STANDARDIZE**: Convert "ATP receptor" to "P2X3", "Beta3-AR" to "Beta-3 adrenergic receptor".
-            3. **NO NEW TARGETS**: Only clean the existing list.
-            
-            Output: Comma-separated list of cleaned targets.
+            Instructions:
+            1. **REMOVE NOISE**: Delete terms that are NOT specific molecular targets (e.g., "Study", "Analysis", "Rats", "Patients", "Placebo", "Safety").
+            2. **STANDARDIZE**: Convert names to official gene/protein symbols (e.g., "ATP receptor" -> "P2X3").
+            3. **OUTPUT**: A strict comma-separated list of the cleaned molecules. Nothing else.
           `;
           break;
 
         case 'repurposing':
+          temperature = 0.4; // Balanced for finding real drugs
           prompt = `
-            Role: Drug Repurposing Specialist.
-            Task: Identify EXISTING DRUGS or PHARMACOLOGICAL TOOLS that could be repurposed for "${target}".
+            Role: Senior Pharmacologist & Drug Hunter.
+            Task: Suggest approved drugs or clinical candidates that could be REPURPOSED for "${target}".
             ${baseContext}
-            ${isComparative ? `- Context: "${context}"` : ''}
 
-            Rules:
-            1. **Focus on DRUGS/MOLECULES**: Look for FDA-approved drugs, Phase 2/3 candidates, or well-known inhibitors.
-            2. **Ignore Basic Biology**: Do not suggest "Inflammation" or "Apoptosis". Suggest specific drug targets (e.g., "GLP-1R", "SGLT2", "JAK1").
-            3. **High Translatability**: Suggest targets with available ligands.
-            
-            Output: Comma-separated list of top 15 repurposing candidates.
+            Instructions:
+            1. **IGNORE EXISTING**: Do not output items from the "Existing List". Find NEW candidates.
+            2. **HIGH POTENTIAL**: Focus on drugs with known safety profiles (FDA approved) or Phase 2/3 data.
+            3. **SPECIFICITY**: Return the DRUG NAME or SPECIFIC MOLECULE (e.g., "SGLT2 inhibitors", "Metformin", "Mirabegron").
+            4. **OUTPUT**: A strict comma-separated list of 15 unique, high-value candidates. No numbering.
           `;
           break;
 
         case 'mechanism':
+          temperature = 0.5; // Balanced for pathways
           prompt = `
-            Role: Molecular Biologist.
-            Task: Identify UPSTREAM and DOWNSTREAM molecular pathways/mechanisms for "${target}".
+            Role: Molecular Systems Biologist.
+            Task: Identify upstream regulators and downstream effectors for "${target}".
             ${baseContext}
 
-            Rules:
-            1. **Focus on PATHWAYS**: Kinases (mTOR, PI3K), Transcription Factors (NF-kB, NRF2), Enzymes (PDE5, COX-2).
-            2. **Deep Mechanism**: Look for specific subunits (e.g., instead of "G-protein", suggest "G alpha s").
-            3. **Avoid Drugs**: Focus on the biological target, not the commercial drug name.
-            
-            Output: Comma-separated list of top 15 mechanistic targets.
+            Instructions:
+            1. **PATHWAY MAPPING**: Suggest Kinases (e.g., mTOR, PI3K), Transcription Factors (NF-kB), or Ion Channels involved in the pathophysiology.
+            2. **DEEP DIVE**: Look for specific subunits (e.g., "G alpha s", "Nav1.8", "TRPV4") rather than generic terms.
+            3. **OUTPUT**: A strict comma-separated list of 15 mechanistic targets. No numbering.
           `;
           break;
 
         case 'blue_ocean':
+          temperature = 0.9; // High creativity for discovery
+          topK = 60;
           prompt = `
-            Role: Elite Data Scientist & Explorer.
-            Mission: Identify UNDERSTUDIED (Blue Ocean) targets for: "${target}".
+            Role: Elite Scientific Prospector.
+            Task: Identify NOVEL, CONTROVERSIAL, or EMERGING targets for "${target}" (Blue Ocean Strategy).
             ${baseContext}
             
-            Rules:
-            1. **ANATOMICAL NICHE**: Focus on specific cell types (e.g., Podocytes, Interstitial Cells) within the target.
-            2. **NOVELTY**: Prefer targets discovered in the last 5 years.
-            3. **AVOID SATURATION**: Do NOT suggest "Insulin", "TNF", "IL-6".
-            4. **BE SPECIFIC**: Good: "P2Y12", "Piezo2". Bad: "Purinergic receptor".
-            
-            Output: Comma-separated list of top 15 novel targets.
+            Instructions:
+            1. **NOVELTY**: Prioritize targets appearing in literature only in the last 3-5 years or those with low citation counts but high relevance.
+            2. **IGNORE THE OBVIOUS**: Do NOT suggest well-known targets for this condition. Dig deeper.
+            3. **ANATOMICAL NICHE**: Look for targets specific to cell types (e.g., "Interstitial Cells", "Urothelium", "Endothelium").
+            4. **OUTPUT**: A strict comma-separated list of 15 novel targets. No bullet points.
           `;
           break;
       }
 
+      // Using gemini-3-flash-preview for speed and reliability with lists
       const response = await this.ai.models.generateContent({
-        model: 'gemini-3-pro-preview', 
+        model: 'gemini-3-flash-preview', 
         contents: prompt,
+        config: {
+          temperature: temperature,
+          topK: topK,
+        }
       });
 
       const text = response.text || "";
+      console.log(`Gemini Raw Response (${strategy}):`, text); // Debugging
       
-      // FIX 1: Robust Parsing
-      // AI often ignores "comma-separated" and uses bullets (* or -) or newlines.
-      // We remove Markdown headers, brackets, bullets, and then split by newline OR comma.
-      const cleanText = text.replace(/Output:|Here is the list:|\[|\]|\*|- /g, "");
+      // FIX: Robust Parsing
+      // Remove common conversational fillers and Markdown
+      const cleanText = text
+        .replace(/^Here.*:/i, "")
+        .replace(/Output:/i, "")
+        .replace(/[\[\]*_`]/g, "") // Remove brackets, bold, italics, code blocks
+        .trim();
       
-      // Split by comma OR newline to handle "List format" responses
+      // Split by comma or newline
       const terms = cleanText.split(/,|\n/);
       
       return terms
         .map(t => t.trim())
-        // Clean up numbering (e.g., "1. Target")
-        .map(t => t.replace(/^\d+\.\s*/, ""))
-        // Filter out if it contains a space AND is too long (hallucination sentence)
-        .filter(t => t.length > 2 && !(t.includes(" ") && t.length > 30));
+        .map(t => t.replace(/^\d+[\).]\s*/, "")) // Remove "1. ", "2)"
+        .filter(t => t.length > 2 && t.length < 50) // Length filter
+        .filter(t => !t.toLowerCase().includes("context")) // Filter out hallucinations repeating "Context"
+        .filter(t => !t.toLowerCase().includes("existing list")) // Filter out hallucinations
+        .filter(t => !t.toLowerCase().includes("none")); // Filter out empty indicator
         
     } catch (error) {
       console.error("Gemini Mining Error:", error);
-      // Fail gracefully returning current list
-      return currentList;
+      throw error; // Throw so UI knows it failed
     }
   }
 
   async analyzePaper(title: string, abstract: string): Promise<string> {
     if (!this.ai) return "API Key Required for Analysis.";
     
-    // FIX 2: Crash Prevention for Null Abstracts
     if (!abstract || typeof abstract !== 'string') {
       return "Abstract not available for analysis.";
     }
 
-    // SMART CONTEXT OPTIMIZATION:
     let optimizedAbstract = abstract;
-    if (abstract.length > 600) {
-      optimizedAbstract = abstract.substring(0, 300) + "\n...[middle section skipped]...\n" + abstract.substring(abstract.length - 300);
+    if (abstract.length > 800) {
+      optimizedAbstract = abstract.substring(0, 400) + "\n...\n" + abstract.substring(abstract.length - 400);
     }
 
     try {
       const response = await this.ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: `
-        Act as a Pharmacologist. Analyze this truncated abstract.
+        Analyze this scientific abstract.
         
         Title: "${title}"
         Text: "${optimizedAbstract}"
         
-        Task:
-        Identify the **Molecule/Target**, its **Action** (Agonist/Antagonist), and the biological **Outcome**.
-        
-        Output format (one sentence):
-        "Mechanism: [Molecule] acts as [Mechanism] -> [Outcome]"
+        Task: Identify the main MOLECULAR TARGET, the DRUG/MOLECULE used, and the EFFECT.
+        Output exactly one short sentence: "M: [Molecule] | E: [Effect]"
         `,
       });
 
       return response.text || "Analysis failed.";
     } catch (error) {
-      return "Error analyzing paper (AI Limit or Network).";
+      return "Error analyzing paper (AI Limit).";
     }
   }
 }

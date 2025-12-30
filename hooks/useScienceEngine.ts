@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+
+import { useState } from 'react';
 import { AppState, AnalysisResult, Article } from '../types';
 import { GeminiService } from '../services/geminiService';
 import { performAnalysis, extractEntitiesRegex, fetchArticles, parseSimpleUserList } from '../services/scienceService';
@@ -14,7 +15,6 @@ export const useScienceEngine = () => {
     yearEnd: 2025,
     targetList: '',
     results: [],
-    apiKey: '',
     useAI: true,
     miningStrategy: 'blue_ocean', // Default
     selectedArticleDetails: null
@@ -22,13 +22,7 @@ export const useScienceEngine = () => {
 
   const [isLoading, setIsLoading] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [gemini, setGemini] = useState<GeminiService>(new GeminiService(''));
-
-  useEffect(() => {
-    if (state.apiKey) {
-      gemini.updateKey(state.apiKey);
-    }
-  }, [state.apiKey]);
+  const [gemini] = useState<GeminiService>(() => new GeminiService());
 
   const updateState = (updates: Partial<AppState>) => {
     setState(prev => ({ ...prev, ...updates }));
@@ -61,7 +55,7 @@ export const useScienceEngine = () => {
 
   const handleDeepMine = async () => {
     if (!state.target) {
-      alert("Please define a Target first.");
+      alert("Por favor, defina o Alvo (Órgão ou Doença) primeiro.");
       return;
     }
     
@@ -70,14 +64,17 @@ export const useScienceEngine = () => {
       ? state.targetList.split(',').map(s => s.trim()).filter(x => x) 
       : [];
 
-    // 1. Initial Seeding if empty
-    if (currentTerms.length === 0) {
+    // 1. Initial Seeding logic altered:
+    // Only auto-seed with presets if using "Conservative/Clean" mode on an empty list.
+    // For Blue Ocean/Repurposing, we want the AI to generate from scratch if empty.
+    if (currentTerms.length === 0 && state.miningStrategy === 'conservative') {
       const randomPreset = Object.values(PRESETS_FRONTEIRA)[0];
       currentTerms = [...randomPreset];
+      alert("Modo Faxina requer uma lista inicial. Carregando preset padrão...");
     }
 
     // 2. Cross-Tissue Intelligence
-    if (state.useAI && state.apiKey) {
+    if (state.useAI) {
       try {
         const resultTerms = await gemini.mineNovelTargets(
           state.target,
@@ -86,20 +83,24 @@ export const useScienceEngine = () => {
           state.miningStrategy
         );
         
-        if (state.miningStrategy === 'conservative') {
-           // Conservative is a filter/cleaner, so we REPLACE the list with the cleaned version
-           currentTerms = resultTerms;
+        if (resultTerms.length === 0) {
+          alert("A IA não encontrou novos alvos com os parâmetros atuais. Tente mudar a estratégia ou adicionar Contexto.");
         } else {
-           // Repurposing, Mechanism, Blue Ocean: We ADD the new findings to the existing list
-           // Ensure uniqueness case-insensitive
-           const existingSet = new Set(currentTerms.map(t => t.toUpperCase()));
-           const newItems = resultTerms.filter(t => !existingSet.has(t.toUpperCase()));
-           currentTerms = [...currentTerms, ...newItems];
+          if (state.miningStrategy === 'conservative') {
+             // Conservative is a filter/cleaner, so we REPLACE the list with the cleaned version
+             currentTerms = resultTerms;
+          } else {
+             // Repurposing, Mechanism, Blue Ocean: We ADD the new findings to the existing list
+             // Ensure uniqueness case-insensitive
+             const existingSet = new Set(currentTerms.map(t => t.toUpperCase()));
+             const newItems = resultTerms.filter(t => !existingSet.has(t.toUpperCase()));
+             currentTerms = [...currentTerms, ...newItems];
+          }
         }
 
       } catch (e) {
         console.warn("Deep Mining failed", e);
-        alert("AI Mining failed. Check your API Key or Quota.");
+        alert("Erro na Mineração IA. Verifique sua API Key no environment.");
       }
     } else if (state.context) {
       // Fallback: simple regex on context if no AI
@@ -114,7 +115,17 @@ export const useScienceEngine = () => {
   };
 
   const executeAnalysis = async () => {
-    if (!state.target || !state.targetList) return;
+    if (!state.target) {
+      alert("Defina um alvo antes de executar.");
+      return;
+    }
+    // Allow execution even if list is empty (it will just return empty results or use internal mock)
+    // But typically user needs a list.
+    if (!state.targetList) {
+       alert("Sua lista de alvos está vazia. Use a IA para minerar ou adicione manualmente.");
+       return;
+    }
+
     setIsLoading(true);
     setProgress(0);
     
@@ -131,7 +142,6 @@ export const useScienceEngine = () => {
   };
 
   const analyzeArticle = async (title: string, abstract: string) => {
-    if (!state.apiKey) return "API Key Required";
     return await gemini.analyzePaper(title, abstract);
   };
 

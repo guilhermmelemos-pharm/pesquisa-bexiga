@@ -1,3 +1,4 @@
+
 export interface AnalysisResult {
   molecule: string;
   status: 'Gold' | 'Trending' | 'Blue Ocean' | 'Embryonic' | 'Saturated' | 'Ghost' | 'Neutral';
@@ -36,7 +37,6 @@ export interface AppState {
   yearEnd: number;
   targetList: string; // Comma separated
   results: AnalysisResult[];
-  apiKey: string;
   useAI: boolean;
   miningStrategy: MiningStrategy;
   selectedArticleDetails: Article[] | null;
