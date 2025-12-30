@@ -113,7 +113,7 @@ export const TEXTS = {
     // --- RODAPÉ ---
     footer_citar: "Uso Acadêmico",
     citar_titulo: "📄 Como Citar",
-    citar_texto: "Lemos, G. (2025). Lemos Lambda: Deep Science Prospector (v2.1). Zenodo. https://doi.org/10.5281/zenodo.18036690",
+    citar_texto: "Lemos, G. (2025). Lemos Lambda: Deep Science Prospector (v2.1.0). Zenodo. https://doi.org/10.5281/zenodo.18090934",
     apoio_titulo: "Apoie o Pesquisador (Pix):",
     apoio_desc: "Ajude a manter o código atualizado e os servidores ativos ☕",
     pix_key: "960f3f16-06ce-4e71-9b5f-6915b2a10b5a",
@@ -231,7 +231,7 @@ export const TEXTS = {
     // --- FOOTER ---
     footer_citar: "Academic Use",
     citar_titulo: "📄 How to Cite",
-    citar_texto: "Lemos, G. (2025). Lemos Lambda: Deep Science Prospector (v2.1). Zenodo. https://doi.org/10.5281/zenodo.18036690",
+    citar_texto: "Lemos, G. (2025). Lemos Lambda: Deep Science Prospector (v2.1.0). Zenodo. https://doi.org/10.5281/zenodo.18090934",
     apoio_titulo: "Support the Researcher (Pix):",
     apoio_desc: "Help keep the code updated and servers running ☕",
     pix_key: "960f3f16-06ce-4e71-9b5f-6915b2a10b5a",

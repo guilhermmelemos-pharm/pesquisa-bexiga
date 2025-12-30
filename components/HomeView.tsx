@@ -48,13 +48,18 @@ const HomeView: React.FC<HomeViewProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const StrategyButton = ({ id, icon: Icon, label, colorClass, desc }: { id: MiningStrategy, icon: any, label: string, colorClass: string, desc: string }) => (
+  // Fixed Strategy Button to use explicit classes instead of dynamic string replacement
+  const StrategyButton = ({ 
+    id, icon: Icon, label, borderColor, textColor, pingColor, desc 
+  }: { 
+    id: MiningStrategy, icon: any, label: string, borderColor: string, textColor: string, pingColor: string, desc: string 
+  }) => (
     <button 
       onClick={() => updateState({ miningStrategy: id })}
       title={desc}
       className={`relative p-2 rounded-lg border text-xs font-bold flex flex-col items-center justify-center gap-1 transition-all h-20 group
         ${state.miningStrategy === id 
-          ? `bg-opacity-10 border-opacity-100 ${colorClass} bg-white ring-1 ring-offset-0 ring-white/20` 
+          ? `bg-opacity-10 border-opacity-100 ${borderColor} ${textColor} bg-white ring-1 ring-offset-0 ring-white/20` 
           : 'bg-lemos-dark border-gray-700 text-gray-500 hover:border-gray-500 hover:bg-gray-800'
         }`}
     >
@@ -63,8 +68,8 @@ const HomeView: React.FC<HomeViewProps> = ({
       
       {state.miningStrategy === id && (
         <span className="absolute -top-1 -right-1 flex h-3 w-3">
-          <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${colorClass.split(' ')[0].replace('border', 'bg')}`}></span>
-          <span className={`relative inline-flex rounded-full h-3 w-3 ${colorClass.split(' ')[0].replace('border', 'bg')}`}></span>
+          <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${pingColor}`}></span>
+          <span className={`relative inline-flex rounded-full h-3 w-3 ${pingColor}`}></span>
         </span>
       )}
     </button>
@@ -135,7 +140,7 @@ const HomeView: React.FC<HomeViewProps> = ({
                 <div className="space-y-2 pt-2">
                    <div className="flex justify-between items-end mb-1">
                      <label className="text-xs text-gray-400 font-bold uppercase tracking-wider">{t.lbl_ai_strategy}</label>
-                     <span className="text-[10px] text-gray-500 italic">{t.helper_ai_strategy}</span>
+                     <span className="text-xs text-gray-500 italic">{t.helper_ai_strategy}</span>
                    </div>
                    <div className="grid grid-cols-4 gap-3">
                      <StrategyButton 
@@ -143,28 +148,36 @@ const HomeView: React.FC<HomeViewProps> = ({
                         icon={ShieldCheck} 
                         label={t.strat_clean}
                         desc={t.desc_clean} 
-                        colorClass="border-green-500 text-green-400" 
+                        borderColor="border-green-500"
+                        textColor="text-green-400"
+                        pingColor="bg-green-500"
                      />
                      <StrategyButton 
                         id="repurposing" 
                         icon={Pill} 
                         label={t.strat_repurpose} 
                         desc={t.desc_repurpose}
-                        colorClass="border-orange-500 text-orange-400" 
+                        borderColor="border-orange-500"
+                        textColor="text-orange-400"
+                        pingColor="bg-orange-500"
                      />
                      <StrategyButton 
                         id="mechanism" 
                         icon={Dna} 
                         label={t.strat_mechanism} 
                         desc={t.desc_mechanism}
-                        colorClass="border-purple-500 text-purple-400" 
+                        borderColor="border-purple-500"
+                        textColor="text-purple-400"
+                        pingColor="bg-purple-500"
                      />
                      <StrategyButton 
                         id="blue_ocean" 
                         icon={Sparkles} 
                         label={t.strat_blue_ocean} 
                         desc={t.desc_blue_ocean}
-                        colorClass="border-blue-500 text-blue-400" 
+                        borderColor="border-blue-500"
+                        textColor="text-blue-400"
+                        pingColor="bg-blue-500"
                      />
                    </div>
                 </div>

@@ -79,4 +79,4 @@ Where expected hits are derived from a contingency table comparing target hits w
 
 If you use this software in your research, please cite:
 
-> Lemos, G. (2025). Lemos Lambda: Deep Science Prospector (v2.1). Zenodo. https://doi.org/10.5281/zenodo.18036690
+> Lemos, G. (2025). Lemos Lambda: Deep Science Prospector (v2.1.0). Zenodo. https://doi.org/10.5281/zenodo.18090934
