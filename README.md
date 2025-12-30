@@ -26,24 +26,39 @@ To ensure a clean signal, the system employs a multi-layer filtration architectu
 3.  **Blacklist 2.1:** Blocks "False Positives" like ANOVA, CI, USA, and clinical acronyms.
 4.  **Lambda Score:** Calculates the Enrichment Ratio ($ER$) vs. Global Hits.
 
-## 📦 Installation & Setup
+## 📦 How to Run Locally (Step-by-Step)
 
-This is a **React/Vite** project. You need Node.js installed.
+To run Lemos Lambda on your own machine, follow these steps:
 
-1.  **Install Dependencies:**
-    ```bash
-    npm install
-    ```
+### 1. Prerequisites
+- **Node.js** (Version 18 or higher). [Download here](https://nodejs.org/).
+- **Git** (Optional, if you want to clone via command line).
 
-2.  **Run Locally:**
-    ```bash
-    npm run dev
-    ```
+### 2. Installation
+Open your terminal/command prompt in the project folder and run:
 
-3.  **Build for Production (Vercel/Netlify):**
-    ```bash
-    npm run build
-    ```
+```bash
+# 1. Clone the repository (or extract the downloaded ZIP)
+# git clone https://github.com/your-username/lemos-lambda.git
+# cd lemos-lambda
+
+# 2. Install dependencies (React, Vite, GenAI SDK)
+npm install
+```
+
+### 3. Start the App
+Start the local development server:
+
+```bash
+npm run dev
+```
+> The app will open automatically at `http://localhost:5173`
+
+### 4. Build for Production (Optional)
+To create a static optimized version for deployment (Vercel/Netlify):
+```bash
+npm run build
+```
 
 ## 🔑 AI Configuration
 
