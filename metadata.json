@@ -1,5 +1,0 @@
-{
-  "name": "Lemos Lambda: Deep Science Prospector v2.1",
-  "description": "A heuristic semantic mining tool for identifying emerging pharmacological targets in PubMed literature, featuring a multi-layer noise filtration system (Semantic Wall).",
-  "requestFramePermissions": []
-}
