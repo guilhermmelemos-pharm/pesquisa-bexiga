@@ -14,107 +14,87 @@ export class GeminiService {
     this.ai = new GoogleGenAI({ apiKey });
   }
 
+  /**
+   * Deep Mining Strategy:
+   * Branches based on the selected strategy.
+   */
   async mineNovelTargets(target: string, context: string, currentList: string[], strategy: MiningStrategy): Promise<string[]> {
-    if (!this.ai) {
-        alert("⚠️ API Key não configurada! Vá nas configurações.");
-        return currentList;
-    }
+    if (!this.ai) return currentList;
 
     try {
-      // --- LÓGICA INTELIGENTE (COLD START vs EXPANSION) ---
-      const isListEmpty = currentList.length === 0;
-      let contextInstruction = "";
-
-      if (isListEmpty) {
-        // MODO FOLHA EM BRANCO: Ensina a IA a gerar a base
-        contextInstruction = `
-        STATE: COLD START (Zero knowledge).
-        TASK: Generate the INITIAL foundation list of targets for this disease.
-        NOTE: Do not ask for examples, just generate the most scientifically relevant targets.
-        `;
-      } else {
-        // MODO EXPANSÃO: Pede coisas novas
-        contextInstruction = `
-        STATE: EXPANSION MODE.
-        EXCLUSION LIST (IGNORE these, find NEW ones):
-        [${currentList.join(", ")}]
-        `;
-      }
-      
-      const baseContext = `
-      TARGET ORGAN/DISEASE: "${target}"
-      BIOLOGICAL CONTEXT: "${context}"
-      ${contextInstruction}
-      `;
-
+      const isComparative = (context || "").length > 2;
+      const baseContext = `- Primary Target Organ/Disease: "${target}"\n- Current Candidate List: ${currentList.join(", ")}`;
       let prompt = "";
-      // Temperatura média para garantir JSON válido no 1.5
-      let temperature = 0.7; 
 
       switch (strategy) {
         case 'conservative':
-          temperature = 0.1;
           prompt = `
-            Role: Scientific Data Curator.
-            Task: Standardize pharmacological targets.
-            Input: ${baseContext}
-            Instructions: 
-            1. If Cold Start: List standard pharmacological targets.
-            2. If Expansion: Clean and standardize the input.
-            3. Return a JSON Array of strings.
+            Role: Biomedical Data Curator.
+            Task: Clean and standardize a list of pharmacological targets for: "${target}".
+            ${baseContext}
+            
+            Rules:
+            1. **REMOVE GARBAGE**: Delete generic terms like "Study", "Analysis", "Expression", "Rat", "Patient", "Method".
+            2. **STANDARDIZE**: Convert "ATP receptor" to "P2X3", "Beta3-AR" to "Beta-3 adrenergic receptor".
+            3. **NO NEW TARGETS**: Only clean the existing list.
+            
+            Output: Comma-separated list of cleaned targets.
           `;
           break;
 
         case 'repurposing':
           prompt = `
-            Role: Senior Pharmacologist.
-            Task: Suggest approved drugs or clinical candidates for "${target}".
+            Role: Drug Repurposing Specialist.
+            Task: Identify EXISTING DRUGS or PHARMACOLOGICAL TOOLS that could be repurposed for "${target}".
             ${baseContext}
+            ${isComparative ? `- Context: "${context}"` : ''}
+
+            Rules:
+            1. **Focus on DRUGS/MOLECULES**: Look for FDA-approved drugs, Phase 2/3 candidates, or well-known inhibitors.
+            2. **Ignore Basic Biology**: Do not suggest "Inflammation" or "Apoptosis". Suggest specific drug targets (e.g., "GLP-1R", "SGLT2", "JAK1").
+            3. **High Translatability**: Suggest targets with available ligands.
             
-            Instructions:
-            1. Focus on FDA approved drugs and Phase 2/3 candidates.
-            2. High translatability candidates.
-            3. Return a JSON Array of strings (Max 25 items).
+            Output: Comma-separated list of top 15 repurposing candidates.
           `;
           break;
 
         case 'mechanism':
           prompt = `
-            Role: Systems Biologist.
-            Task: Identify upstream/downstream signaling pathways for "${target}".
+            Role: Molecular Biologist.
+            Task: Identify UPSTREAM and DOWNSTREAM molecular pathways/mechanisms for "${target}".
             ${baseContext}
 
-            Instructions:
-            1. Focus on Kinases, Transcription Factors, Ion Channels.
-            2. Specific subunits (e.g. "G alpha s").
-            3. Return a JSON Array of strings (Max 25 items).
+            Rules:
+            1. **Focus on PATHWAYS**: Kinases (mTOR, PI3K), Transcription Factors (NF-kB, NRF2), Enzymes (PDE5, COX-2).
+            2. **Deep Mechanism**: Look for specific subunits (e.g., instead of "G-protein", suggest "G alpha s").
+            3. **Avoid Drugs**: Focus on the biological target, not the commercial drug name.
+            
+            Output: Comma-separated list of top 15 mechanistic targets.
           `;
           break;
 
         case 'blue_ocean':
-          temperature = 0.9;
           prompt = `
-            Role: Elite Scientific Prospector.
-            Task: Identify NOVEL, CONTROVERSIAL, or EMERGING targets for "${target}".
+            Role: Elite Data Scientist & Explorer.
+            Mission: Identify UNDERSTUDIED (Blue Ocean) targets for: "${target}".
             ${baseContext}
-
-            Instructions:
-            1. Targets from literature in the last 2-5 years.
-            2. Focus on Orphan GPCRs, lncRNAs, Ion Channels.
-            3. Return a JSON Array of strings (Max 25 items).
+            
+            Rules:
+            1. **ANATOMICAL NICHE**: Focus on specific cell types (e.g., Podocytes, Interstitial Cells) within the target.
+            2. **NOVELTY**: Prefer targets discovered in the last 5 years.
+            3. **AVOID SATURATION**: Do NOT suggest "Insulin", "TNF", "IL-6".
+            4. **BE SPECIFIC**: Good: "P2Y12", "Piezo2". Bad: "Purinergic receptor".
+            
+            Output: Comma-separated list of top 15 novel targets.
           `;
           break;
       }
 
-      // --- MUDANÇA PARA O MODELO ESTÁVEL (1.5 FLASH) ---
       const response = await this.ai.models.generateContent({
-        model: 'gemini-1.5-flash', 
-        contents: prompt + "\nOutput strictly a JSON Array of strings: [\"Item1\", \"Item2\"]",
+        model: 'gemini-3-pro-preview', 
+        contents: prompt,
+        // ADICIONEI APENAS ISSO PARA NÃO TRAVAR EM TERMOS MÉDICOS:
         config: {
-          temperature: temperature,
-          maxOutputTokens: 2000,
-          responseMimeType: "application/json",
-          // Desliga bloqueios de segurança para permitir termos médicos/drogas
           safetySettings: [
             { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
             { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
@@ -125,48 +105,64 @@ export class GeminiService {
         }
       });
 
-      const text = response.text || "[]";
-      console.log(`[Gemini 1.5] Resposta:`, text);
+      const text = response.text || "";
       
-      let terms: string[] = [];
-      try {
-        terms = JSON.parse(text);
-      } catch (jsonError) {
-        console.error("Erro JSON:", jsonError);
-        // Fallback simples
-        terms = text.replace(/[\[\]"]/g, "").split(",");
-      }
+      // FIX 1: Robust Parsing
+      // AI often ignores "comma-separated" and uses bullets (* or -) or newlines.
+      // We remove Markdown headers, brackets, bullets, and then split by newline OR comma.
+      const cleanText = text.replace(/Output:|Here is the list:|\[|\]|\*|- /g, "");
       
-      const lowerCaseCurrentSet = new Set(currentList.map(t => t.toLowerCase().trim()));
+      // Split by comma OR newline to handle "List format" responses
+      const terms = cleanText.split(/,|\n/);
       
       return terms
         .map(t => t.trim())
-        .filter(t => t.length > 2 && t.length < 80)
-        .filter(t => !lowerCaseCurrentSet.has(t.toLowerCase()));
+        // Clean up numbering (e.g., "1. Target")
+        .map(t => t.replace(/^\d+\.\s*/, ""))
+        // Filter out if it contains a space AND is too long (hallucination sentence)
+        .filter(t => t.length > 2 && !(t.includes(" ") && t.length > 30));
         
     } catch (error) {
-      console.error("Gemini Error:", error);
-      alert("Erro na IA: " + error);
-      return currentList; 
+      console.error("Gemini Mining Error:", error);
+      // Fail gracefully returning current list
+      return currentList;
     }
   }
 
   async analyzePaper(title: string, abstract: string): Promise<string> {
-    if (!this.ai) return "API Key Required.";
+    if (!this.ai) return "API Key Required for Analysis.";
     
+    // FIX 2: Crash Prevention for Null Abstracts
+    if (!abstract || typeof abstract !== 'string') {
+      return "Abstract not available for analysis.";
+    }
+
+    // SMART CONTEXT OPTIMIZATION:
     let optimizedAbstract = abstract;
-    if (abstract.length > 800) {
-      optimizedAbstract = abstract.substring(0, 400) + "\n...\n" + abstract.substring(abstract.length - 400);
+    if (abstract.length > 600) {
+      optimizedAbstract = abstract.substring(0, 300) + "\n...[middle section skipped]...\n" + abstract.substring(abstract.length - 300);
     }
 
     try {
       const response = await this.ai.models.generateContent({
-        model: 'gemini-1.5-flash', 
-        contents: `Analyze: Title: "${title}" Abstract: "${optimizedAbstract}". Task: Identify Target, Drug, and Effect. Output format: "M: [Molecule] | E: [Effect]"`,
+        model: 'gemini-3-flash-preview',
+        contents: `
+        Act as a Pharmacologist. Analyze this truncated abstract.
+        
+        Title: "${title}"
+        Text: "${optimizedAbstract}"
+        
+        Task:
+        Identify the **Molecule/Target**, its **Action** (Agonist/Antagonist), and the biological **Outcome**.
+        
+        Output format (one sentence):
+        "Mechanism: [Molecule] acts as [Mechanism] -> [Outcome]"
+        `,
       });
+
       return response.text || "Analysis failed.";
     } catch (error) {
-      return "Error analyzing paper.";
+      return "Error analyzing paper (AI Limit or Network).";
     }
   }
 }
