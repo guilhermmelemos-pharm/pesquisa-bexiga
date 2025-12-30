@@ -1,148 +1,165 @@
-import { AnalysisResult, Article } from '../types';
+import { GoogleGenAI } from "@google/genai";
+import { MiningStrategy } from "../types";
 
-// Lista de termos para ignorar (Blacklist interna de segurança)
-const BLACKLIST_MONSTRO = new Set([
-  "THE", "AND", "FOR", "NOT", "BUT", "VIA", "ALL", "WITH", "FROM", "AFTER",
-  "STUDY", "ANALYSIS", "DATA", "RESULTS", "CONCLUSION", "ABSTRACT", "INTRODUCTION"
-]);
+export class GeminiService {
+  private ai: GoogleGenAI | null = null;
 
-// Constantes de Simulação
-const N_PUBMED = 36000000;
-
-// Helper de delay para não travar a UI
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-/**
- * Limpa e padroniza a lista de entrada
- */
-export const parseSimpleUserList = (text: string): string[] => {
-  if (!text) return [];
-  return text.split(/[\n,;|]+/)
-    .map(item => item.replace(/['"]/g, '').trim())
-    .filter(item => item.length > 1) // Remove itens de 1 letra
-    .filter(item => !BLACKLIST_MONSTRO.has(item.toUpperCase()));
-};
-
-/**
- * SIMULAÇÃO DO FISHER EXACT TEST (Blindada contra erros)
- * Gera estatísticas plausíveis baseadas no tamanho das palavras e aleatoriedade.
- */
-export const performAnalysis = async (
-  terms: string[],
-  target: string,
-  email: string,
-  onProgress: (progress: number) => void
-): Promise<AnalysisResult[]> => {
-  
-  const results: AnalysisResult[] = [];
-  
-  // Proteção contra lista vazia ou nula
-  if (!terms || terms.length === 0) return [];
-
-  // Simula "Hits" totais para a doença (baseado no nome para ser determinístico)
-  let n_total_target = (target.length * 15432) % 500000; 
-  if (n_total_target < 1000) n_total_target = 5000; // Mínimo de segurança
-
-  for (let i = 0; i < terms.length; i++) {
-    const term = terms[i];
-    
-    // Atualiza barra de progresso
-    onProgress(Math.round(((i + 1) / terms.length) * 100));
-    
-    // Delay pequeno para a interface respirar (evita travamento visual)
-    await delay(20); 
-
-    try {
-      // 1. Simula Global Count (Hits totais na ciência)
-      const n_global = Math.floor((term.length * 98765) % 200000) + 50;
-      
-      // 2. Simula Specific Count (Interseção Alvo + Termo)
-      // Lógica: 20% de chance de ser "Blue Ocean" (raro), senão proporcional
-      let n_specific = 0;
-      if (Math.random() > 0.85) {
-         n_specific = Math.floor(Math.random() * 5); // 0 a 4 hits (Raro)
-      } else {
-         const baseRate = (n_global * n_total_target) / N_PUBMED;
-         n_specific = Math.floor(baseRate * (Math.random() * 8)); // Simula enriquecimento
-      }
-
-      // 3. Calcula Enrichment (Ratio)
-      const expected = (n_global * n_total_target) / N_PUBMED;
-      const safeExpected = expected > 0 ? expected : 0.00001;
-      const enrichment = (n_specific + 0.1) / safeExpected;
-
-      // 4. Determina Status e Score
-      let status: AnalysisResult['status'] = 'Neutral';
-      let sortScore = 0;
-
-      if (n_specific < 5) {
-        if (n_global > 200) { 
-            status = 'Blue Ocean'; 
-            sortScore = 1000; // Prioridade máxima
-        } else { 
-            status = 'Ghost'; 
-            sortScore = 0; 
-        }
-      } else if (n_specific <= 20) {
-        if (n_global > 100) { status = 'Embryonic'; sortScore = 500; }
-        else { status = 'Neutral'; sortScore = 20; }
-      } else {
-        if (enrichment > 5) { status = 'Gold'; sortScore = 100; }
-        else if (enrichment > 1.5) { status = 'Trending'; sortScore = 200; }
-        else { status = 'Saturated'; sortScore = 10; }
-      }
-
-      results.push({
-        molecule: term,
-        status,
-        ratio: parseFloat(enrichment.toFixed(1)),
-        pValue: (Math.random() * 0.05).toFixed(4), // P-valor simulado < 0.05
-        targetArticles: n_specific,
-        globalArticles: n_global,
-        sortScore
-      });
-
-    } catch (innerError) {
-      console.warn(`Erro ao calcular termo "${term}":`, innerError);
-      // Não trava o loop, apenas ignora esse termo
+  constructor(apiKey: string) {
+    if (apiKey) {
+      this.ai = new GoogleGenAI({ apiKey });
     }
   }
 
-  // Ordena por relevância (Score -> Ratio)
-  return results.sort((a, b) => {
-    if (a.sortScore !== b.sortScore) return b.sortScore - a.sortScore;
-    return b.ratio - a.ratio;
-  });
-};
+  updateKey(apiKey: string) {
+    this.ai = new GoogleGenAI({ apiKey });
+  }
 
-/**
- * Simula busca de artigos para leitura (Mock)
- */
-export const fetchArticles = async (molecule: string, target: string): Promise<Article[]> => {
-  await delay(500); // Simula rede
-  
-  const templates = [
-    { type: 'agonist', verb: 'activates', outcome: 'increased activity' },
-    { type: 'antagonist', verb: 'blocks', outcome: 'reduced inflammation' },
-    { type: 'inhibitor', verb: 'inhibits', outcome: 'decreased expression' },
-    { type: 'modulator', verb: 'modulates', outcome: 'altered signaling' },
-    { type: 'expression', verb: 'is upregulated in', outcome: 'disease progression' }
-  ];
+  // --- SISTEMA DE ROTAÇÃO DE MODELOS (APENAS OS COMPATÍVEIS) ---
+  private async generateWithFallback(prompt: string): Promise<string> {
+    // LISTA SEGURA: Apenas modelos que apareceram como ✅ na sua lista
+    const models = [
+      'gemini-2.0-flash',       // O mais rápido e moderno disponível pra você
+      'gemini-2.0-flash-lite',  // Versão leve (backup)
+      'gemini-flash-latest'     // O ponteiro genérico do Google (último recurso)
+    ];
+    
+    let lastError = "";
 
-  return Array.from({ length: 5 }).map((_, i) => {
-    const tpl = templates[i % templates.length];
-    return {
-      id: `pmid-${Math.random().toString(36).substr(2, 9)}`,
-      title: `Pharmacological evaluation of ${molecule} in ${target}: ${tpl.type} study ${i+1}`,
-      journal: ['Nature', 'Cell', 'Science', 'PLOS One', 'BJP'][i % 5],
-      year: 2024 - i,
-      link: '#',
-      abstract: `This study investigates the role of ${molecule}. We demonstrate that ${molecule} ${tpl.verb} the ${target} pathway, resulting in ${tpl.outcome}. These findings suggest ${molecule} as a potential therapeutic target.`
-    };
-  });
-};
+    for (const model of models) {
+      try {
+        console.log(`🤖 Tentando modelo: ${model}...`);
+        
+        const response = await this.ai!.models.generateContent({
+          model: model, 
+          contents: prompt,
+          config: {
+            // Travas desligadas para permitir Farmacologia
+            safetySettings: [
+              { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+              { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+              { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+              { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+              { category: 'HARM_CATEGORY_CIVIC_INTEGRITY', threshold: 'BLOCK_NONE' }
+            ]
+          }
+        });
 
-// Placeholder para compatibilidade caso o código tente chamar extractEntitiesRegex
-export const extractEntitiesRegex = (text: string): string[] => {
-    return parseSimpleUserList(text);
-};
+        if (response.text) {
+          console.log(`✅ Sucesso com ${model}!`);
+          return response.text;
+        }
+        
+      } catch (e: any) {
+        lastError = e.message || String(e);
+        console.warn(`⚠️ Falha no ${model}:`, lastError);
+        // Continua para o próximo modelo da lista...
+      }
+    }
+    
+    // Se chegou aqui, nenhum funcionou
+    throw new Error(`Falha em todos os modelos (2.0 e Latest). Erro: ${lastError}`);
+  }
+
+  async mineNovelTargets(target: string, context: string, currentList: string[], strategy: MiningStrategy): Promise<string[]> {
+    if (!this.ai) return currentList;
+
+    try {
+      const isComparative = (context || "").length > 2;
+      const listString = currentList.length > 0 ? currentList.join(", ") : "None";
+      
+      const baseContext = `- Primary Target Organ/Disease: "${target}"\n- Current Candidate List: ${listString}`;
+      let prompt = "";
+
+      switch (strategy) {
+        case 'conservative':
+          prompt = `
+            Role: Scientific Data Curator.
+            Task: Standardize pharmacological targets.
+            Input: ${baseContext}
+            Instructions: 
+            1. If Cold Start: List standard pharmacological targets.
+            2. If Expansion: Clean and standardize the input.
+            3. Return a comma-separated list.
+          `;
+          break;
+
+        case 'repurposing':
+          prompt = `
+            Role: Drug Repurposing Specialist.
+            Task: Suggest approved drugs/candidates for "${target}".
+            ${baseContext}
+            ${isComparative ? `- Context: "${context}"` : ''}
+            Instructions:
+            1. Focus on FDA approved drugs and Phase 2/3 candidates.
+            2. High translatability.
+            3. Output: Comma-separated list of top 20 candidates.
+          `;
+          break;
+
+        case 'mechanism':
+          prompt = `
+            Role: Molecular Biologist.
+            Task: Identify signaling pathways for "${target}".
+            ${baseContext}
+            Instructions:
+            1. Focus on Kinases, Transcription Factors, Ion Channels.
+            2. Specific subunits.
+            3. Output: Comma-separated list of top 20 targets.
+          `;
+          break;
+
+        case 'blue_ocean':
+          prompt = `
+            Role: Elite Scientific Prospector.
+            Mission: Identify UNDERSTUDIED (Blue Ocean) targets for: "${target}".
+            ${baseContext}
+            Instructions:
+            1. Targets from literature (last 5 years).
+            2. Focus on Orphan GPCRs, lncRNAs, Ion Channels.
+            3. Output: Comma-separated list of top 20 novel targets.
+          `;
+          break;
+      }
+
+      // Chama a função robusta
+      const text = await this.generateWithFallback(prompt);
+      
+      console.log("IA Respondeu:", text);
+
+      // Limpeza Regex (Sua preferida)
+      const cleanText = text.replace(/Output:|Here is the list:|\[|\]|\*|- /g, "");
+      const terms = cleanText.split(/,|\n/);
+      
+      return terms
+        .map(t => t.trim())
+        .map(t => t.replace(/^\d+\.\s*/, ""))
+        .filter(t => t.length > 2 && !(t.includes(" ") && t.length > 50));
+        
+    } catch (error: any) {
+      console.error("Erro na Mineração:", error);
+      alert(`Erro na IA: ${error.message || "Verifique o console"}`);
+      return currentList;
+    }
+  }
+
+  async analyzePaper(title: string, abstract: string): Promise<string> {
+    if (!this.ai) return "API Key Required.";
+    if (!abstract) return "No abstract.";
+
+    let optimizedAbstract = abstract;
+    if (abstract.length > 600) {
+      optimizedAbstract = abstract.substring(0, 300) + "\n...\n" + abstract.substring(abstract.length - 300);
+    }
+
+    try {
+      // Tenta analisar com o modelo mais leve disponível
+      const response = await this.ai.models.generateContent({
+        model: 'gemini-flash-latest', 
+        contents: `Analyze: Title: "${title}" Abstract: "${optimizedAbstract}". Task: Identify Target, Drug, and Effect. Output format: "M: [Molecule] | E: [Effect]"`,
+      });
+      return response.text || "Analysis failed.";
+    } catch (error) {
+      return "Error analyzing paper.";
+    }
+  }
+}
