@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { AppState, AnalysisResult, Article } from '../types';
 import { GeminiService } from '../services/geminiService';
-import { performAnalysis, extractEntitiesRegex, fetchArticles, parseSimpleUserList } from '../services/scienceService';
+import { performAnalysis, fetchArticles, parseSimpleUserList } from '../services/scienceService';
 import { PRESETS_FRONTEIRA } from '../constants';
 
 export const useScienceEngine = () => {
@@ -16,11 +16,14 @@ export const useScienceEngine = () => {
     results: [],
     apiKey: '',
     useAI: true,
-    miningStrategy: 'blue_ocean', // Default
+    miningStrategy: 'blue_ocean',
     selectedArticleDetails: null
   });
 
-  const [isLoading, setIsLoading] = useState(false);
+  // SEPARAÇÃO DOS ESTADOS DE CARREGAMENTO
+  const [isMining, setIsMining] = useState(false);     // Só para IA
+  const [isAnalyzing, setIsAnalyzing] = useState(false); // Só para Estatística
+  
   const [progress, setProgress] = useState(0);
   const [gemini, setGemini] = useState<GeminiService>(new GeminiService(''));
 
@@ -44,79 +47,92 @@ export const useScienceEngine = () => {
   const handleAddAllPresets = () => {
     const allItems = Object.values(PRESETS_FRONTEIRA).flat();
     const current = state.targetList ? state.targetList.split(',').map(s => s.trim()) : [];
-    const novel = allItems.filter(i => !current.includes(i));
-    updateState({ targetList: [...current, ...novel].join(', ') });
+    const unique = [...new Set([...current, ...allItems])];
+    updateState({ targetList: unique.join(', ') });
   };
 
   const handleFileUpload = (text: string) => {
-    // Use the simple parser for uploads, respecting user's exact keywords
     const extracted = parseSimpleUserList(text);
-    
     const current = state.targetList ? state.targetList.split(',').map(s => s.trim()) : [];
     const unique = [...new Set([...current, ...extracted])];
-    
     updateState({ targetList: unique.join(', ') });
     return extracted.length;
   };
 
+  // --- MINERAÇÃO (IA) ---
   const handleDeepMine = async () => {
     if (!state.target) {
-      alert("Please define a Target first.");
+      alert("⚠️ Defina o Alvo Principal (Doença/Órgão) antes de minerar.");
       return;
     }
     
-    setIsLoading(true);
+    setIsMining(true); // Ativa apenas o loading da IA
     let currentTerms = state.targetList 
       ? state.targetList.split(',').map(s => s.trim()).filter(x => x) 
       : [];
 
-    // 2. Cross-Tissue Intelligence
+    // Se estiver vazio e sem IA, aplica um preset básico
+    if (currentTerms.length === 0 && (!state.useAI || !state.apiKey)) {
+       const randomPreset = Object.values(PRESETS_FRONTEIRA)[0];
+       currentTerms = [...randomPreset];
+    }
+
+    // Se tiver IA, chama o Gemini
     if (state.useAI && state.apiKey) {
       try {
         const resultTerms = await gemini.mineNovelTargets(
           state.target,
-          state.context || '', // Ensure context is never null
+          state.context || '', 
           currentTerms,
           state.miningStrategy
         );
         
         if (state.miningStrategy === 'conservative') {
-           // Conservative is a filter/cleaner, so we REPLACE the list with the cleaned version
            currentTerms = resultTerms;
         } else {
-           // Repurposing, Mechanism, Blue Ocean: We ADD the new findings to the existing list
-           // Ensure uniqueness case-insensitive
            const existingSet = new Set(currentTerms.map(t => t.toUpperCase()));
            const newItems = resultTerms.filter(t => !existingSet.has(t.toUpperCase()));
            currentTerms = [...currentTerms, ...newItems];
         }
 
       } catch (e) {
-        console.warn("Deep Mining failed", e);
-        alert("AI Mining failed. Check your API Key or Quota.");
+        console.warn("Deep Mining falhou ou foi cancelado", e);
+        // Não alertamos aqui pois o geminiService já alerta
       }
-    } else if (state.context) {
-      // Fallback: simple regex on context if no AI
-      const contextTerms = extractEntitiesRegex(state.context);
-      const existingSet = new Set(currentTerms.map(t => t.toUpperCase()));
-      const newItems = contextTerms.filter(t => !existingSet.has(t.toUpperCase()));
-      currentTerms = [...currentTerms, ...newItems];
     }
     
     updateState({ targetList: currentTerms.join(', ') });
-    setIsLoading(false);
+    setIsMining(false); // Destrava a interface
   };
 
+  // --- ANÁLISE (ESTATÍSTICA LOCAL) ---
   const executeAnalysis = async () => {
-    if (!state.target || !state.targetList) return;
-    setIsLoading(true);
+    if (!state.target) {
+        alert("Defina um alvo primeiro.");
+        return;
+    }
+    if (!state.targetList) {
+        alert("A lista de alvos está vazia. Adicione presets ou use a IA.");
+        return;
+    }
+
+    setIsAnalyzing(true); // Ativa apenas o loading da Análise
     setProgress(0);
     
-    const terms = state.targetList.split(',').map(s => s.trim()).filter(s => s.length > 0);
-    const results = await performAnalysis(terms, state.target, state.email, (p) => setProgress(p));
-    
-    updateState({ results, page: 'results' });
-    setIsLoading(false);
+    try {
+        const terms = state.targetList.split(',').map(s => s.trim()).filter(s => s.length > 0);
+        // Adicionei um pequeno delay inicial para a UI atualizar
+        await new Promise(r => setTimeout(r, 100));
+        
+        const results = await performAnalysis(terms, state.target, state.email, (p) => setProgress(p));
+        
+        updateState({ results, page: 'results' });
+    } catch (error) {
+        alert("Erro na análise estatística. Tente limpar a lista e recomeçar.");
+        console.error(error);
+    } finally {
+        setIsAnalyzing(false); // Destrava a interface sempre
+    }
   };
 
   const fetchDetails = async (molecule: string) => {
@@ -132,7 +148,8 @@ export const useScienceEngine = () => {
   return {
     state,
     updateState,
-    isLoading,
+    isMining,      // Exportando separado
+    isAnalyzing,   // Exportando separado
     progress,
     handlePresetAdd,
     handleAddAllPresets,
