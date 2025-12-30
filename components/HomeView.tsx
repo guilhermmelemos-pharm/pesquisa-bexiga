@@ -5,6 +5,8 @@ import {
 } from 'lucide-react';
 import { TEXTS, PRESETS_FRONTEIRA } from '../constants';
 import Radar from './Radar';
+// Se você criou o componente Logo.tsx, descomente a linha abaixo. Se não, deixe comentado.
+// import Logo from './Logo'; 
 import { AppState, Language, MiningStrategy } from '../types';
 
 interface HomeViewProps {
@@ -48,7 +50,11 @@ const HomeView: React.FC<HomeViewProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const StrategyButton = ({ id, icon: Icon, label, colorClass, desc }: { id: MiningStrategy, icon: any, label: string, colorClass: string, desc: string }) => (
+  const StrategyButton = ({ 
+    id, icon: Icon, label, colorClass, desc 
+  }: { 
+    id: MiningStrategy, icon: any, label: string, colorClass: string, desc: string 
+  }) => (
     <button 
       onClick={() => updateState({ miningStrategy: id })}
       title={desc}
@@ -76,6 +82,7 @@ const HomeView: React.FC<HomeViewProps> = ({
       <header className="mb-8 flex justify-between items-center">
         <div>
           <div className="flex items-center gap-3">
+            {/* Se tiver o componente Logo, use <Logo className="w-10 h-10 text-lemos-red"/> aqui */}
             <span className="text-3xl text-lemos-red">λ</span>
             <h1 className="text-3xl md:text-4xl font-bold tracking-tight">{t.titulo_desk}</h1>
           </div>
@@ -139,32 +146,32 @@ const HomeView: React.FC<HomeViewProps> = ({
                    </div>
                    <div className="grid grid-cols-4 gap-3">
                      <StrategyButton 
-                        id="conservative" 
-                        icon={ShieldCheck} 
-                        label={t.strat_clean}
-                        desc={t.desc_clean} 
-                        colorClass="border-green-500 text-green-400" 
+                       id="conservative" 
+                       icon={ShieldCheck} 
+                       label={t.strat_clean} 
+                       desc={t.desc_clean} 
+                       colorClass="border-green-500 text-green-400" 
                      />
                      <StrategyButton 
-                        id="repurposing" 
-                        icon={Pill} 
-                        label={t.strat_repurpose} 
-                        desc={t.desc_repurpose}
-                        colorClass="border-orange-500 text-orange-400" 
+                       id="repurposing" 
+                       icon={Pill} 
+                       label={t.strat_repurpose} 
+                       desc={t.desc_repurpose} 
+                       colorClass="border-orange-500 text-orange-400" 
                      />
                      <StrategyButton 
-                        id="mechanism" 
-                        icon={Dna} 
-                        label={t.strat_mechanism} 
-                        desc={t.desc_mechanism}
-                        colorClass="border-purple-500 text-purple-400" 
+                       id="mechanism" 
+                       icon={Dna} 
+                       label={t.strat_mechanism} 
+                       desc={t.desc_mechanism} 
+                       colorClass="border-purple-500 text-purple-400" 
                      />
                      <StrategyButton 
-                        id="blue_ocean" 
-                        icon={Sparkles} 
-                        label={t.strat_blue_ocean} 
-                        desc={t.desc_blue_ocean}
-                        colorClass="border-blue-500 text-blue-400" 
+                       id="blue_ocean" 
+                       icon={Sparkles} 
+                       label={t.strat_blue_ocean} 
+                       desc={t.desc_blue_ocean} 
+                       colorClass="border-blue-500 text-blue-400" 
                      />
                    </div>
                 </div>
@@ -198,8 +205,7 @@ const HomeView: React.FC<HomeViewProps> = ({
                 </div>
               )}
 
-              <div className="relative">
-{/* --- INICIO DA SUBSTITUIÇÃO DO BOTÃO --- */}
+              {/* MINING BUTTON / PROGRESS BAR AREA */}
               <div className="relative">
                 {isLoading ? (
                   /* ESTADO DE CARREGAMENTO (Barra de Progresso) */
@@ -243,7 +249,8 @@ const HomeView: React.FC<HomeViewProps> = ({
                   </button>
                 )}
               </div>
-              {/* --- FIM DA SUBSTITUIÇÃO --- */}
+            </div>
+          </div>
 
           {/* Presets */}
           <div className="bg-lemos-card p-6 rounded-xl border border-gray-800">
