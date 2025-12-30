@@ -16,20 +16,23 @@ MODELOS_ATIVOS = [
     "gemini-1.5-flash"
 ]
 
-# LISTA NEGRA: Bloqueio de Ruído Clínico e Metodológico
+# LISTA NEGRA: A Curadora Implacável v4.1 (Final Polish)
 BLACKLIST_MONSTRO = {
-    # 1. Termos Genéricos de Pesquisa
+    # 1. Termos Genéricos de Pesquisa (Reforçado)
     "STUDY", "ANALYSIS", "REVIEW", "META-ANALYSIS", "DATA", "RESULTS", "CONCLUSION",
     "BACKGROUND", "METHODS", "OBJECTIVE", "AIM", "HYPOTHESIS", "INTRODUCTION",
     "SIGNIFICANT", "DIFFERENCE", "INCREASED", "DECREASED", "LEVELS", "EXPRESSION",
     "ROLE", "EFFECT", "IMPACT", "POTENTIAL", "NOVEL", "ASSOCIATION", "EVALUATION",
+    "IDENTIFICATION", "ACTIVATION", "DIVISION", "REGULATION", "FUNCTION", "ACTION",
+    "PATHOGENESIS", "DEVELOPMENT", "PROGRESSION", "CHARACTERIZATION", "INVESTIGATION",
     
     # 2. Estatística e Métricas
     "P-VALUE", "ANOVA", "RATIO", "ODDS", "CONFIDENCE", "INTERVAL", "STATISTICS",
     "COHORT", "POPULATION", "SAMPLE", "SIZE", "BASELINE", "PREDICTION", "SIMULATION",
     "PRECISION", "ACCURACY", "SENSITIVITY", "SPECIFICITY", "SCORE", "SCALE", "INDEX",
+    "MENDELIAN", "RANDOMIZATION", "MULTIVARIATE", "UNIVARIATE", "VALIDATION",
     
-    # 3. Procedimentos e Clínica (Onde costuma sujar)
+    # 3. Procedimentos e Clínica
     "SURGERY", "RESECTION", "INCISION", "OPERATION", "TRANSPLANT", "GRAFT", "STENT",
     "CATHETER", "BIOPSY", "IMAGING", "MRI", "CT", "PET", "ULTRASOUND", "DIAGNOSIS",
     "PROGNOSIS", "MANAGEMENT", "THERAPY", "TREATMENT", "PROTOCOL", "GUIDELINE",
@@ -37,13 +40,14 @@ BLACKLIST_MONSTRO = {
     "PATIENT", "PARTICIPANT", "CHILDREN", "ADULT", "WOMEN", "MEN", "ELDERLY",
     "HOSPITAL", "CLINIC", "CENTER", "DEPARTMENT", "UNIVERSITY",
     
-    # 4. Termos Específicos que Vazaram Antes
-    "PROSTATE", "KIDNEY", "LIVER", "HEART", "LUNG", "BRAIN" if "BLADDER" not in st.session_state.get('input_alvo', '').upper() else "", # Contexto dinâmico
+    # 4. Termos Específicos/Doenças (Lixo Contextual)
+    "PROSTATE", "KIDNEY", "LIVER", "HEART", "LUNG", "BRAIN", 
     "COVID", "SARS-COV-2", "PANDEMIC", "VIRUS",
-    "ENFORTUMAB", "PEMBROLIZUMAB", "NIVOLUMAB", "ATEROLIZUMAB", # Chemo clássica (a menos que seja o foco)
-    "GEMCITABINE", "CISPLATIN", "CARBOPLATIN", "DOXORUBICIN",
+    "PARKINSON", "ALZHEIMER", "DIABETES", "T2DM", "OBESITY", "INSULIN",
+    "GUERIN", "BACILLUS", "CALMETTE", "BCG", # Remove vacina BCG quebrada
     "PLACEBO", "CONTROL", "SHAM", "VEHICLE", "SALINE",
-    "DNA", "RNA", "MRNA", "PROTEIN", "CELL", "TISSUE", "SERUM", "PLASMA", "URINE", "BLOOD"
+    "DNA", "RNA", "MRNA", "PROTEIN", "CELL", "TISSUE", "SERUM", "PLASMA", "URINE", "BLOOD",
+    "HISTONE", "FACTOR", "COMPONENT", "SYSTEM", "MODEL", "PATHWAY", "MECHANISM"
 }
 
 MAPA_SINONIMOS_BASE = {
@@ -103,16 +107,10 @@ def simple_gemini_text(prompt: str, api_key: str) -> str:
 # ================= MINERAÇÃO DE ALTA PRECISÃO =================
 
 def ner_extraction_batch(textos_completos: List[str], api_key: str, contexto_alvo: str) -> List[str]:
-    """
-    Prompt 'Drug Hunter'. Recebe trechos ricos (Título + Abstract Parcial)
-    e extrai apenas química pesada.
-    """
     if not textos_completos: return []
     
-    # Prepara o input para a IA (limitado para não estourar tokens)
     texto_input = "\n---\n".join(textos_completos[:50]) 
     
-    # --- O PROMPT "DRUG HUNTER" ---
     prompt = f"""
     ROLE: Elite Pharmacologist & Chemical Data Curator.
     TARGET ORGAN/DISEASE: {contexto_alvo.upper()}.
@@ -124,10 +122,9 @@ def ner_extraction_batch(textos_completos: List[str], api_key: str, contexto_alv
     
     CRITICAL EXCLUSION RULES (IGNORE THESE):
     - NO Clinical Procedures (Surgery, Resection, Injection).
-    - NO Study Types (RCT, Review, Meta-analysis).
-    - NO General Biological Terms (Gene, Protein, Cell, Pathway, Expression).
-    - NO General Drug Classes without specific names (e.g., ignore "Antibiotics", "Chemotherapy").
-    - NO "Standard of Care" drugs unless used in a NOVEL way (Ignore Cisplatin/Gemcitabine if used as standard control).
+    - NO Study Types (RCT, Review, Meta-analysis, Mendelian Randomization).
+    - NO General Biological Terms (Gene, Protein, Cell, Pathway, Expression, Activation, Identification).
+    - NO "Standard of Care" drugs unless used in a NOVEL way.
     
     YOUR OUTPUT FORMAT:
     A pure JSON list of strings. Example: ["Mirabegron", "P2X3", "GYY4137", "Trealose"]
@@ -143,7 +140,7 @@ def minerar_pubmed(termo_base: str, email: str, usar_ia: bool = True) -> Dict:
     Entrez.email = email
     
     termo_expandido = MAPA_SINONIMOS_BASE.get(termo_base.upper(), termo_base)
-    # Busca 200 artigos (menos que 300, mas com leitura mais profunda)
+    # Busca 200 artigos
     query = f"({termo_expandido}) AND (drug OR inhibitor OR agonist OR antagonist OR compound) AND (2020:2026[Date])"
     
     try:
@@ -163,12 +160,9 @@ def minerar_pubmed(termo_base: str, email: str, usar_ia: bool = True) -> Dict:
             abstract = r.get('AB', '')
             keywords = ' '.join(r.get('OT', []))
             
-            # --- ESTRATÉGIA DE LEITURA INTELIGENTE ---
-            # Pega o Título + Primeiros 250 caracteres (Objetivo) + Últimos 250 (Conclusão)
-            # É aqui que os fármacos se escondem.
+            # Smart Snippet: Título + Início + Fim do Abstract
             intro = abstract[:250] if len(abstract) > 250 else abstract
             conclusao = abstract[-250:] if len(abstract) > 250 else ""
-            
             texto_rico = f"TITLE: {titulo}\nABSTRACT_START: {intro}\nABSTRACT_END: {conclusao}\nKEYWORDS: {keywords}"
             
             raw_texts_for_ai.append(texto_rico)
@@ -176,15 +170,15 @@ def minerar_pubmed(termo_base: str, email: str, usar_ia: bool = True) -> Dict:
         
         entidades = []
         
-        # 1. IA DRUG HUNTER
+        # 1. IA
         if api_key and usar_ia:
             entidades = ner_extraction_batch(raw_texts_for_ai, api_key, termo_base)
         
-        # 2. REGEX DE APOIO (Focado em Química)
+        # 2. REGEX DE APOIO
         if True: 
             texto_full = " ".join([a['texto'] for a in artigos_completos])
             
-            # Códigos Experimentais (Letra+Numero) ex: GYY4137
+            # Códigos Experimentais (GYY4137, AL-353)
             regex_codigos = r'\b[A-Z]{2,4}[- ]?[0-9]{3,5}\b'
             entidades.extend(re.findall(regex_codigos, texto_full))
             
@@ -192,11 +186,11 @@ def minerar_pubmed(termo_base: str, email: str, usar_ia: bool = True) -> Dict:
             sufixos = r'\b[A-Z][a-z]{3,}(?:ine|in|mab|ib|ol|on|one|il|ide|ate|ase|an)\b'
             entidades.extend(re.findall(sufixos, texto_full))
             
-            # Alvos (Genes/Receptores em CAPS)
+            # Alvos (Receptores/Canais)
             regex_alvos = r'\b[A-Z0-9-]{3,8}\b'
-            # Filtragem leve no regex bruto antes de adicionar
             candidatos = re.findall(regex_alvos, texto_full)
-            candidatos = [c for c in candidatos if re.search(r'\d', c) or c.endswith("R")] # Ex: P2X3, TRPV1, EGFR
+            # Filtra apenas o que parece alvo (tem numero ou termina com R)
+            candidatos = [c for c in candidatos if (re.search(r'\d', c) or c.endswith("R")) and len(c)>2]
             entidades.extend(candidatos)
 
         # 3. FILTRAGEM FINAL
@@ -207,13 +201,13 @@ def minerar_pubmed(termo_base: str, email: str, usar_ia: bool = True) -> Dict:
             if e.isdigit(): continue
             if e.upper() in BLACKLIST_MONSTRO: continue
             
-            # Remove palavras comuns do inglês que escapam
-            if e.lower() in ["with", "from", "after", "during", "high", "low", "using", "treated"]: continue
+            # Remove palavras comuns
+            if e.lower() in ["with", "from", "after", "during", "high", "low", "using", "treated", "group", "sham"]: continue
             
             entidades_limpas.append(e)
 
         counts = Counter(entidades_limpas)
-        limit = 1 # Como filtramos muito bem, até 1 ocorrência pode ser Blue Ocean
+        limit = 1 
         recorrentes = sorted([e for e, c in counts.items() if c >= limit], key=lambda x: counts[x], reverse=True)
         
         final = []
