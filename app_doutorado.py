@@ -5,6 +5,7 @@ Licensed under the MIT License.
 """
 import streamlit as st
 
+# --- 1. CONFIGURAÇÃO DA PÁGINA (Deve ser a primeira linha) ---
 st.set_page_config(
     page_title="λ Lemos Lambda: Deep Science Prospector", 
     page_icon="λ", 
@@ -20,6 +21,7 @@ import scipy.stats as stats
 import constantes as c
 import backend as bk 
 
+# --- 2. ESTADO E INICIALIZAÇÃO ---
 defaults = {
     'pagina': 'home', 'alvos_val': "", 'resultado_df': None, 'news_index': 0,
     'input_alvo': "", 'input_fonte': "", 'input_email': "", 'artigos_detalhe': None,
@@ -35,6 +37,7 @@ if 'api_key_usuario' not in st.session_state: st.session_state.api_key_usuario =
 def get_textos(): return c.TEXTOS.get(st.session_state.lang, c.TEXTOS["pt"])
 t = get_textos()
 
+# --- 3. CSS (ESTILIZAÇÃO) ---
 st.markdown("""
     <style>
     .stButton button { border-radius: 12px; height: 50px; font-weight: bold; }
@@ -47,6 +50,8 @@ st.markdown("""
     .sub-header-style { font-size: 1.2rem; font-weight: 400; color: #A0A0A0; margin-bottom: 20px; }
     </style>
 """, unsafe_allow_html=True)
+
+# ================= LÓGICA DO APP =================
 
 def mudar_idioma(novo_lang): 
     st.session_state.lang = novo_lang; resetar_pesquisa(); st.rerun()
@@ -148,11 +153,14 @@ def exibir_radar_cientifico(lang_code, textos):
                     st.link_button(textos["btn_ler"], n['link'], use_container_width=True)
     except: pass
 
+# --- HEADER E IDIOMA ---
 c_logo, c_lang = st.columns([10, 2])
 with c_lang:
     c1, c2 = st.columns(2)
     with c1: st.button("🇧🇷", key="pt_btn", on_click=mudar_idioma, args=("pt",))
     with c2: st.button("🇺🇸", key="en_btn", on_click=mudar_idioma, args=("en",))
+
+# ================= UI PRINCIPAL =================
 
 if st.session_state.pagina == 'resultados':
     c_back, c_tit = st.columns([1, 5])
@@ -193,6 +201,7 @@ if st.session_state.pagina == 'resultados':
                         elif st.session_state.api_key_usuario and not st.session_state.ia_global_switch: st.caption("⚠️ IA Desativada (Master Switch OFF)")
                     with c_link: st.link_button("🔗 Abrir no PubMed", art['Link'], use_container_width=True)
 else:
+    # --- PÁGINA HOME ---
     st.markdown(f'<p class="header-style">λ {t["titulo_desk"]}</p>', unsafe_allow_html=True)
     st.markdown(f'<p class="sub-header-style">{t["subtitulo"]}</p>', unsafe_allow_html=True)
     exibir_radar_cientifico(st.session_state.lang, t); st.divider()
@@ -203,6 +212,7 @@ else:
         c_in, c_trash = st.columns([9, 1], vertical_alignment="bottom")
         with c_in: st.text_input(t["label_alvo"], key="input_alvo", placeholder=t["holder_alvo"])
         with c_trash: st.button("🗑️", on_click=limpar_campo, args=("input_alvo",))
+        
         st.markdown('<div class="big-button">', unsafe_allow_html=True)
         if st.button(t["btn_auto"], use_container_width=True): carregar_lista_dinamica_smart(t)
         st.markdown('</div>', unsafe_allow_html=True)
@@ -215,23 +225,31 @@ else:
                 adicionar_termos_seguro(c.PRESETS_FRONTEIRA[escolha], t); st.rerun()
     with col_config:
         st.subheader(t["header_config"])
-        # --- AQUI ESTÁ O BOTÃO MOVIDO PARA FORA DO EXPANDER ---
+        # Botão Master Switch (Fora do Expander)
         st.toggle("🤖 Habilitar IA Generativa (Global)", key="ia_global_switch", value=True)
-        # ------------------------------------------------------
+        
         with st.expander(t["expander_ia"], expanded=True):
             st.session_state.api_key_usuario = st.text_input("Google API Key", type="password", value=st.session_state.api_key_usuario)
             st.toggle("✨ Ativar Curadoria por IA", key="usar_ia_faxina", help="Usa a IA para limpar a lista de mineração.")
             st.markdown(f"[{t['link_key']}](https://aistudio.google.com/app/apikey)")
         st.divider()
         anos = st.slider(t["slider_tempo"], 2000, datetime.now().year, (2015, datetime.now().year))
-        st.text_input(t["label_contexto"], key="input_fonte")
+        
+        # --- ALTERAÇÃO AQUI (CAMPO DE CONTEXTO) ---
+        st.text_input("Orgão para comparar", key="input_fonte")
+        # ------------------------------------------
+        
         st.file_uploader(t["uploader_label"], type=["csv", "txt"], key="uploader_key", on_change=processar_upload, args=(t,))
     st.divider()
     if st.session_state.alvos_val:
         st.success(f"✅ {len(st.session_state.alvos_val.split(','))} alvos prontos.")
         with st.expander(t["expander_lista"]):
             st.text_area("", key="alvos_val", height=150)
-            st.button("termos indicados", on_click=limpar_lista_total)
+            
+            # --- ALTERAÇÃO AQUI (BOTÃO APAGAR) ---
+            st.button("Apagar termos", on_click=limpar_lista_total)
+            # -------------------------------------
+            
         if st.button(t["btn_executar"], type="primary", use_container_width=True):
             if not st.session_state.input_email: st.error(t["erro_email"])
             else: ir_para_analise(st.session_state.input_email, st.session_state.input_fonte, st.session_state.input_alvo, anos[0], anos[1], t)
