@@ -102,7 +102,7 @@ def ir_para_analise(email, contexto, alvo, y_ini, y_fim, textos):
     with placeholder.container():
         st.markdown(textos["titulo_processando"]); prog = st.progress(0)
     for i, item in enumerate(lista):
-        time.sleep(0.01) 
+        time.sleep(0.5) 
         base_comparacao = contexto if contexto else ""
         n_base = bk.consultar_pubmed_count(item, base_comparacao, email, y_ini, y_fim)
         n_especifico = bk.consultar_pubmed_count(item, alvo, email, y_ini, y_fim)
@@ -271,3 +271,4 @@ with cf1:
     with st.expander(t["citar_titulo"]): st.code(t["citar_texto"], language="text")
 with cf2:
     st.caption(t["apoio_titulo"]); st.text_input("Chave Pix:", value="960f3f16-06ce-4e71-9b5f-6915b2a10b5a", disabled=False)
+
