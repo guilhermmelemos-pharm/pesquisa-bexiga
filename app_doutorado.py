@@ -26,7 +26,7 @@ defaults = {
     'pagina': 'home', 'alvos_val': "", 'resultado_df': None, 'news_index': 0,
     'input_alvo': "", 'input_fonte': "", 'input_email': "", 'artigos_detalhe': None,
     'email_guardado': "", 'alvo_guardado': "", 'lang': 'pt',
-    'api_key_usuario': "", 'usar_ia_faxina': True 
+    'api_key_usuario': "", 'usar_ia_faxina': True, 'ia_global_switch': True  # Novo Default
 }
 
 for k, v in defaults.items():
@@ -89,7 +89,8 @@ def adicionar_termos_seguro(lista, textos):
 
 def carregar_lista_dinamica_smart(textos):
     email, alvo = st.session_state.input_email, st.session_state.input_alvo
-    usar_ia = st.session_state.usar_ia_faxina
+    # Lógica do Master Switch: Só usa a IA se o botão Global estiver ON E o botão da Faxina estiver ON
+    usar_ia = st.session_state.usar_ia_faxina and st.session_state.ia_global_switch
     
     if not alvo: st.error(textos["erro_alvo"]); return
     
@@ -97,7 +98,7 @@ def carregar_lista_dinamica_smart(textos):
     lista_mestra = list(set(existentes)) 
     
     with st.spinner(f"{textos['status_minerando']} {alvo}..."):
-        # Chama o backend com a flag da IA
+        # Chama o backend com a flag da IA controlada
         novos = bk.buscar_alvos_emergentes_pubmed(alvo, email, usar_ia=usar_ia)
         
         if novos: 
@@ -249,11 +250,16 @@ if st.session_state.pagina == 'resultados':
                             if nova_chave:
                                 st.session_state.api_key_usuario = nova_chave
                                 st.rerun()
-                        if st.session_state.api_key_usuario:
+                        
+                        # Verifica o botão Global ANTES de mostrar o botão de analisar
+                        if st.session_state.api_key_usuario and st.session_state.ia_global_switch:
                             if st.button(f"🤖 Analisar este artigo", key=f"btn_ia_{i}"):
                                 with st.spinner("Analisando..."):
                                     resumo = bk.analisar_abstract_com_ia(art['Title'], art.get('Info_IA', ''), st.session_state.api_key_usuario, st.session_state.lang)
                                     st.markdown(f"<div style='background-color: #262730; color: #ffffff; padding: 15px; border-radius: 8px; border-left: 5px solid #FF4B4B; margin-top: 10px;'><small style='color: #FF4B4B;'>🧠 <b>Análise Lemos Lambda:</b></small><br><span style='font-size: 1.1em;'>{resumo}</span></div>", unsafe_allow_html=True)
+                        elif st.session_state.api_key_usuario and not st.session_state.ia_global_switch:
+                             st.caption("⚠️ IA Desativada no Painel Lateral")
+                    
                     with c_link: st.link_button("🔗 Abrir no PubMed", art['Link'], use_container_width=True)
 
 else:
@@ -289,6 +295,9 @@ else:
     with col_config:
         st.subheader(t["header_config"])
         with st.expander(t["expander_ia"], expanded=True):
+            # --- NOVO BOTÃO MASTER SWITCH ---
+            st.toggle("🤖 Habilitar IA Generativa (Global)", key="ia_global_switch", value=True)
+            
             st.session_state.api_key_usuario = st.text_input("Google API Key", type="password", value=st.session_state.api_key_usuario)
             
             # Switch da IA (Faxina)
@@ -316,7 +325,9 @@ st.markdown("---")
 cf1, cf2 = st.columns([2, 1])
 with cf1:
     st.caption(t["footer_citar"])
-    with st.expander(t["citar_titulo"]): st.code(t["citar_texto"], language="text")
+    # Citação atualizada diretamente no componente de código
+    with st.expander(t["citar_titulo"]): 
+        st.code("Lemos, G. (2025). Lemos Lambda: Deep Science Prospector (v2.0). Zenodo. https://doi.org/10.5281/zenodo.18092141", language="text")
 with cf2:
     st.caption(t["apoio_titulo"])
     st.text_input("Chave Pix:", value="960f3f16-06ce-4e71-9b5f-6915b2a10b5a", disabled=False)
