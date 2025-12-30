@@ -20,8 +20,6 @@ import pandas as pd
 import plotly.express as px
 from datetime import datetime
 import time
-import scipy.stats as stats
-
 import constantes as c
 import backend as bk
 
@@ -215,3 +213,4 @@ if st.session_state.artigos_detalhe:
                         art["Link"],
                         use_container_width=True,
                     )
+
