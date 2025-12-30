@@ -9,6 +9,7 @@ from collections import Counter
 from typing import List, Dict
 import json, re
 
+# ⚠️ IMPORTAÇÃO DO GEMINI ISOLADA
 try:
     from google import genai
     from google.genai import types
@@ -25,21 +26,25 @@ BLACKLIST_TOTAL = {
     "ruido_academico": {
         "CONTROL", "MEDICINE", "ALONGSIDE", "MULTIVARIATE", "DETERMINE", 
         "INDICATE", "ADEQUATE", "DETERMINATION", "EVALUATE", "FURTHERMORE",
-        "STRICTLY", "RELEVANT", "CONSIDER", "PRESENT", "ASSOCIATED", "INDICATED"
+        "STRICTLY", "RELEVANT", "CONSIDER", "PRESENT", "ASSOCIATED", "INDICATED",
+        "ELUCIDATE", "FACILITATE", "CANDIDATE", "INVESTIGATE", "APPROPRIATE",
+        "RELEASE", "PROTOCOL", "ROUTINE", "MACHINE", "DATABASE", "GUIDELINE"
     },
     "substancias_genericas": {
         "ETHANOL", "CHOLESTEROL", "GLUTAMINE", "TYROSINE", "SULFATE", 
-        "GLUCOSE", "OXYGEN", "SODIUM", "POTASSIUM", "ACID", "ALCOHOL"
+        "GLUCOSE", "OXYGEN", "SODIUM", "POTASSIUM", "ACID", "ALCOHOL",
+        "GLUTATHIONE", "PEROXIDASE", "HORMONE", "SULFATE"
     },
     "estatistica_e_metodo": {
         "PVALUE", "ANOVA", "RATIO", "ODDS", "STATISTICS", "SIGNIFICANT", 
         "MEDIAN", "REGRESSION", "CORRELATION", "FRACTION", "EQD2", "GSE13507",
-        "DATABASE", "POPULATION", "PROTOCOL", "VALIDATE", "IDENTIFY"
+        "POPULATION", "VALIDATE", "IDENTIFY", "DETECTION", "FRACTION"
     },
     "anatomia_e_geral": {
         "KIDNEY", "PROSTATE", "LIVER", "LUNG", "BLOOD", "URINE", "CELLS",
         "PATIENTS", "ORGAN", "TISSUE", "HUMAN", "MICE", "RAT", "DISEASE",
-        "CANCER", "POUR", "VOLUME", "COMMON", "GERMLINE", "GENOMIC"
+        "CANCER", "POUR", "VOLUME", "COMMON", "GERMLINE", "GENOMIC", 
+        "UTERINE", "CHROMATIN", "HISTONE", "NEUROENDOCRINE"
     }
 }
 UNIFIED_BLACKLIST = set().union(*BLACKLIST_TOTAL.values())
@@ -76,19 +81,19 @@ def validar_com_ia(candidatos: List[str], contexto: str, api_key: str) -> List[s
 
     prompt = f"""
 ROLE: Senior PhD Pharmacologist.
-TASK: Return ONLY a JSON list of:
-1. Specific Drugs (ex: Enfortumab, Bupivacaine, Pembrolizumab).
-2. Molecular Targets (ex: TRPV4, FGFR3, BCL6, STAT1).
+TASK: Return ONLY a JSON list of valid chemical entities or specific molecular targets.
+CONTEXT: {contexto} (Lower Urinary Tract Research).
 
-STRICTLY EXCLUDE:
-- Adverbs/Verbs (Determine, Indicate, Alongside, Adequate, Multivariate).
-- Generic substances (Ethanol, Glutamine, Cholesterol).
-- Generic medical terms (Medicine, Disease, Population).
+STRICT EXCLUSIONS:
+- NO Adverbs/Verbs (Determine, Indicate, Alongside, Adequate, Multivariate, Investigate).
+- NO Ubiquitous metabolites (Ethanol, Glutamine, Cholesterol, Sulfate).
+- NO Anatomical/Generic terms (Uterine, Chromatin, Medicine, Disease, Population).
+- NO Common academic noise (Candidate, Protocol, Appropriate).
 
 LIST TO FILTER:
 {", ".join(candidatos[:120])}
 
-OUTPUT: Pure JSON list only.
+OUTPUT: Pure JSON list of strings only.
 """
     res = gerar_com_gemini(prompt, client, is_json=True)
     try:
@@ -99,7 +104,7 @@ OUTPUT: Pure JSON list only.
 # ================= PIPELINE PUBMED =================
 def minerar_pubmed(termo_base: str, email: str, api_key: str, usar_ia: bool = True) -> Dict:
     Entrez.email = email
-    query = f"({termo_base}) AND (drug OR inhibitor OR target) NOT (prostate[TI] OR kidney[TI]) AND (2020:2026[Date])"
+    query = f"({termo_base}) AND (drug OR inhibitor OR agonist OR antagonist OR target) NOT (prostate[TI] OR kidney[TI] OR renal[TI]) AND (2020:2026[Date])"
 
     try:
         handle = Entrez.esearch(db="pubmed", term=query, retmax=200)
@@ -119,7 +124,8 @@ def minerar_pubmed(termo_base: str, email: str, api_key: str, usar_ia: bool = Tr
         for x in raw_found:
             norm = x.upper().replace("-", "").replace(" ", "").strip()
             if norm not in UNIFIED_BLACKLIST and len(norm) > 2:
-                cleaned.append(norm)
+                # Mantém capitalização original para fármacos (ex: Mirabegron)
+                cleaned.append(x if not x.isupper() else norm)
 
         counts = Counter(cleaned)
         candidatos = [k for k, _ in counts.most_common(120)]
@@ -131,22 +137,38 @@ def minerar_pubmed(termo_base: str, email: str, api_key: str, usar_ia: bool = Tr
         return {"termos_indicados": candidatos[:50]}
     except: return {"termos_indicados": []}
 
-# Funções auxiliares (Analisar Abstract, Contagem, Resumos) permanecem as mesmas v2.0
+# ================= ABSTRACT ANALYSIS (PhD DEDUCTION) =================
 def analisar_abstract_com_ia(titulo, abstract, api_key, lang="pt"):
-    client = configurar_gemini(api_key); prompt = f"PhD Pharmacologist. One line in {lang}: Organ – Target – Action. Title: {titulo}. Abstract: {abstract}"
-    res = gerar_com_gemini(prompt, client); return res.split("\n")[0].strip() if res else "Indisponível"
+    client = configurar_gemini(api_key)
+    if not client: return "API Key ausente."
+    
+    prompt = f"""
+PhD Pharmacologist. Deduce mechanism in ONE LINE.
+Format: Organ – Target – Action. Language: {lang}.
+Title: {titulo}
+Abstract: {abstract}
+"""
+    res = gerar_com_gemini(prompt, client)
+    return res.split("\n")[0].strip() if res else "Indisponível"
 
+# ================= FUNÇÕES AUXILIARES =================
 def consultar_pubmed_count(termo, contexto, email, y_ini, y_fim):
-    Entrez.email = email; query = f"({termo}) AND ({contexto}) NOT (prostate[TI] OR kidney[TI]) AND ({y_ini}:{y_fim}[Date])"
-    try: handle = Entrez.esearch(db="pubmed", term=query, retmax=0); rec = Entrez.read(handle); handle.close(); return int(rec["Count"])
+    Entrez.email = email
+    query = f"({termo}) AND ({contexto}) NOT (prostate[TI] OR kidney[TI]) AND ({y_ini}:{y_fim}[Date])"
+    try:
+        handle = Entrez.esearch(db="pubmed", term=query, retmax=0)
+        rec = Entrez.read(handle); handle.close()
+        return int(rec["Count"])
     except: return 0
 
 def buscar_resumos_detalhados(termo, orgao, email, y_ini, y_fim):
-    Entrez.email = email; query = f"({termo}) AND ({orgao}) AND ({y_ini}:{y_fim}[Date])"
+    Entrez.email = email
+    query = f"({termo}) AND ({orgao}) AND ({y_ini}:{y_fim}[Date])"
     try:
-        handle = Entrez.esearch(db="pubmed", term=query, retmax=6); rec = Entrez.read(handle); handle.close()
+        handle = Entrez.esearch(db="pubmed", term=query, retmax=6)
+        rec = Entrez.read(handle); handle.close()
         if not rec["IdList"]: return []
-        handle = Entrez.efetch(db="pubmed", id=record["IdList"], rettype="medline", retmode="text")
+        handle = Entrez.efetch(db="pubmed", id=rec["IdList"], rettype="medline", retmode="text")
         return [{"Title": r.get("TI", ""), "Abstract": r.get("AB", "")[:1000], "Link": f"https://pubmed.ncbi.nlm.nih.gov/{r.get('PMID','')}/"} for r in Medline.parse(handle)]
     except: return []
 
