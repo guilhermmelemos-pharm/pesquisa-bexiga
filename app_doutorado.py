@@ -2,32 +2,14 @@
 Lemos Lambda: Deep Science Prospector
 Copyright (c) 2025 Guilherme Lemos
 Licensed under the MIT License.
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-Author: Guilherme Lemos (Unifesp)
-Creation Date: December 2025
 Version: 2.0 (Stable)
+
+Citation:
+Lemos, G. (2025). Lemos Lambda: Deep Science Prospector (v2.0). Zenodo. https://doi.org/10.5281/zenodo.18092141
 """
 import streamlit as st
 
-# --- 1. CONFIGURAÇÃO DA PÁGINA (Primeiro comando obrigatório) ---
+# --- 1. CONFIGURAÇÃO DA PÁGINA (Deve ser a primeira linha) ---
 st.set_page_config(
     page_title="λ Lemos Lambda v2.0",
     page_icon="λ",
@@ -41,7 +23,7 @@ from datetime import datetime
 import time
 import scipy.stats as stats
 
-# Blindagem de Dependências (Radar de Notícias)
+# Blindagem de Dependências
 try:
     import feedparser
 except ImportError:
@@ -87,16 +69,10 @@ st.markdown("""
     .stTextArea textarea { font-family: monospace; }
     .header-style { font-size: 2.5rem; font-weight: 700; color: #FAFAFA; margin-bottom: 0px; }
     .sub-header-style { font-size: 1.2rem; font-weight: 400; color: #A0A0A0; margin-bottom: 20px; }
-    .news-card { 
-        background-color: #262730; 
-        padding: 15px; 
-        border-radius: 10px; 
-        border-left: 5px solid #FF4B4B; 
-        margin-bottom: 10px; 
-        min-height: 100px;
-    }
-    .news-card a { color: white; text-decoration: none; font-weight: bold; }
-    .news-card a:hover { text-decoration: underline; color: #FF4B4B; }
+    .news-card { background-color: #262730; padding: 15px; border-radius: 10px; border-left: 5px solid #FF4B4B; margin-bottom: 10px; }
+    
+    /* Estilo para o Modal */
+    div[data-testid="stDialog"] { border-radius: 15px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -118,7 +94,6 @@ def limpar_lista_total():
     st.session_state.alvos_val = ""
 
 def gerar_bibtex():
-    """Gera string BibTeX para importação no Mendeley/Zotero"""
     return """@software{lemos_lambda_2025,
   author       = {Lemos, Guilherme},
   title        = {Lemos Lambda: Deep Science Prospector},
@@ -126,8 +101,7 @@ def gerar_bibtex():
   year         = {2025},
   publisher    = {Zenodo},
   doi          = {10.5281/zenodo.18092141},
-  url          = {https://doi.org/10.5281/zenodo.18092141},
-  note         = {Unifesp - Department of Pharmacology}
+  url          = {https://doi.org/10.5281/zenodo.18092141}
 }"""
 
 def adicionar_termos_seguro(lista):
@@ -150,7 +124,6 @@ def adicionar_termos_seguro(lista):
 
 @st.cache_data(ttl=3600)
 def minerar_cached(alvo, email, api_key, usar_ia):
-    # Backend v2.6+ é seguro contra falhas de IA
     return bk.minerar_pubmed(alvo, email, api_key, usar_ia)
 
 def carregar_lista_dinamica_smart(textos):
@@ -168,7 +141,7 @@ def carregar_lista_dinamica_smart(textos):
         novos = resultado.get("termos_indicados", [])
         
         if not novos:
-            st.warning("⚠️ Mineração vazia (API instável ou sem resultados). Injetando Presets de Fronteira...")
+            st.warning("Mineração vazia. Injetando Presets de Fronteira...")
             for lista in c.PRESETS_FRONTEIRA.values():
                 novos.extend(lista)
         
@@ -180,15 +153,10 @@ def ir_para_analise(email, contexto, alvo, y_ini, y_fim, textos):
     st.session_state.email_guardado = email
     st.session_state.alvo_guardado = alvo
     lista = [x.strip() for x in st.session_state.alvos_val.split(",") if x.strip()]
-    
-    if not lista:
-        st.error("Lista de termos vazia.")
-        return
-
     res = []
     N_PUBMED = 36000000 
-    placeholder = st.empty()
     
+    placeholder = st.empty()
     with placeholder.container():
         st.markdown(textos["titulo_processando"])
         prog = st.progress(0)
@@ -196,7 +164,6 @@ def ir_para_analise(email, contexto, alvo, y_ini, y_fim, textos):
         if n_total_alvo == 0: n_total_alvo = 1
 
         for i, item in enumerate(lista):
-            # Lógica Fisher Completa (Restaurada)
             termo_ctx = contexto if contexto else ""
             n_base = bk.consultar_pubmed_count(item, termo_ctx, email, y_ini, y_fim)
             n_especifico = bk.consultar_pubmed_count(item, alvo, email, y_ini, y_fim)
@@ -206,38 +173,26 @@ def ir_para_analise(email, contexto, alvo, y_ini, y_fim, textos):
             c_val = max(0, n_total_alvo - n_especifico)
             d = max(0, N_PUBMED - (a + b + c_val))
             
-            try: 
-                _, p_value = stats.fisher_exact([[a, b], [c_val, d]], alternative='greater')
-            except: 
-                p_value = 1.0
+            try: _, p_value = stats.fisher_exact([[a, b], [c_val, d]], alternative='greater')
+            except: p_value = 1.0
             
             expected = (max(0.1, n_base) * n_total_alvo) / N_PUBMED
             enrichment = (n_especifico + 0.1) / expected
             
-            # Classificação Lemos Lambda v2.0
             tag, score_sort = textos["tag_neutral"], 0
-            
-            # Lógica Blue Ocean vs Ghost
             if n_especifico <= 5:
                 if n_base > 20: tag, score_sort = textos["tag_blue_ocean"], 1000
                 else: tag, score_sort = textos["tag_ghost"], 0
-            # Lógica Embryonic
-            elif n_especifico <= 25: 
-                tag, score_sort = textos["tag_embryonic"], 500
-            # Lógica Gold vs Saturated
+            elif n_especifico <= 25: tag, score_sort = textos["tag_embryonic"], 500
             else:
                 if enrichment > 5: tag, score_sort = textos["tag_gold"], 100
                 elif enrichment > 1.5: tag, score_sort = textos["tag_trending"], 200 
                 else: tag, score_sort = textos["tag_saturated"], 10
 
             res.append({
-                textos["col_mol"]: item, 
-                textos["col_status"]: tag, 
-                textos["col_ratio"]: round(float(enrichment), 1), 
-                "P-Value": f"{p_value:.4f}", 
-                textos["col_art_alvo"]: n_especifico, 
-                textos["col_global"]: n_base, 
-                "_sort": score_sort
+                textos["col_mol"]: item, textos["col_status"]: tag, 
+                textos["col_ratio"]: round(float(enrichment), 1), "P-Value": f"{p_value:.4f}", 
+                textos["col_art_alvo"]: n_especifico, textos["col_global"]: n_base, "_sort": score_sort
             })
             prog.progress((i+1)/len(lista))
 
@@ -253,24 +208,19 @@ def processar_upload(textos):
             termos = [x.strip() for x in content.replace("\n", ",").split(",") if x.strip()]
             n = adicionar_termos_seguro(termos)
             st.toast(f"{textos.get('toast_importado','Importados')}: {n}", icon="📂")
-        except: 
-            st.error("Erro ao ler arquivo.")
+        except: st.error("Erro ao ler arquivo.")
 
-@st.fragment(run_every=3600) # Atualiza a cada hora
+@st.fragment(run_every=3600)
 def exibir_radar_cientifico(lang_code, textos):
-    """Busca notícias via Backend ou Fallback se RSS falhar"""
     try:
-        # Se feedparser não estiver instalado, vai pro except
         if not feedparser: raise ImportError
         news = bk.buscar_todas_noticias(lang_code)
         if not news: raise Exception
     except:
-        # Fallback de demonstração caso a internet/API falhe
         news = [
             {"titulo": "TRPV4 modulation in Bladder Urothelium", "fonte": "Nature Urology", "link": "https://pubmed.ncbi.nlm.nih.gov"},
             {"titulo": "SGLT2 inhibitors and Voiding Dysfunction", "fonte": "PubMed Trending", "link": "https://pubmed.ncbi.nlm.nih.gov"}
         ]
-    
     with st.container(border=True):
         st.caption(textos.get("radar_titulo", "📡 Science Radar"))
         cols = st.columns(2)
@@ -278,9 +228,41 @@ def exibir_radar_cientifico(lang_code, textos):
             with cols[i]:
                 st.markdown(f"<div class='news-card'><a href='{n['link']}' target='_blank'>{n['titulo']}</a><br><small>{n['fonte']}</small></div>", unsafe_allow_html=True)
 
-# --- 5. INTERFACE DO USUÁRIO ---
+# === POP-UP (MODAL) PARA INVESTIGAÇÃO ===
+@st.dialog("🔬 Leitura Guiada por IA", width="large")
+def abrir_modal_investigacao(alvo, contexto, email, api_key, lang):
+    st.markdown(f"### Investigando: **{alvo}**")
+    st.caption(f"Contexto: {contexto}")
+    
+    with st.spinner("Buscando abstracts no PubMed..."):
+        artigos = bk.buscar_resumos_detalhados(alvo, contexto, email, 2015, 2026)
+    
+    if not artigos:
+        st.warning("Nenhum artigo relevante encontrado nos últimos 10 anos.")
+        return
 
-# Header com troca de idioma imediata
+    for i, art in enumerate(artigos):
+        with st.container(border=True):
+            st.markdown(f"**📄 {art.get('Title')}**")
+            with st.expander("Ler Abstract Original"):
+                st.write(art.get('Abstract', 'Resumo não disponível.'))
+            
+            c1, c2 = st.columns([1, 1])
+            with c1:
+                st.link_button("🔗 Ver no PubMed", art.get('Link', '#'), use_container_width=True)
+            with c2:
+                # Ação da IA entra AQUI
+                if st.button(f"🤖 Analisar (PhD Mode)", key=f"ai_{alvo}_{i}", use_container_width=True):
+                    if not api_key:
+                        st.error("Configure sua API Key no menu lateral.")
+                    else:
+                        with st.spinner("Interpretando mecanismo..."):
+                            resumo = bk.analisar_abstract_com_ia(
+                                art['Title'], art.get('Abstract', ''), api_key, lang
+                            )
+                            st.success(resumo)
+
+# --- 5. INTERFACE ---
 c_logo, c_lang = st.columns([10, 2])
 with c_lang:
     c1, c2 = st.columns(2)
@@ -288,7 +270,7 @@ with c_lang:
     if c2.button("🇺🇸", key="btn_en"): mudar_idioma("en")
 
 if st.session_state.pagina == 'resultados':
-    # --- PÁGINA DE RESULTADOS ---
+    # --- PÁGINA RESULTADOS ---
     if st.button(t["btn_voltar"]):
         st.session_state.pagina = 'home'
         st.rerun()
@@ -303,47 +285,56 @@ if st.session_state.pagina == 'resultados':
         col3.metric("P-Value (Fisher)", top["P-Value"])
         
         st.plotly_chart(px.bar(df.head(20), x=t["col_mol"], y=t["col_ratio"], color=t["col_status"]), use_container_width=True)
-        st.dataframe(df.drop(columns=["_sort"]), use_container_width=True, hide_index=True)
         
-        # Download do CSV
+        # LEGENDA ESTATÍSTICA (Abaixo do Gráfico)
+        with st.expander("ℹ️ Metodologia Estatística (Legenda)", expanded=False):
+            st.markdown("""
+            **1. Lambda Score (Enrichment):** Razão entre a frequência do termo no seu contexto específico versus a frequência global na ciência. Scores > 5 indicam altíssima especificidade.
+            **2. P-Value (Fisher's Exact Test):** Probabilidade estatística da associação não ser aleatória. Valores < 0.05 são significativos.
+            **3. Blue Ocean:** Termos com alta relevância global mas NENHUMA ou POUCAS publicações no seu contexto específico (Oportunidade de Ineditismo).
+            """)
+
+        # TABELA COM LUPA NA ÚLTIMA COLUNA
+        st.subheader("Mapa de Descobertas")
+        df_view = df.drop(columns=["_sort"]).copy()
+        
+        # Move a coluna de investigação para o final para ficar mais intuitivo
+        # Streamlit dataframe selection event
+        selection = st.dataframe(
+            df_view,
+            use_container_width=True,
+            hide_index=True,
+            on_select="rerun",
+            selection_mode="single-row"
+        )
+        
+        # GATILHO DO POP-UP
+        if selection.selection.rows:
+            idx = selection.selection.rows[0]
+            alvo_sel = df.iloc[idx][t["col_mol"]]
+            # Abre o Modal
+            abrir_modal_investigacao(
+                alvo_sel, 
+                st.session_state.alvo_guardado, 
+                st.session_state.email_guardado, 
+                st.session_state.api_key_usuario, 
+                st.session_state.lang
+            )
+
+        # Download CSV
         csv = df.drop(columns=["_sort"]).to_csv(index=False).encode('utf-8')
         st.download_button("📥 Download CSV", csv, "lemos_lambda_results.csv", "text/csv")
 
-        st.divider()
-        st.subheader(t["header_leitura"])
-        alvo_sel = st.selectbox(t["label_investigar"], df[t["col_mol"]].tolist())
-        
-        if st.button(t["btn_investigar"]):
-            with st.spinner(t["spinner_investigando"]):
-                st.session_state.artigos_detalhe = bk.buscar_resumos_detalhados(
-                    alvo_sel, st.session_state.alvo_guardado, st.session_state.email_guardado, 2015, 2026
-                )
-        
-        if st.session_state.artigos_detalhe:
-            for i, art in enumerate(st.session_state.artigos_detalhe):
-                with st.expander(f"📄 {art.get('Title', 'Untitled')}"):
-                    st.write(art.get("Abstract", "Sem resumo disponível."))
-                    if st.session_state.api_key_usuario and st.session_state.ia_global_switch:
-                        if st.button(f"🤖 Analyze PhD", key=f"btn_ia_{i}"):
-                            res = bk.analisar_abstract_com_ia(
-                                art['Title'], art.get('Abstract',''), 
-                                st.session_state.api_key_usuario, st.session_state.lang
-                            )
-                            st.info(res)
-                    st.link_button("PubMed Link", art.get("Link", "#"))
 else:
-    # --- PÁGINA HOME ---
+    # --- PÁGINA HOME (Igual à anterior) ---
     st.markdown(f'<p class="header-style">{t["titulo_desk"]}</p>', unsafe_allow_html=True)
     st.markdown(f'<p class="sub-header-style">{t["subtitulo"]}</p>', unsafe_allow_html=True)
     
-    # 1. RADAR DE NOVIDADES
     exibir_radar_cientifico(st.session_state.lang, t)
-    
     st.divider()
-    col1, col2 = st.columns([2, 1])
     
+    col1, col2 = st.columns([2, 1])
     with col1:
-        # ABAS: Auto-Miner | Import | Presets
         tab1, tab2, tab3 = st.tabs(["🔍 Auto-Miner", "📥 Import List", "🔥 Presets"])
         
         with tab1:
@@ -357,15 +348,13 @@ else:
             st.file_uploader("Upload", type=['txt', 'csv'], key="uploader_key", on_change=processar_upload, args=(t,))
 
         with tab3:
-            st.write("Presets de Fronteira (Gasotransmissores, Canais, etc.)")
+            st.write("Presets de Fronteira")
             preset_select = st.selectbox("Selecione Categoria:", list(c.PRESETS_FRONTEIRA.keys()))
-            if st.button("Adicionar Preset Selecionado"):
+            if st.button("Adicionar Preset"):
                 qtd = adicionar_termos_seguro(c.PRESETS_FRONTEIRA[preset_select])
                 st.success(f"Adicionados {qtd} termos!")
 
         st.divider()
-        
-        # Área de Texto Editável (Estado Persistente)
         if st.session_state.alvos_val:
             st.text_area(t["expander_lista"], key="alvos_val", height=150)
             c_run, c_clear = st.columns([4, 1])
@@ -378,13 +367,11 @@ else:
     with col2:
         st.subheader("⚙️ Setup")
         st.session_state.api_key_usuario = st.text_input("Gemini API Key", type="password")
-        # Link para gerar chave grátis
         st.markdown("[🔑 **Gerar API Key Grátis**](https://aistudio.google.com/app/apikey)")
-        
         st.toggle(t["label_ia_global"], key="ia_global_switch")
         st.text_input(t["label_contexto"], key="input_fonte")
 
-# --- RODAPÉ & CITAÇÃO ---
+# --- RODAPÉ ---
 st.markdown("---")
 c1, c2 = st.columns([2, 1])
 with c1:
@@ -392,14 +379,7 @@ with c1:
     with st.expander("📚 Citação (Zenodo/Mendeley)"):
         citacao_texto = "Lemos, G. (2025). Lemos Lambda: Deep Science Prospector (v2.0). Zenodo. https://doi.org/10.5281/zenodo.18092141"
         st.code(citacao_texto, language="text")
-        
-        # Botão Mendeley (.bib)
-        st.download_button(
-            label="📥 Baixar Citação (.bib) para Mendeley",
-            data=gerar_bibtex(),
-            file_name="lemos_lambda_citation.bib",
-            mime="application/x-bibtex"
-        )
+        st.download_button("📥 Baixar Citação (.bib)", gerar_bibtex(), "lemos_lambda.bib", "application/x-bibtex")
 
 with c2:
     st.caption(t["apoio_titulo"])
