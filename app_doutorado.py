@@ -73,7 +73,9 @@ def adicionar_termos_seguro(lista, textos):
 
 def carregar_lista_dinamica_smart(textos):
     email, alvo = st.session_state.input_email, st.session_state.input_alvo
+    # Master Switch Lógica
     usar_ia = st.session_state.usar_ia_faxina and st.session_state.ia_global_switch
+    
     if not alvo: st.error(textos["erro_alvo"]); return
     existentes = [x.strip() for x in st.session_state.alvos_val.split(",") if x.strip()]
     lista_mestra = list(set(existentes)) 
@@ -193,15 +195,17 @@ if st.session_state.pagina == 'resultados':
                         if not st.session_state.api_key_usuario:
                             nova_chave = st.text_input("Cole sua Google API Key:", type="password", key=f"key_input_{i}")
                             if nova_chave: st.session_state.api_key_usuario = nova_chave; st.rerun()
+                        # Lógica da IA (Verifica Chave E Master Switch)
                         if st.session_state.api_key_usuario and st.session_state.ia_global_switch:
                             if st.button(f"🤖 Analisar este artigo", key=f"btn_ia_{i}"):
                                 with st.spinner("Analisando..."):
                                     resumo = bk.analisar_abstract_com_ia(art['Title'], art.get('Info_IA', ''), st.session_state.api_key_usuario, st.session_state.lang)
                                     st.markdown(f"<div style='background-color: #262730; color: #ffffff; padding: 15px; border-radius: 8px; border-left: 5px solid #FF4B4B; margin-top: 10px;'><small style='color: #FF4B4B;'>🧠 <b>Análise Lemos Lambda:</b></small><br><span style='font-size: 1.1em;'>{resumo}</span></div>", unsafe_allow_html=True)
-                        elif st.session_state.api_key_usuario and not st.session_state.ia_global_switch: st.caption("⚠️ IA Desativada (Master Switch OFF)")
+                        elif st.session_state.api_key_usuario and not st.session_state.ia_global_switch:
+                             st.caption("⚠️ IA Desativada (Master Switch OFF)")
                     with c_link: st.link_button("🔗 Abrir no PubMed", art['Link'], use_container_width=True)
 else:
-    # --- PÁGINA HOME ---
+    # --- HOME ---
     st.markdown(f'<p class="header-style">λ {t["titulo_desk"]}</p>', unsafe_allow_html=True)
     st.markdown(f'<p class="sub-header-style">{t["subtitulo"]}</p>', unsafe_allow_html=True)
     exibir_radar_cientifico(st.session_state.lang, t); st.divider()
@@ -212,7 +216,6 @@ else:
         c_in, c_trash = st.columns([9, 1], vertical_alignment="bottom")
         with c_in: st.text_input(t["label_alvo"], key="input_alvo", placeholder=t["holder_alvo"])
         with c_trash: st.button("🗑️", on_click=limpar_campo, args=("input_alvo",))
-        
         st.markdown('<div class="big-button">', unsafe_allow_html=True)
         if st.button(t["btn_auto"], use_container_width=True): carregar_lista_dinamica_smart(t)
         st.markdown('</div>', unsafe_allow_html=True)
@@ -225,19 +228,19 @@ else:
                 adicionar_termos_seguro(c.PRESETS_FRONTEIRA[escolha], t); st.rerun()
     with col_config:
         st.subheader(t["header_config"])
-        # Botão Master Switch (Fora do Expander)
+        # --- BOTÃO MASTER (FORA DO EXPANDER) ---
         st.toggle("🤖 Habilitar IA Generativa (Global)", key="ia_global_switch", value=True)
         
-        with st.expander(t["expander_ia"], expanded=True):
+        # --- CONFIGURAÇÃO DA CHAVE (DENTRO DO EXPANDER RENOMEADO) ---
+        with st.expander("🔑 Configurar Chave API", expanded=True):
             st.session_state.api_key_usuario = st.text_input("Google API Key", type="password", value=st.session_state.api_key_usuario)
             st.toggle("✨ Ativar Curadoria por IA", key="usar_ia_faxina", help="Usa a IA para limpar a lista de mineração.")
             st.markdown(f"[{t['link_key']}](https://aistudio.google.com/app/apikey)")
         st.divider()
         anos = st.slider(t["slider_tempo"], 2000, datetime.now().year, (2015, datetime.now().year))
         
-        # --- ALTERAÇÃO AQUI (CAMPO DE CONTEXTO) ---
+        # --- CAMPO DE CONTEXTO CORRIGIDO ---
         st.text_input("Orgão para comparar", key="input_fonte")
-        # ------------------------------------------
         
         st.file_uploader(t["uploader_label"], type=["csv", "txt"], key="uploader_key", on_change=processar_upload, args=(t,))
     st.divider()
@@ -246,9 +249,8 @@ else:
         with st.expander(t["expander_lista"]):
             st.text_area("", key="alvos_val", height=150)
             
-            # --- ALTERAÇÃO AQUI (BOTÃO APAGAR) ---
+            # --- BOTÃO APAGAR CORRIGIDO ---
             st.button("Apagar termos", on_click=limpar_lista_total)
-            # -------------------------------------
             
         if st.button(t["btn_executar"], type="primary", use_container_width=True):
             if not st.session_state.input_email: st.error(t["erro_email"])
