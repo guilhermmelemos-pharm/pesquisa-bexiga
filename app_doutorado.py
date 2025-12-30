@@ -56,10 +56,11 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- COLOQUE SEU LINK DA VERCEL AQUI EMBAIXO ---
-LINK_NOVO = "https://seu-projeto-na-vercel.app" 
+LINK_NOVO = "https://lemos-lambda.vercel.app/" 
 
 st.markdown(f'<a href="{LINK_NOVO}" class="big-btn" target="_blank">ACESSAR VERSÃO 2.1 AGORA</a>', unsafe_allow_html=True)
 
 st.write("###")
 st.write("###")
 st.caption("Se você chegou aqui via DOI/Zenodo, o link acima é o oficial e atualizado.")
+
