@@ -1,16 +1,12 @@
 # constantes.py
-# Configurações, Textos e Listas de Prospecção
-# Versão: 3.2 (Correção Final de Chaves de Tradução)
+# Versão: 3.3 (FULL FIX)
 
 TEXTOS = {
     "pt": {
-        # --- GERAL ---
         "titulo_desk": "λ Lemos Lambda: Deep Science Prospector",
         "subtitulo": "Ferramenta de Prospecção Farmacológica Dinâmica",
         "radar_titulo": "📡 Radar Científico (Últimas 24h)",
         "btn_ler": "Ler Artigo",
-        
-        # --- INPUTS & CONFIG ---
         "label_email": "E-mail do Pesquisador (Obrigatório NCBI)",
         "holder_email": "ex: guilherme@unifesp.br",
         "erro_email": "⚠️ E-mail é obrigatório para usar a API!",
@@ -27,19 +23,10 @@ TEXTOS = {
         "btn_add_manual": "Adicionar Manual",
         "header_config": "Configuração",
         "slider_tempo": "Janela de Tempo",
-        
-        # --- TEXTOS FIXOS PEDIDOS ---
-        "label_contexto": "Orgão para comparar", 
         "uploader_label": "Importar Lista (CSV/TXT)",
-        "btn_limpar": "Apagar termos",
-        "expander_ia": "🔑 Configurar Chave API",
-        
-        # --- CONFIG IA ---
         "caption_ia": "Insira sua chave gratuita do Google para resumos inteligentes.",
         "placeholder_key": "Cole sua chave AIza... aqui",
         "link_key": "Obter chave grátis",
-        
-        # --- FEEDBACK ---
         "status_minerando": "Minerando literatura para",
         "toast_atualizado": "Lista atualizada!",
         "sucesso_carregado": "alvos carregados. Clique em EXECUTAR abaixo.",
@@ -50,8 +37,6 @@ TEXTOS = {
         "erro_arquivo": "Erro ao ler arquivo.",
         "spinner_analise": "Calibrando estatística (Lemos Lambda v3.0)...",
         "titulo_processando": "## 🧬 Processando Estatística...",
-
-        # --- RESULTADOS ---
         "resultados": "Relatório de Inteligência",
         "btn_voltar": "⬅ Voltar",
         "metric_top": "Top Oportunidade",
@@ -64,15 +49,11 @@ TEXTOS = {
         "btn_investigar": "🔎 Investigar com IA",
         "spinner_investigando": "Lendo artigos com Inteligência Artificial...",
         "btn_pubmed": "Ver no PubMed",
-
-        # --- COLUNAS ---
         "col_mol": "Alvo Molecular",
         "col_status": "Classificação",
         "col_ratio": "Lambda Score",
         "col_art_alvo": "Hits (Alvo)",
         "col_global": "Hits (Comparação)",
-
-        # --- TAGS ---
         "tag_blue_ocean": "💎 Blue Ocean",
         "tag_ghost": "👻 Fantasma",
         "tag_embryonic": "🌱 Embrionário",
@@ -80,22 +61,17 @@ TEXTOS = {
         "tag_gold": "🥇 Ouro",
         "tag_trending": "🚀 Tendência",
         "tag_saturated": "🔴 Saturado",
-
-        # --- RODAPÉ ---
         "footer_citar": "Uso Acadêmico",
         "citar_titulo": "📄 Como Citar",
-        "citar_texto": "Lemos, G. (2025). Lemos Lambda v3.0. Zenodo. doi.org/10.5281/zenodo.18092141",
+        "citar_texto": "Lemos, G. (2025). Lemos Lambda v3.0.",
         "apoio_titulo": "Apoie o Projeto (Pix):",
         "apoio_desc": "Ajude a manter o código atualizado ☕"
     },
     "en": {
-        # --- GENERAL ---
         "titulo_desk": "λ Lemos Lambda: Deep Science Prospector",
         "subtitulo": "Dynamic Pharmacological Prospecting Tool",
         "radar_titulo": "📡 Scientific Radar (Last 24h)",
         "btn_ler": "Read Article",
-        
-        # --- INPUTS ---
         "label_email": "Researcher E-mail (NCBI Required)",
         "holder_email": "ex: researcher@university.edu",
         "erro_email": "⚠️ E-mail is required for API usage!",
@@ -112,17 +88,10 @@ TEXTOS = {
         "btn_add_manual": "Add Manual",
         "header_config": "Configuration",
         "slider_tempo": "Time Range",
-        "label_contexto": "Comparison Organ",
         "uploader_label": "Import List (CSV/TXT)",
-        "btn_limpar": "Clear Terms",
-        "expander_ia": "🔑 API Key Config",
-        
-        # --- CONFIG IA ---
         "caption_ia": "Insert your free Google API Key for smart summaries.",
         "placeholder_key": "Paste your AIza... key here",
         "link_key": "Get free key",
-        
-        # --- FEEDBACK ---
         "status_minerando": "Mining literature for",
         "toast_atualizado": "List updated!",
         "sucesso_carregado": "targets loaded. Click EXECUTE below.",
@@ -133,8 +102,6 @@ TEXTOS = {
         "erro_arquivo": "Error reading file.",
         "spinner_analise": "Calibrating statistics (Lemos Lambda v3.0)...",
         "titulo_processando": "## 🧬 Processing Statistics...",
-
-        # --- RESULTS ---
         "resultados": "Intelligence Report",
         "btn_voltar": "⬅ Back",
         "metric_top": "Top Opportunity",
@@ -147,15 +114,11 @@ TEXTOS = {
         "btn_investigar": "🔎 Investigate with AI",
         "spinner_investigando": "Reading articles with AI...",
         "btn_pubmed": "View on PubMed",
-
-        # --- COLUMNS ---
         "col_mol": "Molecular Target",
         "col_status": "Classification",
         "col_ratio": "Lambda Score",
         "col_art_alvo": "Hits (Target)",
         "col_global": "Hits (Comparison)",
-
-        # --- TAGS ---
         "tag_blue_ocean": "💎 Blue Ocean",
         "tag_ghost": "👻 Ghost",
         "tag_embryonic": "🌱 Embryonic",
@@ -163,17 +126,14 @@ TEXTOS = {
         "tag_gold": "🥇 Gold",
         "tag_trending": "🚀 Trending",
         "tag_saturated": "🔴 Saturated",
-
-        # --- FOOTER ---
         "footer_citar": "Academic Use",
         "citar_titulo": "📄 How to Cite",
-        "citar_texto": "Lemos, G. (2025). Lemos Lambda v3.0. Zenodo. doi.org/10.5281/zenodo.18092141",
+        "citar_texto": "Lemos, G. (2025). Lemos Lambda v3.0.",
         "apoio_titulo": "Support the Project (Pix):",
         "apoio_desc": "Help keep the code updated ☕"
     }
 }
 
-# --- PRESETS ---
 PRESETS_FRONTEIRA = {
     "🧪 Chaperonas & Estresse": ["Trehalose", "TMAO", "4-PBA", "Taurine", "Betaine", "Chemical Chaperones", "HSP70", "HSP90", "ER Stress"],
     "🔥 Gasotransmissores": ["Carbon Monoxide (CO)", "HO-1", "CORM-2", "CORM-401", "Hydrogen Sulfide (H2S)", "CBS", "CSE", "GYY4137", "AP39", "Hydrogen Gas (H2)"],
