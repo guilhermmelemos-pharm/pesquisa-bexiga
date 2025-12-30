@@ -21,56 +21,46 @@ export class GeminiService {
     }
 
     try {
+      // --- LÓGICA DE PARTIDA (COLD START) ---
+      // Define se a IA deve CRIAR (lista vazia) ou EXPANDIR (lista cheia)
       const isListEmpty = currentList.length === 0;
-      let contextBlock = "";
+      let contextInstruction = "";
 
-      // --- O PULO DO GATO: Contexto Dinâmico ---
       if (isListEmpty) {
-        // SE A LISTA ESTIVER VAZIA:
-        // Ensinamos a IA o que queremos usando exemplos genéricos de farmacologia.
-        // Isso dá o "norte" que os presets davam, mas sem sujar sua lista.
-        contextBlock = `
-        STARTING PHASE: Zero Knowledge.
-        
-        REFERENCE EXAMPLES (To understand the desired format ONLY):
-        - Pharmacology: "Semaglutide", "Atorvastatin"
-        - Targets: "GLP1R", "P2X3", "TRPV1", "mTOR"
-        
-        INSTRUCTION: Generate NEW targets for "${target}" following the style of the Reference Examples above.
+        contextInstruction = `
+        STATE: COLD START (Zero knowledge).
+        TASK: Generate the INITIAL foundation list of targets for this disease.
+        NOTE: Do not ask for examples, just generate the most scientifically relevant targets.
         `;
       } else {
-        // SE JÁ TIVER ITENS:
-        // Usamos a lista como exclusão para não repetir.
-        contextBlock = `
-        EXPANSION PHASE: Filtering known targets.
-        
-        EXCLUSION LIST (DO NOT OUTPUT THESE):
+        contextInstruction = `
+        STATE: EXPANSION MODE.
+        EXCLUSION LIST (IGNORE these, find NEW ones):
         [${currentList.join(", ")}]
         `;
       }
       
       const baseContext = `
-      TARGET CONTEXT:
-      - Primary Disease/Organ: "${target}"
-      - Biological Context: "${context}"
-      
-      ${contextBlock}
+      TARGET ORGAN/DISEASE: "${target}"
+      BIOLOGICAL CONTEXT: "${context}"
+      ${contextInstruction}
       `;
 
       let prompt = "";
+      // Gemini 3 gosta de temperatura alta para ser criativo
       let temperature = 0.8; 
 
       switch (strategy) {
         case 'conservative':
-          temperature = 0.2;
+          temperature = 0.1;
           prompt = `
             Role: Scientific Data Curator.
-            Task: Standardize terms related to "${target}".
+            Task: Standardize pharmacological targets.
             Input: ${baseContext}
             Instructions: 
-            1. If input is empty, generate standard targets for this disease.
-            2. Convert Drugs to Targets (e.g. Semaglutide -> GLP1R).
-            3. Return a clean JSON Array of strings.
+            1. If Cold Start: List standard pharmacological targets.
+            2. If Expansion: Clean and standardize the input.
+            3. Return a JSON Array of strings.
           `;
           break;
 
@@ -82,7 +72,8 @@ export class GeminiService {
             
             Instructions:
             1. Focus on FDA approved drugs and Phase 2/3 candidates.
-            2. Return a JSON Array of strings (Max 30 items).
+            2. High translatability candidates.
+            3. Return a JSON Array of strings (Max 25 items).
           `;
           break;
 
@@ -93,8 +84,9 @@ export class GeminiService {
             ${baseContext}
 
             Instructions:
-            1. Focus on Kinases, Transcription Factors, Ion Channels, Enzymes.
-            2. Return a JSON Array of strings (Max 30 items).
+            1. Focus on Kinases, Transcription Factors, Ion Channels.
+            2. Specific subunits (e.g. "G alpha s").
+            3. Return a JSON Array of strings (Max 25 items).
           `;
           break;
 
@@ -108,17 +100,21 @@ export class GeminiService {
             Instructions:
             1. Targets from literature in the last 2-5 years.
             2. Focus on Orphan GPCRs, lncRNAs, Ion Channels.
-            3. Return a JSON Array of strings (Max 30 items).
+            3. Return a JSON Array of strings (Max 25 items).
           `;
           break;
       }
 
+      // --- CONFIGURAÇÃO GEMINI 3 PRO ---
       const response = await this.ai.models.generateContent({
-        model: 'gemini-2.0-flash-exp', 
+        // O modelo que você pediu
+        model: 'gemini-3-pro-preview', 
         contents: prompt + "\nOutput strictly a JSON Array of strings: [\"Item1\", \"Item2\"]",
         config: {
           temperature: temperature,
+          // Força JSON (Gemini 3 obedece bem a isso)
           responseMimeType: "application/json",
+          // DESLIGA TODAS AS TRAVAS DE SEGURANÇA (Essencial para Farmacologia)
           safetySettings: [
             { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
             { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
@@ -130,17 +126,17 @@ export class GeminiService {
       });
 
       const text = response.text || "[]";
-      console.log(`[Gemini JSON] Resposta:`, text);
+      console.log(`[Gemini 3] Resposta:`, text);
       
       let terms: string[] = [];
       try {
         terms = JSON.parse(text);
       } catch (jsonError) {
-        console.error("Erro ao ler JSON da IA:", jsonError);
+        console.error("Erro JSON:", jsonError);
+        // Fallback de força bruta caso o JSON venha quebrado
         terms = text.replace(/[\[\]"]/g, "").split(",");
       }
       
-      // Limpeza final
       const lowerCaseCurrentSet = new Set(currentList.map(t => t.toLowerCase().trim()));
       
       return terms
@@ -149,8 +145,8 @@ export class GeminiService {
         .filter(t => !lowerCaseCurrentSet.has(t.toLowerCase()));
         
     } catch (error) {
-      console.error("Gemini Critical Error:", error);
-      alert("A IA falhou. Verifique se sua API Key tem acesso ao modelo 'gemini-2.0-flash-exp'. Detalhes no Console.");
+      console.error("Gemini 3 Error:", error);
+      alert("Erro no Gemini 3. Verifique se sua chave suporta o modelo 'preview'. Detalhes no console.");
       return currentList; 
     }
   }
@@ -164,8 +160,10 @@ export class GeminiService {
     }
 
     try {
+      // Para análise rápida de texto, o Flash ainda é recomendado, 
+      // mas podemos usar o 3-flash-preview se preferir consistência.
       const response = await this.ai.models.generateContent({
-        model: 'gemini-2.0-flash-exp', 
+        model: 'gemini-3-flash-preview', 
         contents: `Analyze: Title: "${title}" Abstract: "${optimizedAbstract}". Task: Identify Target, Drug, and Effect. Output format: "M: [Molecule] | E: [Effect]"`,
       });
       return response.text || "Analysis failed.";
