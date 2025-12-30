@@ -4,8 +4,16 @@ Copyright (c) 2025 Guilherme Lemos
 Licensed under the MIT License.
 Version: 2.0 (Stable)
 """
-
 import streamlit as st
+import pandas as pd
+import plotly.express as px
+from datetime import datetime
+import time
+import scipy.stats as stats
+
+# Importação dos módulos locais
+import constantes as c
+import backend as bk 
 
 # --- 1. CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
@@ -14,14 +22,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed"
 )
-
-# --- IMPORTS ---
-import pandas as pd
-import plotly.express as px
-from datetime import datetime
-import time
-import constantes as c
-import backend as bk
 
 # --- 2. ESTADO E INICIALIZAÇÃO ---
 DEFAULTS = {
@@ -45,172 +45,240 @@ for k, v in DEFAULTS.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
-
-# --- TEXTOS ---
 def get_textos():
     return c.TEXTOS.get(st.session_state.lang, c.TEXTOS["pt"])
 
-
 t = get_textos()
 
-# --- 3. CSS ---
-st.markdown(
-    """
+# --- 3. CSS CUSTOMIZADO ---
+st.markdown("""
 <style>
-.stButton button {
-    border-radius: 12px;
-    height: 50px;
-    font-weight: bold;
-}
-div[data-testid="stMetricValue"] {
-    font-size: 1.8rem !important;
-}
-.big-button button {
-    background-color: #FF4B4B !important;
-    color: white !important;
-    border: none;
-    font-size: 1.1rem !important;
-}
-.stTextArea textarea {
-    font-family: monospace;
-}
-.header-style {
-    font-size: 2.5rem;
-    font-weight: 700;
-    color: #FAFAFA;
-}
-.sub-header-style {
-    font-size: 1.2rem;
-    color: #A0A0A0;
-}
+    .stButton button { border-radius: 12px; height: 50px; font-weight: bold; }
+    div[data-testid="stMetricValue"] { font-size: 1.8rem !important; }
+    .big-button button { background-color: #FF4B4B !important; color: white !important; border: none; font-size: 1.1rem !important; }
+    .stTextArea textarea { font-family: monospace; }
+    .header-style { font-size: 2.5rem; font-weight: 700; color: #FAFAFA; margin-bottom: 0px; }
+    .sub-header-style { font-size: 1.2rem; font-weight: 400; color: #A0A0A0; margin-bottom: 20px; }
 </style>
-""",
-    unsafe_allow_html=True,
-)
+""", unsafe_allow_html=True)
 
-# ================= LÓGICA =================
-
-def resetar_pesquisa():
-    st.session_state.resultado_df = None
-    st.session_state.artigos_detalhe = None
-    st.session_state.news_index = 0
-
+# --- 4. FUNÇÕES DE SUPORTE (FRONTEND) ---
 
 def mudar_idioma(novo_lang):
     st.session_state.lang = novo_lang
     resetar_pesquisa()
 
+def resetar_pesquisa():
+    st.session_state.pagina = "home"
+    st.session_state.resultado_df = None
+    st.session_state.artigos_detalhe = None
 
 def limpar_campo(k):
     st.session_state[k] = ""
 
-
 def limpar_lista_total():
     st.session_state.alvos_val = ""
-
 
 def adicionar_termos_seguro(lista, textos):
     atuais = [x.strip() for x in st.session_state.alvos_val.split(",") if x.strip()]
     atuais_up = [x.upper() for x in atuais]
     blacklist = [b.lower() for b in c.BLACKLIST_GERAL]
-
     adicionados = []
-
     for item in lista:
         termo = item.strip()
-        if not termo:
-            continue
-        if any(b in termo.lower() for b in blacklist):
+        if not termo or any(b in termo.lower() for b in blacklist):
             continue
         if termo.upper() not in atuais_up:
             atuais.append(termo)
             atuais_up.append(termo.upper())
             adicionados.append(termo)
-
     st.session_state.alvos_val = ", ".join(atuais)
     return len(adicionados)
 
-# =========================================================
-# ================= RESULTADOS =============================
-# =========================================================
+@st.cache_data(ttl=3600)
+def minerar_cached(alvo, email, api_key, usar_ia):
+    # Chama o backend sem depender de session_state interno
+    return bk.minerar_pubmed(alvo, email, api_key, usar_ia)
 
-if st.session_state.artigos_detalhe:
+def carregar_lista_dinamica_smart(textos):
+    email = st.session_state.input_email
+    alvo = st.session_state.input_alvo
+    api_key = st.session_state.api_key_usuario
+    usar_ia = st.session_state.usar_ia_faxina and st.session_state.ia_global_switch
+    
+    if not alvo:
+        st.error(textos["erro_alvo"])
+        return
+    
+    with st.spinner(f"{textos['status_minerando']} {alvo}..."):
+        resultado = minerar_cached(alvo, email, api_key, usar_ia)
+        novos = resultado.get("termos_indicados", [])
+        
+        if not novos:
+            st.warning("Mineração vazia. Usando presets...")
+            novos = []
+            for lista in c.PRESETS_FRONTEIRA.values():
+                novos.extend(lista)
+        
+        qtd = adicionar_termos_seguro(novos, textos)
+        st.toast(textos["toast_atualizado"], icon="✅")
+        if qtd > 0:
+            st.success(f"✅ {qtd} {textos['sucesso_carregado']}")
 
-    alvo_exibido = (
-        st.session_state.alvo_guardado
-        if st.session_state.alvo_guardado
-        else "selected query"
-    )
+def ir_para_analise(email, contexto, alvo, y_ini, y_fim, textos):
+    st.session_state.email_guardado = email
+    st.session_state.alvo_guardado = alvo
+    lista = [x.strip() for x in st.session_state.alvos_val.split(",") if x.strip()]
+    
+    if not lista:
+        st.error("Lista de termos vazia.")
+        return
 
-    st.info(
-        f"{len(st.session_state.artigos_detalhe)} papers found for {alvo_exibido}."
-    )
+    res = []
+    N_PUBMED = 36000000 
 
-    for i, art in enumerate(st.session_state.artigos_detalhe):
+    placeholder = st.empty()
+    with placeholder.container():
+        st.markdown(textos["titulo_processando"])
+        prog = st.progress(0)
+        
+        n_total_alvo = bk.consultar_pubmed_count(alvo, "", email, 1900, 2030)
+        if n_total_alvo == 0: n_total_alvo = 1
 
-        with st.expander(f"📄 {art.get('Title', 'Untitled')}", expanded=False):
+        for i, item in enumerate(lista):
+            base_comparacao = contexto if contexto else ""
+            n_base = bk.consultar_pubmed_count(item, base_comparacao, email, y_ini, y_fim)
+            n_especifico = bk.consultar_pubmed_count(item, alvo, email, y_ini, y_fim)
+            
+            # Estatística Fisher Exact
+            a, b, c_val = n_especifico, n_base - n_especifico, n_total_alvo - n_especifico
+            d = max(0, N_PUBMED - (a + max(0,b) + max(0,c_val)))
+            
+            try:
+                _, p_value = stats.fisher_exact([[a, max(0,b)], [max(0,c_val), d]], alternative='greater')
+            except:
+                p_value = 1.0
+            
+            expected = (max(0.1, n_base) * n_total_alvo) / N_PUBMED
+            enrichment = (n_especifico + 0.1) / expected
+            
+            # Tags de Classificação
+            tag, score_sort = textos["tag_neutral"], 0
+            if n_especifico <= 5:
+                if n_base > 20: tag, score_sort = textos["tag_blue_ocean"], 1000
+                else: tag, score_sort = textos["tag_ghost"], 0
+            elif n_especifico <= 25:
+                tag, score_sort = textos["tag_embryonic"], 500
+            else:
+                if enrichment > 5: tag, score_sort = textos["tag_gold"], 100
+                elif enrichment > 1.5: tag, score_sort = textos["tag_trending"], 200 
+                else: tag, score_sort = textos["tag_saturated"], 10
 
-            st.caption(
-                f"**Keywords/Context:** {art.get('Info_IA', 'N/A')[:200]}..."
-            )
+            res.append({
+                textos["col_mol"]: item, 
+                textos["col_status"]: tag, 
+                textos["col_ratio"]: round(float(enrichment), 1), 
+                "P-Value": f"{p_value:.4f}", 
+                textos["col_art_alvo"]: n_especifico, 
+                textos["col_global"]: n_base, 
+                "_sort": score_sort
+            })
+            prog.progress((i+1)/len(lista))
 
-            col_ia, col_link = st.columns([1, 1])
+    st.session_state.resultado_df = pd.DataFrame(res).sort_values(by=["_sort", textos["col_ratio"]], ascending=[False, False])
+    st.session_state.pagina = 'resultados'
+    st.rerun()
 
-            # -------- IA --------
-            with col_ia:
+# --- 5. RENDERIZAÇÃO DA INTERFACE ---
 
-                if not st.session_state.api_key_usuario:
-                    nova_chave = st.text_input(
-                        "Google API Key",
-                        type="password",
-                        key=f"key_input_{i}",
-                    )
-                    if nova_chave:
-                        st.session_state.api_key_usuario = nova_chave
-                        st.rerun()
+# Seletor de Idioma no Topo
+c_logo, c_lang = st.columns([10, 2])
+with c_lang:
+    c1, c2 = st.columns(2)
+    with c1: st.button("🇧🇷", on_click=mudar_idioma, args=("pt",))
+    with c2: st.button("🇺🇸", on_click=mudar_idioma, args=("en",))
 
-                if (
-                    st.session_state.api_key_usuario
-                    and st.session_state.ia_global_switch
-                ):
-                    if st.button(
-                        f"🤖 {t['btn_investigar']}",
-                        key=f"btn_ia_{i}",
-                    ):
-                        with st.spinner("Analyzing..."):
-
-                            resumo = bk.analisar_abstract_com_ia(
-                                art.get("Title", ""),
-                                art.get("Info_IA", ""),
-                                st.session_state.api_key_usuario,
+# PÁGINA: RESULTADOS
+if st.session_state.pagina == 'resultados':
+    c_back, c_tit = st.columns([1, 5])
+    with c_back: 
+        if st.button(t["btn_voltar"], use_container_width=True):
+            st.session_state.pagina = 'home'
+            st.rerun()
+    with c_tit: st.title(t["resultados"])
+    
+    df = st.session_state.resultado_df
+    if df is not None:
+        top = df.iloc[0]
+        m1, m2, m3 = st.columns(3)
+        m1.metric(t["metric_top"], top[t["col_mol"]], delta=top[t["col_status"]])
+        m2.metric(t["metric_score"], top[t["col_ratio"]])
+        m3.metric("P-Value (Fisher)", top["P-Value"])
+        
+        st.plotly_chart(px.bar(df.head(20), x=t["col_mol"], y=t["col_ratio"], color=t["col_status"]), use_container_width=True)
+        st.dataframe(df.drop(columns=["_sort"]), use_container_width=True, hide_index=True)
+        
+        st.divider()
+        st.subheader(t["header_leitura"])
+        alvo_sel = st.selectbox(t["label_investigar"], df[t["col_mol"]].tolist())
+        
+        if st.button(t["btn_investigar"]):
+            with st.spinner(t["spinner_investigando"]):
+                st.session_state.artigos_detalhe = bk.buscar_resumos_detalhados(
+                    alvo_sel, st.session_state.alvo_guardado, st.session_state.email_guardado, 2015, 2026
+                )
+        
+        if st.session_state.artigos_detalhe:
+            for i, art in enumerate(st.session_state.artigos_detalhe):
+                with st.expander(f"📄 {art.get('Title', 'Untitled')}"):
+                    st.write(art.get("Info_IA", "No abstract available."))
+                    
+                    if st.session_state.api_key_usuario and st.session_state.ia_global_switch:
+                        if st.button(f"🤖 Analyze with Gemini", key=f"btn_ai_{i}"):
+                            res = bk.analisar_abstract_com_ia(
+                                art['Title'], art['Info_IA'], 
+                                st.session_state.api_key_usuario, 
+                                st.session_state.lang
                             )
+                            st.info(res)
+                    st.link_button("PubMed", art.get("Link", "#"))
 
-                            st.markdown(
-                                f"""
-                                <div style="
-                                    background-color:#262730;
-                                    color:#ffffff;
-                                    padding:15px;
-                                    border-radius:8px;
-                                    border-left:5px solid #FF4B4B;
-                                    margin-top:10px;">
-                                <small style="color:#FF4B4B;">
-                                    🧠 <b>Lemos Lambda AI</b>
-                                </small><br>
-                                <span style="font-size:1.05em;">
-                                    {resumo}
-                                </span>
-                                </div>
-                                """,
-                                unsafe_allow_html=True,
-                            )
+# PÁGINA: HOME
+else:
+    st.markdown(f'<p class="header-style">{t["titulo_desk"]}</p>', unsafe_allow_html=True)
+    st.markdown(f'<p class="sub-header-style">{t["subtitulo"]}</p>', unsafe_allow_html=True)
+    
+    col_main, col_side = st.columns([2, 1])
+    
+    with col_main:
+        st.subheader("1. Setup")
+        st.text_input(t["label_email"], key="input_email")
+        st.text_input(t["label_alvo"], key="input_alvo")
+        
+        if st.button(t["btn_auto"], use_container_width=True, type="primary"):
+            carregar_lista_dinamica_smart(t)
+            
+        st.divider()
+        if st.session_state.alvos_val:
+            st.success(f"Ready: {len(st.session_state.alvos_val.split(','))} terms.")
+            st.text_area(t["expander_lista"], key="alvos_val", height=150)
+            if st.button(t["btn_executar"], use_container_width=True, type="primary"):
+                ir_para_analise(
+                    st.session_state.input_email, st.session_state.input_fonte, 
+                    st.session_state.input_alvo, 2015, 2026, t
+                )
 
-            # -------- LINK --------
-            with col_link:
-                if art.get("Link"):
-                    st.link_button(
-                        t["btn_pubmed"],
-                        art["Link"],
-                        use_container_width=True,
-                    )
+    with col_side:
+        st.subheader(t["header_config"])
+        st.session_state.api_key_usuario = st.text_input("Gemini API Key", type="password", value=st.session_state.api_key_usuario)
+        st.toggle(t["label_ia_global"], key="ia_global_switch")
+        st.text_input(t["label_contexto"], key="input_fonte")
 
+# RODAPÉ
+st.markdown("---")
+cf1, cf2 = st.columns([2, 1])
+with cf1:
+    st.caption(t["footer_citar"])
+    with st.expander(t["citar_titulo"]): st.code(t["citar_texto"], language="text")
+with cf2:
+    st.caption(t["apoio_titulo"]); st.text_input("Pix:", value="960f3f16-06ce-4e71-9b5f-6915b2a10b5a")
