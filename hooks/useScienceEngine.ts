@@ -70,12 +70,6 @@ export const useScienceEngine = () => {
       ? state.targetList.split(',').map(s => s.trim()).filter(x => x) 
       : [];
 
-    // 1. Initial Seeding if empty
-    if (currentTerms.length === 0) {
-      const randomPreset = Object.values(PRESETS_FRONTEIRA)[0];
-      currentTerms = [...randomPreset];
-    }
-
     // 2. Cross-Tissue Intelligence
     if (state.useAI && state.apiKey) {
       try {
