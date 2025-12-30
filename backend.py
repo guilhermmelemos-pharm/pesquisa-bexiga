@@ -1,5 +1,5 @@
 """
-Lemos Lambda Backend v2.0
+Lemos Lambda Backend v2.1
 Hybrid Deterministic-LLM Pipeline for Pharmacological Discovery
 """
 import streamlit as st
@@ -12,7 +12,13 @@ from typing import List, Dict, Any
 
 # --- CONFIGURAÇÃO ---
 Entrez.email = "pesquisador_guest@unifesp.br"
-MODELOS_ATIVOS = ["gemini-2.0-flash", "gemini-1.5-flash"]
+
+# Lista de modelos conforme solicitado
+MODELOS_ATIVOS = [
+    "gemini-2.5-flash", 
+    "gemini-2.0-flash", 
+    "gemini-1.5-flash"
+]
 
 # --- BLACKLIST CATEGORIZADA ---
 BLACKLIST_TOTAL = {
@@ -25,44 +31,47 @@ UNIFIED_BLACKLIST = set().union(*BLACKLIST_TOTAL.values())
 
 # --- REGEX FARMACÊUTICO ---
 REGEX_PATTERNS = [
-    r'\b[A-Z]{2,5}\d{1,4}\b',        # P2X3, TRPV1
-    r'\b[A-Z]{3,6}R\b',              # AT1R
-    r'\b[A-Z]{2,4}[- ]?\d{3,6}\b',   # GYY-4137
-    r'\b[A-Z][a-z]{3,}(?:ine|mab|ib|ol|on|one|ide|ate|ase|an)\b' # Mirabegron
+    r'\b[A-Z]{2,5}\d{1,4}\b',        # Ex: P2X3, TRPV1
+    r'\b[A-Z]{3,6}R\b',              # Ex: AT1R, GPCR
+    r'\b[A-Z]{2,4}[- ]?\d{3,6}\b',   # Ex: GYY-4137, CORM-401
+    r'\b[A-Z][a-z]{3,}(?:ine|mab|ib|ol|on|one|ide|ate|ase|an)\b' # Ex: Mirabegron
 ]
 
-# ================= MOTORES DE IA =================
+# ================= MOTORES DE COMUNICAÇÃO (COM FALLBACK) =================
 
-def call_gemini_json(prompt: str, api_key: str) -> List[str]:
-    """Motor especializado em retornar listas JSON (Uso na Mineração)."""
-    if not api_key: return []
+def call_gemini_api(prompt: str, api_key: str, is_json: bool = False) -> str:
+    """Motor de comunicação universal com lógica de tentativa em múltiplos modelos."""
+    if not api_key: return ""
+    
     headers = {"Content-Type": "application/json"}
     payload = {
-        "contents": [{"parts": [{"text": prompt}]}], 
-        "generationConfig": {"temperature": 0.1, "response_mime_type": "application/json"}
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "temperature": 0.1 if is_json else 0.3
+        }
     }
+    
+    if is_json:
+        payload["generationConfig"]["response_mime_type"] = "application/json"
+
     for modelo in MODELOS_ATIVOS:
         try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent?key={api_key.strip()}"
-            resp = requests.post(url, headers=headers, json=payload, timeout=20)
+            resp = requests.post(url, headers=headers, json=payload, timeout=15)
+            
             if resp.status_code == 200:
-                text = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
-                clean_text = re.sub(r"```json|```", "", text).strip()
-                return json.loads(clean_text)
-        except: continue
-    return []
+                data = resp.json()
+                if "candidates" in data:
+                    return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+            elif resp.status_code == 404:
+                continue # Pula para o próximo modelo se o atual não existir
+            else:
+                continue
+        except:
+            continue
+    return ""
 
-def validar_com_ia(candidatos: List[str], api_key: str, contexto: str) -> List[str]:
-    if not candidatos: return []
-    prompt = f"""
-    Expert Pharmacologist Review. Context: {contexto}.
-    Task: From the list below, return ONLY valid Drugs, Chemical Compounds, or Molecular Targets (Receptors/Channels/Enzymes).
-    Format: Pure JSON string list.
-    List: {", ".join(candidatos[:120])}
-    """
-    return call_gemini_json(prompt, api_key)
-
-# ================= PIPELINE PRINCIPAL =================
+# ================= PIPELINE DE MINERAÇÃO =================
 
 @st.cache_data(ttl=3600)
 def minerar_pubmed(termo_base: str, email: str, usar_ia: bool = True) -> Dict:
@@ -92,60 +101,40 @@ def minerar_pubmed(termo_base: str, email: str, usar_ia: bool = True) -> Dict:
         cleaned = [n for n in normalized if n not in UNIFIED_BLACKLIST and len(n) > 2]
         
         counts = Counter(cleaned)
-        candidates_to_validate = [item for item, _ in counts.most_common(100)]
+        candidates = [item for item, _ in counts.most_common(100)]
         
-        if api_key and usar_ia:
-            validated = validar_com_ia(candidates_to_validate, api_key, termo_base)
-        else:
-            validated = candidates_to_validate[:50]
-
-        return {
-            "termos_indicados": validated[:50],
-            "metadata": {"total_articles": total_docs}
-        }
+        if api_key and usar_ia and candidates:
+            prompt = f"Pharmacologist Review. Context: {termo_base}. Task: Return ONLY a JSON list of valid Drugs/Targets from: {', '.join(candidates)}"
+            resp_ia = call_gemini_api(prompt, api_key, is_json=True)
+            if resp_ia:
+                clean_json = re.sub(r"```json|```", "", resp_ia).strip()
+                validated = json.loads(clean_json)
+                return {"termos_indicados": validated[:50], "metadata": {"total_articles": total_docs}}
+        
+        return {"termos_indicados": candidates[:50], "metadata": {"total_articles": total_docs}}
     except Exception: return {}
 
-# ================= ANÁLISE DE ABSTRACT (AQUI ESTAVA O ERRO) =================
+# ================= ANÁLISE DE ABSTRACT (Órgão - Alvo - Ação) =================
 
 def analisar_abstract_com_ia(titulo: str, dados_curtos: str, api_key: str, lang: str = 'pt') -> str:
     """Análise dedutiva PhD: Órgão - Alvo - Ação."""
     if not api_key: return "API Key pendente."
     
-    # Prompt focado no seu esquema específico
     prompt = f"""
     Você é uma Doutora em Farmacologia (PhD).
-    Analise o título e o resumo técnico abaixo e DEDUZA o mecanismo farmacológico.
+    Extraia do texto abaixo seguindo este modelo de uma única linha:
+    Órgão/Tecido - Alvo Molecular (Receptor/Enzima/Canal) - Ação Farmacológica (Agonista/Inibidor/Expressão)
     
     TÍTULO: "{titulo}"
     RESUMO: "{dados_curtos}"
-    
-    SUA TAREFA:
-    Extraia e descreva seguindo EXATAMENTE este modelo de uma única linha:
-    Órgão/Tecido - Alvo Molecular (Receptor/Enzima/Canal) - Ação Farmacológica (Agonista/Inibidor/Expressão)
-    
-    Se o fármaco for implícito (ex: Mirabegron), você deve saber que o alvo é Receptor Beta-3.
-    Responda apenas a linha, sem comentários extras.
     """
     
-    headers = {"Content-Type": "application/json"}
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.3} # Temperatura baixa para precisão
-    }
+    resposta = call_gemini_api(prompt, api_key, is_json=False)
     
-    try:
-        # Usamos o modelo 1.5-flash por ser o mais estável para resumos
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key.strip()}"
-        resp = requests.post(url, headers=headers, json=payload, timeout=12)
-        
-        if resp.status_code == 200:
-            resposta_texto = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
-            return resposta_texto.strip().replace("*", "")
-        else:
-            return f"Indisponível (Erro {resp.status_code})"
-            
-    except Exception:
-        return "Análise indisponível no momento."
+    if resposta:
+        # Limpeza final para garantir que venha apenas a linha
+        return resposta.split('\n')[0].replace("*", "").strip()
+    return "Análise indisponível (Erro nos modelos ativos)."
 
 # ================= WRAPPERS COMPATIBILIDADE =================
 
