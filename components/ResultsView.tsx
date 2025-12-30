@@ -1,7 +1,7 @@
-import React from 'react';
-import { AppState } from '../types';
+import React, { useState, useMemo } from 'react';
+import { AppState, AnalysisResult } from '../types';
 import { 
-  ArrowLeft, Search, ExternalLink, Bot, Download, Zap 
+  ArrowLeft, Search, ExternalLink, Bot, Download, Zap, Loader2, ArrowUpDown
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell 
@@ -19,6 +19,44 @@ const ResultsView: React.FC<ResultsViewProps> = ({
   state, t, updateState, fetchDetails, analyzeArticle 
 }) => {
   const topResult = state.results[0];
+  
+  // Local state to store AI analysis per article ID
+  const [aiInsights, setAiInsights] = useState<Record<string, string>>({});
+  const [analyzingIds, setAnalyzingIds] = useState<Record<string, boolean>>({});
+
+  // Sorting State
+  const [sortConfig, setSortConfig] = useState<{ key: keyof AnalysisResult, direction: 'asc' | 'desc' } | null>(null);
+
+  const sortedResults = useMemo(() => {
+    let sortableItems = [...state.results];
+    if (sortConfig !== null) {
+      sortableItems.sort((a, b) => {
+        if (a[sortConfig.key] < b[sortConfig.key]) {
+          return sortConfig.direction === 'asc' ? -1 : 1;
+        }
+        if (a[sortConfig.key] > b[sortConfig.key]) {
+          return sortConfig.direction === 'asc' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+    return sortableItems;
+  }, [state.results, sortConfig]);
+
+  const requestSort = (key: keyof AnalysisResult) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const getSortIcon = (key: keyof AnalysisResult) => {
+    if (sortConfig?.key === key) {
+        return <ArrowUpDown size={14} className={`inline ml-1 ${sortConfig.direction === 'asc' ? 'text-blue-400' : 'text-red-400'}`} />
+    }
+    return <ArrowUpDown size={14} className="inline ml-1 opacity-20 group-hover:opacity-100" />
+  };
 
   const getStatusColor = (status: string) => {
     switch(status) {
@@ -31,7 +69,6 @@ const ResultsView: React.FC<ResultsViewProps> = ({
     }
   };
 
-  // Maps the internal status ID to the translated text with Emoji
   const getStatusLabel = (status: string) => {
     switch(status) {
       case 'Gold': return t.tag_gold;
@@ -49,10 +86,17 @@ const ResultsView: React.FC<ResultsViewProps> = ({
       alert("Please add your API Key in the settings first.");
       return;
     }
-    const confirm = window.confirm("This action uses 1 AI Credit (API Call). Continue?");
-    if (confirm) {
+    
+    // Set analyzing state
+    setAnalyzingIds(prev => ({ ...prev, [art.id]: true }));
+    
+    try {
       const res = await analyzeArticle(art.title, art.abstract);
-      alert(`Lemos Lambda Insight:\n\n${res}`);
+      setAiInsights(prev => ({ ...prev, [art.id]: res }));
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setAnalyzingIds(prev => ({ ...prev, [art.id]: false }));
     }
   };
 
@@ -82,7 +126,6 @@ const ResultsView: React.FC<ResultsViewProps> = ({
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    // Fix: Revoke URL to prevent memory leaks
     URL.revokeObjectURL(url);
   };
 
@@ -135,7 +178,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({
       <div className="bg-lemos-card p-6 rounded-xl border border-gray-800 mb-8 h-96">
          <h3 className="text-lg font-semibold mb-4 text-gray-300">{t.header_heatmap}</h3>
          <ResponsiveContainer width="100%" height="100%">
-           <BarChart data={state.results.slice(0, 25)}>
+           <BarChart data={sortedResults.slice(0, 25)}>
              <XAxis dataKey="molecule" stroke="#666" fontSize={12} tick={{fill: '#999'}} interval={0} angle={-45} textAnchor="end" height={60} />
              <YAxis stroke="#666" fontSize={12} tick={{fill: '#999'}} />
              <Tooltip 
@@ -143,7 +186,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({
                itemStyle={{ color: '#fff' }}
              />
              <Bar dataKey="ratio">
-               {state.results.slice(0, 25).map((entry, index) => (
+               {sortedResults.slice(0, 25).map((entry, index) => (
                  <Cell key={`cell-${index}`} fill={getStatusColor(entry.status)} />
                ))}
              </Bar>
@@ -155,19 +198,31 @@ const ResultsView: React.FC<ResultsViewProps> = ({
       <div className="bg-lemos-card rounded-xl border border-gray-800 overflow-hidden mb-8">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
-            <thead className="bg-black/20 text-gray-400 text-sm uppercase">
+            <thead className="bg-black/20 text-gray-400 text-sm uppercase cursor-pointer select-none">
               <tr>
-                <th className="p-4">{t.col_mol}</th>
-                <th className="p-4">{t.col_status}</th>
-                <th className="p-4">{t.col_ratio}</th>
-                <th className="p-4">{t.col_pvalue}</th>
-                <th className="p-4">{t.col_art_alvo}</th>
-                <th className="p-4">{t.col_global}</th>
+                <th className="p-4 group hover:bg-white/5" onClick={() => requestSort('molecule')}>
+                    {t.col_mol} {getSortIcon('molecule')}
+                </th>
+                <th className="p-4 group hover:bg-white/5" onClick={() => requestSort('status')}>
+                    {t.col_status} {getSortIcon('status')}
+                </th>
+                <th className="p-4 group hover:bg-white/5" onClick={() => requestSort('ratio')}>
+                    {t.col_ratio} {getSortIcon('ratio')}
+                </th>
+                <th className="p-4 group hover:bg-white/5" onClick={() => requestSort('pValue')}>
+                    {t.col_pvalue} {getSortIcon('pValue')}
+                </th>
+                <th className="p-4 group hover:bg-white/5" onClick={() => requestSort('targetArticles')}>
+                    {t.col_art_alvo} {getSortIcon('targetArticles')}
+                </th>
+                <th className="p-4 group hover:bg-white/5" onClick={() => requestSort('globalArticles')}>
+                    {t.col_global} {getSortIcon('globalArticles')}
+                </th>
                 <th className="p-4">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-800 text-sm">
-              {state.results.map((row, idx) => (
+              {sortedResults.map((row, idx) => (
                 <tr key={idx} className="hover:bg-white/5 transition-colors">
                   <td className="p-4 font-medium text-white">{row.molecule}</td>
                   <td className="p-4">
@@ -197,31 +252,46 @@ const ResultsView: React.FC<ResultsViewProps> = ({
       {/* Article Detail View (Drill Down) */}
       {state.selectedArticleDetails && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-lemos-card w-full max-w-3xl max-h-[80vh] overflow-y-auto rounded-xl border border-gray-700 p-6">
+          <div className="bg-lemos-card w-full max-w-3xl max-h-[80vh] overflow-y-auto rounded-xl border border-gray-700 p-6 shadow-2xl">
              <div className="flex justify-between items-center mb-6">
                <h2 className="text-xl font-bold text-white">{t.header_leitura}</h2>
-               <button onClick={() => updateState({ selectedArticleDetails: null })} className="text-gray-400 hover:text-white">Close</button>
+               <button onClick={() => updateState({ selectedArticleDetails: null })} className="text-gray-400 hover:text-white bg-gray-800 p-2 rounded-full">✕</button>
              </div>
              
              <div className="space-y-4">
                {state.selectedArticleDetails.map((art) => (
-                 <div key={art.id} className="bg-black/20 p-4 rounded-lg border border-gray-800">
-                    <h4 className="text-lg font-semibold text-blue-300 mb-1">{art.title}</h4>
-                    <div className="text-xs text-gray-500 mb-2">{art.journal} • {art.year}</div>
-                    <p className="text-sm text-gray-300 mb-3 leading-relaxed">{art.abstract}</p>
+                 <div key={art.id} className="bg-black/40 p-5 rounded-lg border border-gray-700/50">
+                    <div className="flex justify-between items-start gap-4">
+                      <h4 className="text-lg font-semibold text-blue-300 mb-1 leading-tight">{art.title}</h4>
+                      <span className="text-xs text-gray-500 whitespace-nowrap bg-black/50 px-2 py-1 rounded">{art.year}</span>
+                    </div>
+                    <div className="text-xs text-gray-400 mb-3 italic">{art.journal}</div>
+                    <p className="text-sm text-gray-300 mb-4 leading-relaxed">{art.abstract}</p>
                     
-                    <div className="flex gap-3 pt-2">
-                       <a href={art.link} className="flex items-center gap-1 text-xs text-white bg-gray-700 px-3 py-2 rounded hover:bg-gray-600 transition-colors">
+                    {/* Inline AI Insight */}
+                    {aiInsights[art.id] && (
+                       <div className="mb-4 bg-purple-900/20 border-l-4 border-purple-500 p-3 rounded-r-lg">
+                         <div className="flex items-center gap-2 mb-1">
+                           <Bot size={14} className="text-purple-400" />
+                           <span className="text-xs font-bold text-purple-400 uppercase tracking-wider">AI Insight</span>
+                         </div>
+                         <p className="text-sm text-gray-200">{aiInsights[art.id]}</p>
+                       </div>
+                    )}
+
+                    <div className="flex gap-3 pt-2 border-t border-gray-800/50">
+                       <a href={art.link} className="flex items-center gap-1 text-xs text-white bg-gray-700 px-3 py-2 rounded hover:bg-gray-600 transition-colors font-medium">
                          <ExternalLink size={12} /> {t.btn_pubmed}
                        </a>
-                       {state.apiKey && (
+                       {state.apiKey && !aiInsights[art.id] && (
                          <button 
                            onClick={() => handleAIAnalysis(art)}
-                           className="flex items-center gap-1 text-xs text-white bg-purple-900/50 border border-purple-500/50 px-3 py-2 rounded hover:bg-purple-900 transition-colors group"
+                           disabled={analyzingIds[art.id]}
+                           className="flex items-center gap-1 text-xs text-white bg-purple-900/50 border border-purple-500/50 px-3 py-2 rounded hover:bg-purple-900 transition-colors group disabled:opacity-50"
                            title="Consumes AI Token"
                          >
-                           <Bot size={12} className="group-hover:text-purple-300" /> 
-                           <span className="group-hover:text-purple-300">{t.btn_investigar}</span>
+                           {analyzingIds[art.id] ? <Loader2 size={12} className="animate-spin" /> : <Bot size={12} className="group-hover:text-purple-300" />}
+                           <span className="group-hover:text-purple-300">{analyzingIds[art.id] ? t.spinner_investigando : t.btn_investigar}</span>
                            <Zap size={10} className="text-yellow-500 ml-1" />
                          </button>
                        )}

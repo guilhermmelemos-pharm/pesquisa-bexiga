@@ -100,13 +100,19 @@ export const performAnalysis = async (
 
   for (let i = 0; i < terms.length; i++) {
     const term = terms[i];
-    await delay(50); // Simulate API latency
+    await delay(30); // Reduced delay slightly for speed
 
     // Simulate Global Count (Total papers for the molecule)
     const n_global = (term.length * 98765) % 200000;
     
-    // Simulate Specific Count (Intersection of Molecule AND Target)
-    const n_specific = Math.floor((n_global * n_total_target) / N_PUBMED * (Math.random() * 10));
+    // Simulate Specific Count with a bias towards "Blue Ocean" (low hits)
+    // 20% chance of being extremely low hit (Blue Ocean candidate)
+    let n_specific = 0;
+    if (Math.random() > 0.80) {
+        n_specific = Math.floor(Math.random() * 5); // 0 to 4 hits
+    } else {
+        n_specific = Math.floor((n_global * n_total_target) / N_PUBMED * (Math.random() * 10));
+    }
 
     // Calculate Enrichment
     const expected = (n_global * n_total_target) / N_PUBMED;
@@ -116,10 +122,16 @@ export const performAnalysis = async (
     let status: AnalysisResult['status'] = 'Neutral';
     let sortScore = 0;
 
-    if (n_specific === 0) {
-      if (n_global > 100) { status = 'Blue Ocean'; sortScore = 1000; }
-      else { status = 'Ghost'; sortScore = 0; }
-    } else if (n_specific <= 15) {
+    // Relaxed Blue Ocean Logic: Less than 5 hits (instead of strictly 0)
+    if (n_specific < 5) {
+      if (n_global > 100) { 
+          status = 'Blue Ocean'; 
+          sortScore = 1000; 
+      } else { 
+          status = 'Ghost'; 
+          sortScore = 0; 
+      }
+    } else if (n_specific <= 20) {
       if (n_global > 50) { status = 'Embryonic'; sortScore = 500; }
       else { status = 'Neutral'; sortScore = 20; }
     } else {
@@ -150,13 +162,25 @@ export const performAnalysis = async (
 
 export const fetchArticles = async (molecule: string, target: string): Promise<Article[]> => {
   await delay(1000);
-  // Return mock articles
-  return Array.from({ length: 5 }).map((_, i) => ({
-    id: `pmid-${Math.random()}`,
-    title: `Effects of ${molecule} on ${target}: A comprehensive review part ${i+1}`,
-    journal: ['Nature', 'Cell', 'Science', 'PLOS One'][i % 4],
-    year: 2023 - i,
-    link: '#',
-    abstract: `This study investigates the role of ${molecule} in modulating pathways associated with ${target}. Results indicate a significant correlation...`
-  }));
+  
+  // Variations to prevent "same tags" AI output
+  const templates = [
+    { type: 'agonist', verb: 'activates', outcome: 'increased contractility' },
+    { type: 'antagonist', verb: 'blocks', outcome: 'reduced inflammation' },
+    { type: 'inhibitor', verb: 'inhibits', outcome: 'decreased expression' },
+    { type: 'modulator', verb: 'modulates', outcome: 'altered signaling' },
+    { type: 'expression', verb: 'is upregulated in', outcome: 'disease progression' }
+  ];
+
+  return Array.from({ length: 5 }).map((_, i) => {
+    const tpl = templates[i % templates.length];
+    return {
+      id: `pmid-${Math.random().toString(36).substr(2, 9)}`,
+      title: `Pharmacological evaluation of ${molecule} in ${target}: ${tpl.type} study ${i+1}`,
+      journal: ['Nature', 'Cell', 'Science', 'PLOS One', 'BJP'][i % 5],
+      year: 2023 - i,
+      link: '#',
+      abstract: `This study investigates the role of ${molecule}. We demonstrate that ${molecule} ${tpl.verb} the ${target} pathway, resulting in ${tpl.outcome}. These findings suggest ${molecule} as a potential therapeutic target.`
+    };
+  });
 };

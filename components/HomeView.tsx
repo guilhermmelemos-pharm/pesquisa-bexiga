@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   FlaskConical, Trash2, Settings, Key, Play, FileText, AlertTriangle, 
-  Sparkles, ShieldCheck, Pill, Dna, Upload, Copy, Check
+  Sparkles, ShieldCheck, Pill, Dna, Upload, Copy, Check, Loader2
 } from 'lucide-react';
 import { TEXTS, PRESETS_FRONTEIRA } from '../constants';
 import Radar from './Radar';
@@ -198,22 +198,34 @@ const HomeView: React.FC<HomeViewProps> = ({
                 </div>
               )}
 
-              <button 
-                onClick={handleDeepMine}
-                disabled={isLoading}
-                className={`w-full font-bold py-4 rounded-xl text-lg shadow-lg transition-all flex items-center justify-center gap-2 relative overflow-hidden group
-                  ${!state.apiKey 
-                    ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' 
-                    : 'bg-lemos-red hover:bg-red-600 text-white shadow-red-900/20'
-                  }`}
-              >
-                <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
-                {isLoading ? t.status_minerando : (
-                   state.apiKey 
-                   ? `${t.btn_run_prefix} ${t[`strat_${state.miningStrategy}`] || state.miningStrategy.toUpperCase()}`
-                   : "🔍 Minerar (Modo Básico)"
+              <div className="relative">
+                <button 
+                  onClick={handleDeepMine}
+                  disabled={isLoading}
+                  className={`w-full font-bold py-4 rounded-xl text-lg shadow-lg transition-all flex items-center justify-center gap-2 relative overflow-hidden group
+                    ${!state.apiKey 
+                      ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' 
+                      : 'bg-lemos-red hover:bg-red-600 text-white shadow-red-900/20'
+                    }`}
+                >
+                  <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
+                  {isLoading ? (
+                     <div className="flex items-center gap-2">
+                       <Loader2 className="animate-spin" size={24} />
+                       <span>Consultando Gemini AI...</span>
+                     </div>
+                  ) : (
+                     state.apiKey 
+                     ? `${t.btn_run_prefix} ${t[`strat_${state.miningStrategy}`] || state.miningStrategy.toUpperCase()}`
+                     : "🔍 Minerar (Modo Básico)"
+                  )}
+                </button>
+                {isLoading && (
+                   <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-700 overflow-hidden rounded-b-xl">
+                      <div className="h-full bg-white/50 w-full origin-left animate-[progress_1s_ease-in-out_infinite]"></div>
+                   </div>
                 )}
-              </button>
+              </div>
             </div>
           </div>
 
@@ -321,9 +333,10 @@ const HomeView: React.FC<HomeViewProps> = ({
                  <span className="text-xs font-bold text-lemos-red">{state.targetList.split(',').length} {t.lbl_targets_count}</span>
                </div>
                <textarea 
-                 readOnly
-                 className="w-full bg-transparent text-xs font-mono text-gray-300 h-24 focus:outline-none resize-none"
+                 className="w-full bg-transparent text-xs font-mono text-gray-300 h-24 focus:outline-none resize-none border border-transparent focus:border-gray-700 rounded p-1"
                  value={state.targetList}
+                 onChange={(e) => updateState({ targetList: e.target.value })}
+                 placeholder="Digite ou edite seus alvos aqui..."
                />
                <button 
                  onClick={executeAnalysis}
