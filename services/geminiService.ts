@@ -16,37 +16,39 @@ export class GeminiService {
 
   async mineNovelTargets(target: string, context: string, currentList: string[], strategy: MiningStrategy): Promise<string[]> {
     if (!this.ai) {
-        console.warn("API Key missing");
+        alert("⚠️ API Key não configurada! Vá nas configurações.");
         return currentList;
     }
 
     try {
       const currentListStr = currentList.length > 0 ? currentList.join(", ") : "None";
       
+      // --- O TRUQUE DO "CONTEXTO FANTASMA" ---
+      // Damos exemplos para a IA entender o formato, mesmo com lista vazia.
       const baseContext = `
-      CONTEXT:
+      TARGET CONTEXT:
       - Primary Disease/Organ: "${target}"
-      - Bio Context: "${context}"
+      - Biological Context: "${context}"
       
-      EXCLUSION LIST (DO NOT OUTPUT THESE):
+      KNOWN EXCLUSION LIST (DO NOT REPEAT THESE):
       [${currentListStr}]
       `;
 
       let prompt = "";
-      // Temperatura alta para o Gemini 3 ser criativo na busca
+      // Temperatura alta para criatividade
       let temperature = 0.8; 
 
       switch (strategy) {
         case 'conservative':
-          temperature = 0.1;
+          temperature = 0.2;
           prompt = `
             Role: Scientific Data Curator.
             Task: Clean and Standardize the candidate list.
             Input: ${baseContext}
             Instructions: 
             1. Convert Drugs to Targets (e.g. Semaglutide -> GLP1R).
-            2. Remove noise. 
-            3. Output ONLY the clean comma-separated list.
+            2. Remove noise terms. 
+            3. Return a clean JSON Array of strings.
           `;
           break;
 
@@ -55,10 +57,14 @@ export class GeminiService {
             Role: Senior Pharmacologist.
             Task: Suggest approved drugs or clinical candidates for "${target}".
             ${baseContext}
+            
+            EXAMPLE OUTPUT FORMAT (Follow this style):
+            ["SGLT2 inhibitors", "Metformin", "Atorvastatin"]
+
             Instructions:
             1. STRICTLY NEW items (Not in Exclusion List).
             2. Focus on FDA approved drugs and Phase 2/3 candidates.
-            3. Output: Comma-separated list of 30 specific items.
+            3. Return a JSON Array of strings (Max 30 items).
           `;
           break;
 
@@ -67,36 +73,42 @@ export class GeminiService {
             Role: Systems Biologist.
             Task: Identify upstream/downstream signaling pathways for "${target}".
             ${baseContext}
+
+            EXAMPLE OUTPUT FORMAT (Follow this style):
+            ["mTORC1", "NF-kB", "P2X3 receptor", "TRPV1"]
+
             Instructions:
             1. STRICTLY NEW items.
             2. Focus on Kinases, Transcription Factors, Ion Channels, Enzymes.
-            3. Output: Comma-separated list of 30 specific targets.
+            3. Return a JSON Array of strings (Max 30 items).
           `;
           break;
 
         case 'blue_ocean':
-          temperature = 1.0; // Máxima criatividade
+          temperature = 1.0;
           prompt = `
             Role: Elite Scientific Prospector.
             Task: Identify NOVEL, CONTROVERSIAL, or EMERGING targets for "${target}".
             ${baseContext}
+
+            EXAMPLE OUTPUT FORMAT (Follow this style):
+            ["Piezo2", "LncRNA MALAT1", "GPR183", "OSCA1"]
+
             Instructions:
             1. STRICTLY NEW items (Not in Exclusion List).
             2. Targets from literature in the last 2-5 years.
-            3. Focus on Orphan GPCRs, lncRNAs, Ion Channels, and metabolic sensors.
-            4. Output: Comma-separated list of 30 items.
+            3. Focus on Orphan GPCRs, lncRNAs, Ion Channels.
+            4. Return a JSON Array of strings (Max 30 items).
           `;
           break;
       }
 
-      // --- CONFIGURAÇÃO PARA O GEMINI 3 ---
       const response = await this.ai.models.generateContent({
-        // Usando o modelo mais forte da sua lista
-        model: 'gemini-3-pro-preview', 
-        contents: prompt,
+        model: 'gemini-2.0-flash-exp', 
+        contents: prompt + "\nOutput strictly a JSON Array of strings: [\"Item1\", \"Item2\"]",
         config: {
           temperature: temperature,
-          // CRÍTICO: Desativa o bloqueio "Médico/Perigoso" para permitir farmacologia
+          responseMimeType: "application/json",
           safetySettings: [
             { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
             { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
@@ -107,50 +119,30 @@ export class GeminiService {
         }
       });
 
-      const text = response.text || "";
-      console.log(`[Gemini 3 Pro] Resposta (${strategy}):`, text);
+      const text = response.text || "[]";
+      console.log(`[Gemini JSON] Resposta:`, text);
       
-      // Limpeza da resposta
-      const cleanText = text
-        .replace(/^Here.*:/i, "")
-        .replace(/Output:/i, "")
-        .replace(/[\[\]*_`]/g, "")
-        .trim();
+      let terms: string[] = [];
+      try {
+        terms = JSON.parse(text);
+      } catch (jsonError) {
+        console.error("Erro ao ler JSON da IA:", jsonError);
+        terms = text.replace(/[\[\]"]/g, "").split(",");
+      }
       
-      const terms = cleanText.split(/,|\n/);
-      
+      // Limpeza final
       const lowerCaseCurrentSet = new Set(currentList.map(t => t.toLowerCase().trim()));
       
-      const finalTerms = terms
+      return terms
         .map(t => t.trim())
-        .map(t => t.replace(/^\d+[\).]\s*/, "")) 
-        .filter(t => t.length > 2 && t.length < 60)
-        .filter(t => !t.toLowerCase().includes("context"))
+        .filter(t => t.length > 2 && t.length < 80)
         .filter(t => !lowerCaseCurrentSet.has(t.toLowerCase()));
-
-      return finalTerms;
         
     } catch (error) {
-      console.error("Gemini 3 Error:", error);
-      // Fallback para o 2.5 Flash se o 3 der erro de cota ou instabilidade
-      console.log("Tentando fallback para gemini-2.5-flash...");
-      try {
-          return await this.retryWithFallback(target, context, currentList, strategy);
-      } catch (e) {
-          alert("Erro na IA: Verifique a API Key (F12 para detalhes).");
-          return currentList; 
-      }
+      console.error("Gemini Critical Error:", error);
+      alert("A IA falhou. Verifique se sua API Key tem acesso ao modelo 'gemini-2.0-flash-exp'. Detalhes no Console.");
+      return currentList; 
     }
-  }
-
-  // Fallback usando o modelo rápido da sua lista
-  private async retryWithFallback(target: string, context: string, currentList: string[], strategy: MiningStrategy): Promise<string[]> {
-      const response = await this.ai!.models.generateContent({
-        model: 'gemini-2.5-flash', 
-        contents: `List 10 novel pharmacological targets for ${target}. Comma separated.`,
-      });
-      const text = response.text || "";
-      return text.split(',').map(t => t.trim());
   }
 
   async analyzePaper(title: string, abstract: string): Promise<string> {
@@ -163,8 +155,7 @@ export class GeminiService {
 
     try {
       const response = await this.ai.models.generateContent({
-        // Usando o Flash Preview para leitura rápida
-        model: 'gemini-3-flash-preview', 
+        model: 'gemini-2.0-flash-exp', 
         contents: `Analyze: Title: "${title}" Abstract: "${optimizedAbstract}". Task: Identify Target, Drug, and Effect. Output format: "M: [Molecule] | E: [Effect]"`,
       });
       return response.text || "Analysis failed.";
