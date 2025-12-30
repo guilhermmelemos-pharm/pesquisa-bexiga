@@ -1,6 +1,6 @@
 # constantes.py
 # Configurações, Textos e Listas de Prospecção
-# Versão: 2.0
+# Versão: 2.0 (Textos Ajustados)
 
 TEXTOS = {
     "pt": {
@@ -27,11 +27,13 @@ TEXTOS = {
         "btn_add_manual": "Adicionar Manual",
         "header_config": "Configuração",
         "slider_tempo": "Janela de Tempo",
-        "label_contexto": "Contexto (Opcional)",
+        
+        # --- MUDANÇAS AQUI ---
+        "label_contexto": "Orgão para comparar", 
         "uploader_label": "Importar Lista (CSV/TXT)",
         
         # --- CONFIG IA ---
-        "expander_ia": "🧠 Ativar Inteligência Artificial (Gemini)",
+        "expander_ia": "🔑 Configurar Chave API", # Mudado para não duplicar visualmente
         "caption_ia": "Insira sua chave gratuita do Google para resumos inteligentes.",
         "placeholder_key": "Cole sua chave AIza... aqui",
         "link_key": "Obter chave grátis",
@@ -42,11 +44,14 @@ TEXTOS = {
         "sucesso_carregado": "alvos carregados. Clique em EXECUTAR abaixo.",
         "msg_alvos_ok": "alvos prontos para análise.",
         "expander_lista": "👀 Ver/Editar Lista Completa",
-        "btn_limpar": "Limpar Lista",
+        
+        # --- MUDANÇA AQUI ---
+        "btn_limpar": "Apagar termos",
+        
         "btn_executar": "🚀 EXECUTAR ANÁLISE ESTATÍSTICA",
         "toast_importado": "Importação concluída",
         "erro_arquivo": "Erro ao ler arquivo.",
-        "spinner_analise": "Calibrando estatística (Lemos Lambda v2.1)...",
+        "spinner_analise": "Calibrando estatística (Lemos Lambda v3.0)...",
         "titulo_processando": "## 🧬 Processando Estatística...",
 
         # --- RESULTADOS ---
@@ -68,7 +73,7 @@ TEXTOS = {
         "col_status": "Classificação",
         "col_ratio": "Lambda Score",
         "col_art_alvo": "Hits (Alvo)",
-        "col_global": "Hits (Global)",
+        "col_global": "Hits (Comparação)",
 
         # --- TAGS ---
         "tag_blue_ocean": "💎 Blue Ocean",
@@ -82,23 +87,24 @@ TEXTOS = {
         # --- RODAPÉ ---
         "footer_citar": "Uso Acadêmico",
         "citar_titulo": "📄 Como Citar",
-        "citar_texto": "Lemos, G. (2025). Lemos Lambda v2.1: AI Prospecting Engine.",
+        "citar_texto": "Lemos, G. (2025). Lemos Lambda v3.0. Zenodo. doi.org/10.5281/zenodo.18092141",
         "apoio_titulo": "Apoie o Projeto (Pix):",
         "apoio_desc": "Ajude a manter o código atualizado ☕"
     },
     "en": {
         "titulo_desk": "λ Lemos Lambda: Deep Science Prospector",
         "subtitulo": "Dynamic Pharmacological Prospecting Tool",
-        # ... (Mantido o resto do EN igual para economizar espaço, se precisar eu envio)
          "label_email": "Researcher E-mail (NCBI Required)",
          "btn_auto": "🧠 AUTO-DETECT TARGETS",
          "erro_alvo": "Define target first",
-         # ...
          "tag_blue_ocean": "💎 Blue Ocean",
+         "label_contexto": "Comparison Organ",
+         "btn_limpar": "Clear Terms",
+         "expander_ia": "🔑 API Key Config"
     }
 }
 
-# --- PRESETS ATUALIZADOS ---
+# --- PRESETS ---
 PRESETS_FRONTEIRA = {
     "🧪 Chaperonas & Estresse": ["Trehalose", "TMAO", "4-PBA", "Taurine", "Betaine", "Chemical Chaperones", "HSP70", "HSP90", "ER Stress"],
     "🔥 Gasotransmissores": ["Carbon Monoxide (CO)", "HO-1", "CORM-2", "CORM-401", "Hydrogen Sulfide (H2S)", "CBS", "CSE", "GYY4137", "AP39", "Hydrogen Gas (H2)"],
