@@ -199,35 +199,51 @@ const HomeView: React.FC<HomeViewProps> = ({
               )}
 
               <div className="relative">
-                <button 
-                  onClick={handleDeepMine}
-                  disabled={isLoading}
-                  className={`w-full font-bold py-4 rounded-xl text-lg shadow-lg transition-all flex items-center justify-center gap-2 relative overflow-hidden group
-                    ${!state.apiKey 
-                      ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' 
-                      : 'bg-lemos-red hover:bg-red-600 text-white shadow-red-900/20'
-                    }`}
-                >
-                  <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
-                  {isLoading ? (
-                     <div className="flex items-center gap-2">
-                       <Loader2 className="animate-spin" size={24} />
-                       <span>Consultando Gemini AI...</span>
-                     </div>
-                  ) : (
-                     state.apiKey 
-                     ? `${t.btn_run_prefix} ${t[`strat_${state.miningStrategy}`] || state.miningStrategy.toUpperCase()}`
-                     : "🔍 Minerar (Modo Básico)"
-                  )}
-                </button>
-                {isLoading && (
-                   <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-700 overflow-hidden rounded-b-xl">
-                      <div className="h-full bg-white/50 w-full origin-left animate-[progress_1s_ease-in-out_infinite]"></div>
-                   </div>
+{/* --- INICIO DA SUBSTITUIÇÃO DO BOTÃO --- */}
+              <div className="relative">
+                {isLoading ? (
+                  /* ESTADO DE CARREGAMENTO (Barra de Progresso) */
+                  <div className="w-full bg-lemos-dark border border-blue-500/30 rounded-xl p-4 shadow-lg shadow-blue-900/10">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-bold text-blue-400 uppercase tracking-widest flex items-center gap-2">
+                        <Loader2 className="animate-spin" size={14} />
+                        Neuro-Mining
+                      </span>
+                      <span className="text-xs text-blue-300 font-mono animate-pulse">
+                        Gemini 2.0 Thinking...
+                      </span>
+                    </div>
+                    
+                    {/* A Barra Animada */}
+                    <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden relative">
+                      <div className="absolute top-0 left-0 h-full bg-blue-500 w-1/3 animate-[slide_1.5s_ease-in-out_infinite]"></div>
+                    </div>
+                    
+                    <p className="text-[10px] text-gray-500 mt-2 font-mono text-center">
+                      Cruzando dados de "{state.target}" com literatura recente...
+                    </p>
+                  </div>
+                ) : (
+                  /* ESTADO NORMAL (Botão) */
+                  <button 
+                    onClick={handleDeepMine}
+                    disabled={isLoading}
+                    className={`w-full font-bold py-4 rounded-xl text-lg shadow-lg transition-all flex items-center justify-center gap-2 relative overflow-hidden group
+                      ${!state.apiKey 
+                        ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' 
+                        : 'bg-lemos-red hover:bg-red-600 text-white shadow-red-900/20'
+                      }`}
+                  >
+                    <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
+                    
+                    {state.apiKey 
+                      ? `${t.btn_run_prefix} ${t[`strat_${state.miningStrategy}`] || state.miningStrategy.toUpperCase()}`
+                      : "🔍 Minerar (Modo Básico)"
+                    }
+                  </button>
                 )}
               </div>
-            </div>
-          </div>
+              {/* --- FIM DA SUBSTITUIÇÃO --- */}
 
           {/* Presets */}
           <div className="bg-lemos-card p-6 rounded-xl border border-gray-800">
