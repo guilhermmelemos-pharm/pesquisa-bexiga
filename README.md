@@ -68,13 +68,13 @@ plotly>=5.18.0
 ### Local
 ```bash
 pip install -r requirements.txt
-streamlit run app.py
+streamlit run app_doutorado.py
 ```
 
 ### Streamlit Cloud (recommended)
-1. Upload the 4 files to GitHub: `app.py`, `backend.py`, `constantes.py`, `requirements.txt`
+1. Upload the 4 files to GitHub: `app_doutorado.py`, `backend.py`, `constantes.py`, `requirements.txt`
 2. Go to [share.streamlit.io](https://share.streamlit.io) → New app → select your repository
-3. Main file path: `app.py` (or `app_doutorado.py` if you rename it)
+3. Main file path: `app_doutorado.py`
 4. Under **Settings → Secrets** add:
 ```toml
 GEMINI_API_KEY = "AIza..."
@@ -154,15 +154,11 @@ Click **RUN STATISTICAL ANALYSIS**. Calculates for each candidate:
 ## File Structure
 
 ```
-app.py            → Streamlit interface
+app_doutorado.py            → Streamlit interface
 backend.py        → Mining pipeline, statistical analysis, AI calls
 constantes.py     → Blacklist, presets, systems, tags, models
 requirements.txt  → Python dependencies
 ```
-
-> You can rename `app.py` to `app_doutorado.py` — just update the Main file path in Streamlit Cloud settings.
-
----
 
 ## Citation
 
